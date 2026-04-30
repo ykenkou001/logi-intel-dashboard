@@ -1,0 +1,40 @@
+# シークレット（絶対にコミットしない）
+.env
+
+# uv / Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+.python-version.local
+
+# テスト・カバレッジ
+.pytest_cache/
+.coverage
+htmlcov/
+
+# 型チェック
+.mypy_cache/
+
+# Lint
+.ruff_cache/
+
+# DB（キャッシュ）
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ビルド成果物
+dist/
+build/
+*.egg-info/
