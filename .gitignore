@@ -28,6 +28,9 @@ htmlcov/
 .idea/
 .vscode/
 *.swp
+
+# Claude Code（個人設定はコミットしない）
+.claude/settings.local.json
 *.swo
 
 # OS
