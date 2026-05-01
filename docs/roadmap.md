@@ -12,8 +12,9 @@
 
 - [x] リポジトリ作成: `logi-intel-dashboard` (Private)
 - [x] uv で初期化、pyproject.toml 作成
-- [ ] API キー取得: e-Stat, 国税庁法人番号（健一が手動で実施）
+- [x] API キー取得: e-Stat（取得済み）
   - ※ RESAS API は 2025-03-24 提供終了のため対象外
+  - ※ 国税庁法人番号 applicationID は 2026-05-01 申請済み・取得まで約1ヶ月かかるためスキップ
 - [x] `.env.example` 作成
 
 ---
@@ -39,7 +40,8 @@
 - [x] 気象庁 JSON クライアント・ツール
 - [x] エネ庁 石油価格クライアント・ツール
 - [x] 統合ツール: 都道府県マクロ概況（logi_macro_overview）
-- [x] Claude Desktop で logi_macro_overview("東京都") の動作確認（2026-05-01 完了・国税庁APIキー取得後に完全動作）
+- [x] Claude Desktop で logi_macro_overview("東京都") の動作確認（2026-05-01 完了）
+  - ※ 国税庁法人番号データは applicationID 取得後に有効化（申請済み・約1ヶ月待ち）
 
 ---
 

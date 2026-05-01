@@ -116,6 +116,9 @@
 
 ## 国税庁 法人番号 API
 
+> **⚠️ applicationID 申請中（2026-05-01 申請済み・取得まで約1ヶ月）**
+> 取得後は `.env` の `CORP_NUMBER_APP_ID=` に設定すれば `logi_corp_search` / `logi_macro_overview` が有効化される。
+
 | 項目 | 内容 |
 |------|------|
 | エンドポイント | `https://api.houjin-bangou.nta.go.jp/4/` |
