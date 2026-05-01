@@ -1,8 +1,4 @@
-"""資源エネルギー庁 石油価格情報スクレイパー。
-
-HTML スクレイピングで最新週の燃料価格を取得する。
-API は存在しないため BeautifulSoup4 を使用。
-"""
+"""gogo.gs 全国平均燃料価格スクレイパー。"""
 from __future__ import annotations
 
 import re
@@ -13,105 +9,86 @@ from bs4 import BeautifulSoup
 from core import cache
 from core.clients.base import AsyncHTTPClient, HttpClientError
 
-_BASE_URL = "https://www.enecho.meti.go.jp/"
-_PAGE_PATH = "statistics/petroleum_and_lpgas/pl007/results.html"
-_TTL_SECONDS = 7 * 24 * 60 * 60   # 7 日（週次更新）
-
-_CACHE_KEY = "energy:fuel_prices"
+_BASE_URL = "https://gogo.gs/"
+_SOURCE_NAME = "gogo.gs（全国平均・ユーザー申告集計）"
+_CACHE_KEY = "energy:fuel_prices:gogogs:v1"
+_TTL_SECONDS = 24 * 60 * 60
 
 
 class EnergyApiError(Exception):
-    """エネ庁スクレイピングエラー。HTML 構造変更の可能性がある。"""
+    """燃料価格の取得・解析エラー。"""
 
 
-class EnergyClient(AsyncHTTPClient):
-    """資源エネルギー庁 石油価格情報スクレイパー。"""
+class GoGoGsClient(AsyncHTTPClient):
+    """gogo.gs から全国平均燃料価格をスクレイピングする。"""
 
     def __init__(self) -> None:
-        super().__init__(_BASE_URL)
+        super().__init__(_BASE_URL, max_retries=2, timeout=10.0)
 
     async def get_fuel_prices(self) -> dict[str, Any]:
-        """最新週の燃料価格（円/L）を取得する。
-
-        Returns:
-            {"date": "2025-01-01", "regular": 170.0, "diesel": 155.0, "kerosene": 100.0}
-
-        Raises:
-            EnergyApiError: HTML 構造変更等でパース失敗した場合
-        """
+        """全国平均燃料価格（円/L）を取得する。キャッシュあれば返す。"""
         cached = cache.get(_CACHE_KEY)
         if cached is not None:
             return cast(dict[str, Any], cached)
 
         try:
-            html = await self.get_html(_PAGE_PATH)
+            html = await self.get_html("")
         except HttpClientError as exc:
-            raise EnergyApiError(f"エネ庁ページ取得エラー: {exc}") from exc
+            raise EnergyApiError(f"gogo.gs 取得エラー: {exc}") from exc
 
-        result = _parse_fuel_prices(html)
+        result = _parse_gogogs_prices(html)
         cache.store(_CACHE_KEY, result, _TTL_SECONDS)
         return result
 
 
-def _parse_fuel_prices(html: str) -> dict[str, Any]:
-    """HTML から最新週の燃料価格を抽出する。
+# 後方互換エイリアス（energy_tools.py / macro_tools.py のインポートを変えない）
+EnergyClient = GoGoGsClient
 
-    HTML 構造変更時は EnergyApiError を送出する。
-    """
+
+def _parse_gogogs_prices(html: str) -> dict[str, Any]:
+    """gogo.gs トップページ HTML から全国平均価格を抽出する。"""
     soup = BeautifulSoup(html, "html.parser")
-
-    # 価格テーブルを探す（「レギュラー」という列ヘッダを含む表）
-    target_table = None
-    for table in soup.find_all("table"):
-        if "レギュラー" in table.get_text():
-            target_table = table
-            break
-
-    if target_table is None:
+    panel = soup.find(class_="pref-price-panel")
+    if panel is None:
         raise EnergyApiError(
-            "エネ庁ページの価格テーブルが見つかりません。HTML 構造が変更された可能性があります。"
-            "手動確認先: https://www.enecho.meti.go.jp/statistics/petroleum_and_lpgas/pl007/"
+            "gogo.gs: .pref-price-panel が見つかりません。ページ構造が変わった可能性があります。"
         )
 
-    rows = target_table.find_all("tr")
-    if len(rows) < 2:
-        raise EnergyApiError("価格テーブルの行数が不足しています。")
+    prices: dict[str, float] = {}
+    for avg in panel.find_all(class_="average"):
+        label_tag = avg.find("label")
+        price_tag = avg.find(class_="price")
+        if label_tag is None or price_tag is None:
+            continue
+        label = label_tag.get_text(strip=True)
+        price_text = price_tag.get_text(strip=True).replace(",", "")
+        match = re.search(r"\d+(?:\.\d+)?", price_text)
+        if match is None:
+            continue
+        value = float(match.group())
+        if "レギュラー" in label:
+            prices["regular"] = value
+        elif "軽油" in label:
+            prices["diesel"] = value
+        elif "灯油" in label:
+            prices["kerosene"] = value
 
-    # ヘッダー行でカラム位置を特定
-    headers = [th.get_text(strip=True) for th in rows[0].find_all(["th", "td"])]
-    col_map: dict[str, int] = {}
-    for i, h in enumerate(headers):
-        if "レギュラー" in h:
-            col_map["regular"] = i
-        elif "軽油" in h:
-            col_map["diesel"] = i
-        elif "灯油" in h and "店頭" not in h:
-            col_map["kerosene"] = i
-        elif "調査" in h or "年月" in h or "週" in h:
-            col_map["date"] = i
+    if "regular" not in prices or "diesel" not in prices:
+        raise EnergyApiError("gogo.gs: レギュラー・軽油の価格を取得できませんでした。")
 
-    if not col_map.get("regular"):
-        raise EnergyApiError("レギュラーガソリン価格の列が見つかりません。")
+    date_str = _parse_date(soup)
 
-    # 最新データ行: エネ庁ページは降順（新→旧）のため先頭データ行が最新
-    data_row = rows[1].find_all(["th", "td"])
-    if len(data_row) <= max(col_map.values()):
-        raise EnergyApiError("最新行のセル数が不足しています。")
-
-    def _to_float(text: str) -> float:
-        m = re.search(r"[\d.]+", text.replace(",", ""))
-        if not m:
-            raise EnergyApiError(f"数値パースエラー: {text!r}")
-        return float(m.group())
-
-    result: dict[str, Any] = {}
-    if "date" in col_map:
-        result["date"] = data_row[col_map["date"]].get_text(strip=True)
-    if "regular" in col_map:
-        result["regular"] = _to_float(data_row[col_map["regular"]].get_text(strip=True))
-    if "diesel" in col_map:
-        result["diesel"] = _to_float(data_row[col_map["diesel"]].get_text(strip=True))
-    if "kerosene" in col_map:
-        result["kerosene"] = _to_float(data_row[col_map["kerosene"]].get_text(strip=True))
-
+    result: dict[str, Any] = {"source": _SOURCE_NAME, "date": date_str}
+    result.update(prices)
     return result
+
+
+def _parse_date(soup: BeautifulSoup) -> str:
+    """「2026年4月30日（木）時点...」のようなテキストから ISO 日付を返す。"""
+    for tag in soup.find_all(class_="help"):
+        text = tag.get_text(" ", strip=True)
+        match = re.search(r"(20\d{2})年(\d{1,2})月(\d{1,2})日", text)
+        if match:
+            y, m, d = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            return f"{y:04d}-{m:02d}-{d:02d}"
+    return ""

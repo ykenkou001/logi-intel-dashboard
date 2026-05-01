@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable
 
 from fastmcp import FastMCP
 
@@ -74,6 +75,15 @@ _PREF_CODES: dict[str, dict[str, str]] = {
 
 # e-Stat 経済センサス活動調査 産業（大分類）別事業所数（2021年）の統計表 ID
 _ESTAT_STATS_ID = "0004005642"
+_SOURCE_TIMEOUT_SECONDS = 18.0
+
+
+async def _with_source_timeout(label: str, coro: Awaitable[str]) -> str:
+    """外部 API 単位で待ち時間に上限を設け、部分結果を返しやすくする。"""
+    try:
+        return await asyncio.wait_for(coro, timeout=_SOURCE_TIMEOUT_SECONDS)
+    except TimeoutError:
+        return f"{label}: 取得タイムアウト（{_SOURCE_TIMEOUT_SECONDS:.0f}秒）"
 
 
 async def _fetch_estat(cd_area: str) -> str:
@@ -132,7 +142,8 @@ async def _fetch_fuel() -> str:
         regular = prices.get("regular", "不明")
         diesel = prices.get("diesel", "不明")
         date = prices.get("date", "")
-        return f"燃料価格（{date}）: レギュラー {regular} 円/L・軽油 {diesel} 円/L（全国平均）"
+        source = prices.get("source", "gogo.gs")
+        return f"燃料価格（{date}）: レギュラー {regular} 円/L・軽油 {diesel} 円/L（{source}）"
     except EnergyApiError as exc:
         return f"燃料価格: 取得失敗（{exc}）"
 
@@ -162,10 +173,10 @@ def register_tools(mcp: FastMCP) -> None:
             )
 
         estat_result, corp_result, weather_result, fuel_result = await asyncio.gather(
-            _fetch_estat(codes["estat"]),
-            _fetch_corp(codes["corp"], prefecture_name),
-            _fetch_weather(codes["jma"]),
-            _fetch_fuel(),
+            _with_source_timeout("運輸業事業所数", _fetch_estat(codes["estat"])),
+            _with_source_timeout("運送会社法人数", _fetch_corp(codes["corp"], prefecture_name)),
+            _with_source_timeout("気象警報", _fetch_weather(codes["jma"])),
+            _with_source_timeout("燃料価格", _fetch_fuel()),
         )
 
         return "\n".join([

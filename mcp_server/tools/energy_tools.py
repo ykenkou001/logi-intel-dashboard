@@ -11,7 +11,7 @@ from core.clients.energy import EnergyApiError, EnergyClient
 def _format_prices(prices: dict[str, Any]) -> str:
     lines: list[str] = []
     if "date" in prices:
-        lines.append(f"調査週: {prices['date']}")
+        lines.append(f"取得日: {prices['date']}")
     if "regular" in prices:
         lines.append(f"レギュラーガソリン: {prices['regular']:.1f} 円/L")
     if "diesel" in prices:
@@ -20,7 +20,8 @@ def _format_prices(prices: dict[str, Any]) -> str:
         lines.append(f"灯油（店頭）: {prices['kerosene']:.1f} 円/L")
     if not lines:
         return "燃料価格データが取得できませんでした。"
-    lines.append("出典: 資源エネルギー庁 石油製品価格調査")
+    source = prices.get("source", "gogo.gs")
+    lines.append(f"出典: {source}")
     return "\n".join(lines)
 
 
