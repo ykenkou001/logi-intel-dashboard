@@ -4,7 +4,7 @@
 
 ---
 
-## 現在のフェーズ: フェーズ 1 — MVP MCP サーバー初版
+## 現在のフェーズ: フェーズ 2 — データソース拡張
 
 ---
 
@@ -26,8 +26,8 @@
 - [x] `core/cache.py`（SQLite キャッシュ）
 - [x] `mcp_server/server.py`（FastMCP エントリ）
 - [x] `mcp_server/tools/estat_tools.py`（統計表検索ツール、データ取得ツール、メタデータ取得ツール）
-- [ ] Claude Desktop 設定登録手順を README に記載
-- [ ] Claude Desktop で動作確認
+- [x] Claude Desktop 設定登録手順を README に記載
+- [x] Claude Desktop で動作確認（2026-05-01 logi_estat_search 成功確認）
 
 ---
 
