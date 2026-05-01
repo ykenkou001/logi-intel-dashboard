@@ -2,27 +2,42 @@
 
 **責任範囲**: システム全体の設計方針、採用技術、ファイル配置のルール。「なぜこの構成か」の根拠を含む。
 
+> ⚠️ 本アプリの存在意義は **CLO 支援への徹底コミット**（[CLAUDE.md §1.5](../CLAUDE.md)）。MCP サーバー / REST API / Web は手段であり、本体は `core/` と `core/export/`（成果物生成）にある。
+
 ---
 
-## システム構成（3層）
+## システム構成（core + 多出口）
 
 ```
-                                 ┌─→ [FastAPI REST] → [Next.js ダッシュボード] (フェーズ4以降)
-                                 │
-[各オープンデータ API] → [core モジュール]
-                                 │
-                                 └─→ [FastMCP サーバー] → [Claude Desktop / Code]
+                                              ┌─→ [FastMCP サーバー] → Claude Desktop/Code
+                                              │     （社内パワーユーザー・営業向け）
+[各オープンデータ API] → [core モジュール] ───┤
+       ↑                       │              ├─→ [FastAPI REST] → [Next.js ダッシュボード]
+       │                       │              │     （CLO担当者・経営層向け、フェーズ4）
+[静的データ                    ↓              │
+ (CO2係数・告示等)]    [core/export/]         └─→ [ファイル出力]
+                          ↓                         ・PPT（最優先）
+                       成果物生成                   ・PDF
+                          ↓                         ・Excel
+                  [outputs/ ディレクトリ]            ・Word（様式第3別紙）
+                          ↓                         ・Markdown
+                  [Web ダウンロード or 直接配布]
 ```
 
 ### 各層の責務
 
 | 層 | パス | 責務 |
 |----|------|------|
-| core モジュール | `core/` | API クライアント、キャッシュ、データ正規化、複合分析ロジック。外部依存なしで単体テスト可能 |
-| MCP サーバー層 | `mcp_server/` | core を呼び出す薄いラッパー。Claude が叩くツール定義のみ |
-| REST API 層 | `api/` | core を呼び出す薄いラッパー。Web フロントが叩く（フェーズ4） |
+| core モジュール | `core/` | API クライアント、キャッシュ、データ正規化、複合分析ロジック、**法令ロジック**、**成果物生成**。外部依存なしで単体テスト可能 |
+| 静的データ層 | `core/static/` | CO2 排出原単位・改善基準告示・標準的運賃等、API 不要のデータ。鮮度メタデータで更新リマインド |
+| 出口層（成果物） | `core/export/` | PPT / PDF / Excel / Word / Markdown 出力。**ここが CLO に届く価値の最終地点** |
+| MCP サーバー層 | `mcp_server/` | core を呼び出す薄いラッパー。Claude が叩くツール定義のみ。**戻り値はファイルパスを含む** |
+| REST API 層 | `api/` | core を呼び出す薄いラッパー。Web フロントが叩く（フェーズ4）。成果物ファイルをダウンロード配信 |
 
-**重要**: ビジネスロジックは必ず core に置く。MCP・REST 層には書かない。
+**重要原則**:
+- ビジネスロジックは必ず `core/` に置く。MCP・REST 層には書かない
+- **MCP ツールは「Claude の会話画面に文字列を返す」だけで終わらせない**。必ず `core/export/` を呼び、ファイルパスを成果物として返す
+- 全成果物に出典 URL を付与（`core/export/citation.py` 経由）
 
 ---
 
@@ -37,10 +52,14 @@
 | データ検証 | Pydantic v2 | |
 | キャッシュ DB | SQLite | API レスポンスキャッシュ用 |
 | 分析 DB | DuckDB | 集計クエリ用、SQLite から読み込み可 |
+| **PPT 出力** | **python-pptx** | **CLO 計画書プレゼン資料生成（最優先）** |
+| **Excel 出力** | **openpyxl** | **数値表・出典シート** |
+| **Word 出力** | **python-docx** | **様式第3別紙（e-Gov 提出用）への流し込み** |
+| **PDF 出力** | **WeasyPrint or LibreOffice CLI** | **PPT/Word からの変換** |
 | Lint / Format | Ruff | flake8 / black は使わない |
 | 型チェック | mypy (strict) | |
 | テスト | pytest, pytest-asyncio | |
-| フロント (フェーズ4) | Next.js 15, Recharts, deck.gl | |
+| フロント (フェーズ4) | Next.js 15, Recharts, deck.gl | 成果物ダウンロード UI 含む |
 
 ### 依存関係追加時のルール
 
@@ -78,12 +97,40 @@ logi-intel-dashboard/
 │   ├── models/                    # Pydantic モデル
 │   │   ├── __init__.py
 │   │   ├── estat.py
+│   │   ├── company_profile.py     # CLO ツールの自社情報入力モデル
 │   │   └── ...
-│   └── analytics/                 # 複合分析ロジック
-│       ├── __init__.py
-│       ├── benchmark.py           # 業界ベンチマーク
-│       ├── driver_gap.py          # ドライバー需給ギャップ
-│       └── clo_planning.py        # CLO 中長期計画支援
+│   ├── static/                    # 静的データ（API 不要・コード同梱）
+│   │   ├── __init__.py
+│   │   ├── _freshness.py          # 鮮度メタデータ + 更新リマインダ
+│   │   ├── co2_factors.py         # 環境省 CO2 排出原単位
+│   │   ├── improvement_standards.py  # 改善基準告示（拘束時間等）
+│   │   ├── standard_freight.py    # 標準的運賃 2024
+│   │   ├── efficiency_law_certified.py  # 物流効率化法 認定事業
+│   │   └── industry_freight_coef.py  # 業種別物流原単位
+│   ├── legal/                     # 法令ロジック
+│   │   ├── __init__.py
+│   │   ├── eligibility.py         # 9万トン基準の特定荷主判定
+│   │   └── improvement_check.py   # 改善基準告示準拠チェック
+│   ├── analytics/                 # 複合分析ロジック
+│   │   ├── __init__.py
+│   │   ├── benchmark.py           # 業界ベンチマーク
+│   │   ├── driver_gap.py          # ドライバー需給ギャップ
+│   │   ├── modal_shift.py         # モーダルシフト試算
+│   │   ├── load_factor.py         # 積載率改善 → CO2 削減
+│   │   ├── target_proposal.py     # 数値目標提案
+│   │   └── clo_planning.py        # CLO 中長期計画支援
+│   ├── export/                    # ★成果物生成（CLO に届く出口）★
+│   │   ├── __init__.py
+│   │   ├── citation.py            # 出典 URL の統一管理
+│   │   ├── ppt_writer.py          # PPT 出力（最優先）
+│   │   ├── pdf_writer.py          # PDF 出力
+│   │   ├── excel_writer.py        # Excel 出力
+│   │   ├── docx_form3_writer.py   # 様式第3別紙への流し込み
+│   │   └── markdown_writer.py     # Markdown 出力
+│   └── templates/                 # 成果物テンプレート
+│       ├── micware_master.pptx    # PPT マスタスライド
+│       ├── clo_plan_form3.docx    # 国交省様式第3別紙（公式）
+│       └── clo_plan_examples/     # 公式記載事例（業種別 MD 化）
 ├── mcp_server/                    # MCP サーバー層
 │   ├── __init__.py
 │   ├── server.py                  # FastMCP エントリポイント
@@ -96,6 +143,12 @@ logi-intel-dashboard/
 ├── api/                           # REST API 層（フェーズ4）
 │   └── main.py
 ├── web/                           # フロント（フェーズ4）
+├── outputs/                       # 成果物の出力先（gitignore 対象）
+│   ├── ppt/
+│   ├── pdf/
+│   ├── excel/
+│   ├── docx/
+│   └── markdown/
 ├── tests/
 │   ├── core/
 │   ├── mcp_server/
@@ -174,3 +227,63 @@ CREATE INDEX idx_fetched_at ON api_cache(fetched_at);
 
 - `core/` 層はローカル・AWS どちらでも動くように、外部ストレージへの依存をキャッシュ層に閉じ込める
 - HTTP モードでは認証（API キー or Cognito）を MCP サーバー層に追加する必要がある
+
+---
+
+## 成果物配信戦略（CLO に届く最終地点）
+
+本アプリの設計上の最終アウトプットは「分析結果の文字列」ではなく「**経営会議で配れるファイル**」。配信経路は2段構成。
+
+### フェーズ 2.5〜3（ローカル）: ファイルパス返却方式
+
+```
+Claude Desktop
+     ↓ logi_clo_plan_draft(company_profile)
+mcp_server/tools/clo_tools.py
+     ↓ core/analytics/clo_planning.py で分析
+     ↓ core/export/ppt_writer.py で生成
+     ↓
+outputs/ppt/clo_plan_<company>_<timestamp>.pptx
+     ↓
+ファイルパスを Claude に返す → ユーザーが直接開く / 共有
+```
+
+MCP ツールの戻り値:
+```python
+{
+    "summary": "...",                                # 概要テキスト
+    "files": {
+        "ppt": "outputs/ppt/clo_plan_xxx.pptx",
+        "pdf": "outputs/pdf/clo_plan_xxx.pdf",
+        "excel": "outputs/excel/clo_plan_xxx.xlsx",
+        "docx_form3": "outputs/docx/form3_xxx.docx"  # 国交省様式第3別紙
+    },
+    "citations": [...]                               # 出典 URL リスト
+}
+```
+
+### フェーズ 4（AWS + Web）: HTTPS ダウンロード方式
+
+```
+Next.js ダッシュボード
+     ↓ 入力フォーム（自社情報 → CompanyProfile）
+     ↓ POST /api/v1/clo/plan/draft
+FastAPI
+     ↓ core/analytics → core/export
+     ↓
+S3 に成果物アップロード
+     ↓
+プレサインド URL を返却
+     ↓
+ブラウザから PPT/PDF/Excel/DOCX をダウンロード
+```
+
+**非エンジニアの CLO 担当者が、エンジニアの介在なしに成果物を入手できることがゴール**。
+
+### 出力フォーマットの優先順位（健一さんとの合意事項）
+
+1. **PPT**（最優先）— 経営会議の必須フォーマット
+2. **PDF** — 顧客提案・印刷配布
+3. **Excel** — 数値表・社内 BI 取込
+4. **Word（様式第3別紙）** — e-Gov 提出用
+5. **Markdown** — Claude → 人間レビュー用
