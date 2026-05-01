@@ -12,12 +12,13 @@
 
 - [x] リポジトリ作成: `logi-intel-dashboard` (Private)
 - [x] uv で初期化、pyproject.toml 作成
-- [ ] API キー取得: e-Stat, RESAS, 国税庁法人番号（健一が手動で実施）
+- [ ] API キー取得: e-Stat, 国税庁法人番号（健一が手動で実施）
+  - ※ RESAS API は 2025-03-24 提供終了のため対象外
 - [x] `.env.example` 作成
 
 ---
 
-## フェーズ 1: MVP — MCP サーバー初版 ★現在ここ★
+## フェーズ 1: MVP — MCP サーバー初版 ✅ 完了
 
 **ゴール**: Claude Desktop から「東京都の運輸業事業所数」が返ってくる
 
@@ -38,7 +39,7 @@
 - [x] 気象庁 JSON クライアント・ツール
 - [x] エネ庁 石油価格クライアント・ツール
 - [x] 統合ツール: 都道府県マクロ概況（logi_macro_overview）
-- [ ] Claude Desktop で logi_macro_overview("東京都") の動作確認
+- [x] Claude Desktop で logi_macro_overview("東京都") の動作確認（2026-05-01 完了・国税庁APIキー取得後に完全動作）
 
 ---
 
@@ -51,12 +52,24 @@
 
 ---
 
-## フェーズ 4: Web ダッシュボード
+## フェーズ 4: Web ダッシュボード + AWS 移行
 
-- [ ] FastAPI REST 層
+**ゴール**: 社内全員が HTTPS でアクセスできる Web ダッシュボード + MCP サーバーを AWS 上に構築する
+
+### Web ダッシュボード
+- [ ] FastAPI REST 層（`api/` ディレクトリ）
 - [ ] Next.js 初期化
-- [ ] 主要画面実装
-- [ ] デプロイ
+- [ ] 主要画面実装（都道府県マクロ概況・燃料価格推移・ドライバー需給）
+
+### AWS 移行
+- [ ] MCP サーバーを stdio モード → HTTP/SSE モードに切り替え（FastMCP 設定変更）
+- [ ] `core/cache.py` を SQLite → Redis（ElastiCache）に差し替え
+- [ ] API キーを AWS Secrets Manager に移行
+- [ ] ECS または Lambda にデプロイ
+- [ ] Claude Desktop 設定をローカル起動から AWS エンドポイントに変更
+- [ ] VPN 内からの接続確認
+
+詳細設計 → [docs/architecture.md](docs/architecture.md)（AWS 移行計画セクション）
 
 ---
 
