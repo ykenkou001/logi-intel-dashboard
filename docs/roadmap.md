@@ -21,11 +21,11 @@
 
 **ゴール**: Claude Desktop から「東京都の運輸業事業所数」が返ってくる
 
-- [ ] `core/clients/base.py`（共通 HTTP クライアント基底クラス）
-- [ ] `core/clients/estat.py`（e-Stat 統計表検索 + データ取得）
-- [ ] `core/cache.py`（SQLite キャッシュ）
-- [ ] `mcp_server/server.py`（FastMCP エントリ）
-- [ ] `mcp_server/tools/estat_tools.py`（統計表検索ツール、データ取得ツール、コード解決ツール）
+- [x] `core/clients/base.py`（共通 HTTP クライアント基底クラス）
+- [x] `core/clients/estat.py`（e-Stat 統計表検索 + データ取得）
+- [x] `core/cache.py`（SQLite キャッシュ）
+- [x] `mcp_server/server.py`（FastMCP エントリ）
+- [x] `mcp_server/tools/estat_tools.py`（統計表検索ツール、データ取得ツール、メタデータ取得ツール）
 - [ ] Claude Desktop 設定登録手順を README に記載
 - [ ] Claude Desktop で動作確認
 
