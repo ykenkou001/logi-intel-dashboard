@@ -49,8 +49,8 @@ class AsyncHTTPClient:
         """ログ出力用にシークレット値を *** に置換する。"""
         return {k: "***" if k in _SECRET_PARAMS else str(v) for k, v in params.items()}
 
-    async def get_json(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        """リトライ・バックオフ付き GET リクエスト。レスポンスを JSON で返す。"""
+    async def _get(self, path: str, params: dict[str, Any] | None = None) -> httpx.Response:
+        """リトライ・バックオフ付き GET リクエスト。httpx.Response を返す。"""
         if self._client is None:
             raise HttpClientError("async with 経由で使用してください")
 
@@ -62,7 +62,7 @@ class AsyncHTTPClient:
                 logger.debug("GET %s params=%s", path, self._mask_params(params))
                 resp = await self._client.get(path, params=params)
                 resp.raise_for_status()
-                return resp.json()
+                return resp
             except httpx.HTTPStatusError as exc:
                 # 4xx はリトライしても無意味
                 if exc.response.status_code < 500:
@@ -82,3 +82,11 @@ class AsyncHTTPClient:
         raise HttpClientError(
             f"{self._max_retries} 回リトライ後も失敗: {path}"
         ) from last_exc
+
+    async def get_json(self, path: str, params: dict[str, Any] | None = None) -> Any:
+        """リトライ・バックオフ付き GET リクエスト。レスポンスを JSON で返す。"""
+        return (await self._get(path, params)).json()
+
+    async def get_html(self, path: str, params: dict[str, Any] | None = None) -> str:
+        """リトライ・バックオフ付き GET リクエスト。レスポンスを HTML テキストで返す。"""
+        return (await self._get(path, params)).text
