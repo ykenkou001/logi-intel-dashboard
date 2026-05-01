@@ -47,10 +47,16 @@
 
 ## フェーズ 3: CLO 支援機能
 
-- [ ] 業界ベンチマーク分析
-- [ ] ドライバー需給ギャップ推計
-- [ ] 中長期計画ドラフト生成プロンプト
-- [ ] 燃料価格動向と補助金影響分析
+詳細設計 → [docs/clo_domain.md](docs/clo_domain.md)（フェーズ3実装設計セクション）
+
+- [ ] **Step 1**: 業界ベンチマーク分析（`logi_analyze_benchmark`）
+  - e-Stat 0004005642 を全国一括取得 → 47都道府県ランキング・全国シェア計算
+- [ ] **Step 2**: ドライバー需給ギャップ推計（`logi_analyze_driver_gap`）
+  - 国勢調査 statsDataId 探索 → 就業者数 × 2024年問題削減係数
+- [ ] **Step 3**: MCP ツール登録（`mcp_server/tools/analyze_tools.py`）
+- [ ] **Step 4**: 燃料価格履歴蓄積（`fuel_price_history` テーブル追加）
+- [ ] **Step 5**: CLO 中長期計画ドラフトプロンプト（`mcp_server/prompts/clo_plan_draft.py`）
+- [ ] ~~燃料価格動向と補助金影響分析~~ → Step 4 の数ヶ月蓄積後に実装
 
 ---
 

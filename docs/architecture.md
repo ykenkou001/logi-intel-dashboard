@@ -67,11 +67,12 @@ logi-intel-dashboard/
 │   │   ├── __init__.py
 │   │   ├── base.py                # 共通基底クラス（リトライ、レート制限）
 │   │   ├── estat.py               # e-Stat API
-│   │   ├── resas.py               # RESAS API
 │   │   ├── corp_number.py         # 国税庁法人番号 API
 │   │   ├── xroad.py               # 国交省 xROAD 交通量 API
-│   │   ├── jma.py                 # 気象庁 bosai JSON
-│   │   └── enecho.py              # 資源エネルギー庁 石油情報
+│   │   ├── weather.py             # 気象庁 bosai JSON
+│   │   └── energy.py              # gogo.gs 燃料価格（GoGoGsClient）
+│   │   # ※ RESAS API は 2025-03-24 提供終了のため含まない
+│   │   # ※ enecho.meti.go.jp は Akamai ブロックで接続不可（2026-05-01 確認）
 │   ├── cache.py                   # SQLite キャッシュ層
 │   ├── exceptions.py              # カスタム例外定義
 │   ├── models/                    # Pydantic モデル
@@ -89,8 +90,7 @@ logi-intel-dashboard/
 │   ├── tools/                     # ツール定義
 │   │   ├── __init__.py
 │   │   ├── estat_tools.py
-│   │   ├── resas_tools.py
-│   │   └── ...
+│   │   └── ...                    # ※ resas_tools.py は作成しない（API 終了）
 │   └── prompts/                   # MCP プロンプト
 │       └── clo_plan_draft.py
 ├── api/                           # REST API 層（フェーズ4）
@@ -137,12 +137,40 @@ CREATE INDEX idx_fetched_at ON api_cache(fetched_at);
 | API | TTL |
 |-----|-----|
 | e-Stat | 24 時間（統計表は更新頻度低い） |
-| RESAS | 7 日（更新頻度極めて低い） |
 | 国税庁法人番号 | 30 日 |
 | xROAD 交通量 | 1 分（5 分値データ） |
 | 気象庁 | 30 分 |
-| エネ庁 石油価格 | 7 日（週次更新） |
+| gogo.gs 燃料価格 | 24 時間（前日更新） |
 
 ### 環境変数
 
 - `LOGI_CACHE_BYPASS=1` で強制バイパス可（開発時）
+
+---
+
+## AWS 移行計画（フェーズ4）
+
+現在はローカル稼働（Claude Desktop が stdio で子プロセスとして起動）。
+フェーズ4 で AWS 上に常駐サーバーとして移行し、社内全員が接続可能にする。
+
+### ローカル vs AWS の差分
+
+| 項目 | ローカル（現在） | AWS（フェーズ4） |
+|------|----------------|----------------|
+| 起動方式 | Claude Desktop が stdio で子プロセス起動 | ECS/Lambda 上で常駐 |
+| 通信方式 | stdio（標準入出力） | HTTP / SSE |
+| キャッシュ | ローカル SQLite | ElastiCache（Redis）または RDS |
+| API キー管理 | `.env` ファイル | AWS Secrets Manager |
+| 接続元 | 開発者 PC のみ | 社内全員（VPN 内） |
+
+### 移行時の主な変更点
+
+1. **`mcp_server/server.py`** — `mcp.run()` を stdio モードから HTTP/SSE モードに切り替え（FastMCP が対応済み）
+2. **`core/cache.py`** — SQLite → Redis クライアントに差し替え（インターフェースは共通化しておく）
+3. **`.env`** — Secrets Manager から環境変数を注入する仕組みに変更
+4. **Claude Desktop 設定** — `localhost` から AWS エンドポイント URL に変更
+
+### 設計上の注意
+
+- `core/` 層はローカル・AWS どちらでも動くように、外部ストレージへの依存をキャッシュ層に閉じ込める
+- HTTP モードでは認証（API キー or Cognito）を MCP サーバー層に追加する必要がある
