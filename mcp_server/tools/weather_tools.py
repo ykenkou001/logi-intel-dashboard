@@ -5,7 +5,12 @@ from typing import Any
 
 from fastmcp import FastMCP
 
-from core.clients.weather import WeatherApiError, WeatherClient
+from core.clients.weather import (
+    _INACTIVE_STATUSES,
+    WeatherApiError,
+    WeatherClient,
+    resolve_warning_name,
+)
 
 
 def _format_forecast(data: list[dict[str, Any]]) -> str:
@@ -31,17 +36,15 @@ def _format_forecast(data: list[dict[str, Any]]) -> str:
 
 def _format_warning(data: dict[str, Any], area_code: str) -> str:
     area_types = data.get("areaTypes", [])
-    warnings_found: list[str] = []
+    warnings_found: set[str] = set()
     for at in area_types:
         for area in at.get("areas", []):
             for w in area.get("warnings", []):
-                status = w.get("status", "")
-                wtype = w.get("type", "")
-                if status and status != "解除":
-                    warnings_found.append(f"{wtype}（{status}）")
+                if w.get("status", "") not in _INACTIVE_STATUSES:
+                    warnings_found.add(resolve_warning_name(w.get("code", "")))
     if not warnings_found:
         return f"エリアコード {area_code}: 現在発令中の警報・注意報はありません。"
-    return f"エリアコード {area_code}: " + "、".join(warnings_found)
+    return f"エリアコード {area_code}: " + "、".join(sorted(warnings_found))
 
 
 def register_tools(mcp: FastMCP) -> None:

@@ -93,8 +93,8 @@ def _parse_fuel_prices(html: str) -> dict[str, Any]:
     if not col_map.get("regular"):
         raise EnergyApiError("レギュラーガソリン価格の列が見つかりません。")
 
-    # 最新データ行（テーブルの最終行）を取得
-    data_row = rows[-1].find_all(["th", "td"])
+    # 最新データ行: エネ庁ページは降順（新→旧）のため先頭データ行が最新
+    data_row = rows[1].find_all(["th", "td"])
     if len(data_row) <= max(col_map.values()):
         raise EnergyApiError("最新行のセル数が不足しています。")
 

@@ -12,7 +12,12 @@ from fastmcp import FastMCP
 from core.clients.corp_number import CorpNumberApiError, CorpNumberClient
 from core.clients.energy import EnergyApiError, EnergyClient
 from core.clients.estat import EStatApiError, EStatClient
-from core.clients.weather import WeatherApiError, WeatherClient
+from core.clients.weather import (
+    _INACTIVE_STATUSES,
+    WeatherApiError,
+    WeatherClient,
+    resolve_warning_name,
+)
 
 # 都道府県名 → 各 API コードのマッピング
 # estat: e-Stat cdArea（5桁）, corp: 国税庁都道府県コード（2桁）
@@ -67,8 +72,8 @@ _PREF_CODES: dict[str, dict[str, str]] = {
     "沖縄県": {"estat": "47000", "corp": "47", "jma": "471000"},
 }
 
-# e-Stat 経済センサス 産業別事業所数（2021年）の統計表 ID
-_ESTAT_STATS_ID = "0003410379"
+# e-Stat 経済センサス活動調査 産業（大分類）別事業所数（2021年）の統計表 ID
+_ESTAT_STATS_ID = "0004005642"
 
 
 async def _fetch_estat(cd_area: str) -> str:
@@ -107,14 +112,14 @@ async def _fetch_weather(jma_code: str) -> str:
         async with WeatherClient() as client:
             warnings = await client.get_warning(jma_code)
         area_types = warnings.get("areaTypes", [])
-        active: list[str] = []
+        active: set[str] = set()
         for at in area_types:
             for area in at.get("areas", []):
                 for w in area.get("warnings", []):
-                    if w.get("status", "") not in ("", "解除"):
-                        active.append(w.get("type", ""))
+                    if w.get("status", "") not in _INACTIVE_STATUSES:
+                        active.add(resolve_warning_name(w.get("code", "")))
         if active:
-            return f"気象警報: 発令中 — {', '.join(active)}"
+            return f"気象警報: 発令中 — {', '.join(sorted(active))}"
         return "気象警報: なし（気象庁）"
     except WeatherApiError as exc:
         return f"気象警報: 取得失敗（{exc}）"
