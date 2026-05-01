@@ -73,11 +73,16 @@ class AsyncHTTPClient:
             except httpx.RequestError as exc:
                 last_exc = exc
 
-            wait = self._backoff_factor * (2**attempt)
-            logger.warning(
-                "リトライ %d/%d: %.1f 秒待機 (%s)", attempt + 1, self._max_retries, wait, last_exc
-            )
-            await asyncio.sleep(wait)
+            if attempt < self._max_retries - 1:
+                wait = self._backoff_factor * (2**attempt)
+                logger.warning(
+                    "リトライ %d/%d: %.1f 秒待機 (%s)",
+                    attempt + 1,
+                    self._max_retries,
+                    wait,
+                    last_exc,
+                )
+                await asyncio.sleep(wait)
 
         raise HttpClientError(
             f"{self._max_retries} 回リトライ後も失敗: {path}"
@@ -90,3 +95,7 @@ class AsyncHTTPClient:
     async def get_html(self, path: str, params: dict[str, Any] | None = None) -> str:
         """リトライ・バックオフ付き GET リクエスト。レスポンスを HTML テキストで返す。"""
         return (await self._get(path, params)).text
+
+    async def get_bytes(self, path: str, params: dict[str, Any] | None = None) -> bytes:
+        """リトライ・バックオフ付き GET リクエスト。レスポンスを bytes で返す。"""
+        return (await self._get(path, params)).content

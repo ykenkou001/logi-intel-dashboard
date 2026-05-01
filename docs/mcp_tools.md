@@ -17,7 +17,6 @@
 | データソース | プレフィックス | ツール例 |
 |------------|--------------|----|
 | e-Stat | `logi_estat_*` | `logi_estat_search`, `logi_estat_get_data` |
-| RESAS | `logi_resas_*` | `logi_resas_industry`, `logi_resas_population` |
 | 国税庁法人番号 | `logi_corp_*` | `logi_corp_search`, `logi_corp_by_pref` |
 | xROAD | `logi_traffic_*` | `logi_traffic_realtime`, `logi_traffic_by_route` |
 | 気象庁 | `logi_weather_*` | `logi_weather_forecast`, `logi_weather_warning` |

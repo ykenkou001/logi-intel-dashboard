@@ -1,5 +1,6 @@
 """core/cache.py の単体テスト。"""
 import time
+from pathlib import Path
 
 import pytest
 
@@ -7,9 +8,9 @@ from core import cache
 
 
 @pytest.fixture(autouse=True)
-def use_temp_db(tmp_path: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> None:
+def use_temp_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """テストごとに一時 DB を使用する。"""
-    monkeypatch.setattr(cache, "_DB_PATH", tmp_path / "test_cache.db")  # type: ignore[attr-defined]
+    monkeypatch.setattr(cache, "_DB_PATH", tmp_path / "test_cache.db")
 
 
 def test_store_and_get() -> None:
@@ -29,6 +30,26 @@ def test_get_expired() -> None:
     cache.store("test:expired", {"value": 1}, ttl_seconds=1)
     time.sleep(1.1)
     assert cache.get("test:expired") is None
+
+
+def test_get_stale_returns_expired_entry_within_max_age() -> None:
+    """get_stale は期限切れだが最大経過時間内のエントリを返す。"""
+    cache.store("test:stale", {"value": 1}, ttl_seconds=1)
+    time.sleep(1.1)
+    assert cache.get_stale("test:stale", max_age_seconds=60) == {"value": 1}
+
+
+def test_get_stale_ignores_fresh_entry() -> None:
+    """get_stale は fresh なエントリを返さない。"""
+    cache.store("test:fresh", {"value": 1}, ttl_seconds=60)
+    assert cache.get_stale("test:fresh", max_age_seconds=60) is None
+
+
+def test_get_stale_ignores_too_old_entry() -> None:
+    """get_stale は最大経過時間を超えたエントリを返さない。"""
+    cache.store("test:too_old", {"value": 1}, ttl_seconds=1)
+    time.sleep(1.1)
+    assert cache.get_stale("test:too_old", max_age_seconds=1) is None
 
 
 def test_store_overwrites() -> None:

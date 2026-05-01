@@ -59,6 +59,28 @@ def get(key: str) -> Any:
     return json.loads(response_json)
 
 
+def get_stale(key: str, max_age_seconds: int) -> Any:
+    """期限切れを許容してキャッシュを取得する。
+
+    LOGI_CACHE_BYPASS=1 が設定されている場合は常に None を返す。
+    max_age_seconds より古い行、または fresh な行は None を返す。
+    """
+    if os.environ.get("LOGI_CACHE_BYPASS") == "1":
+        return None
+    with closing(_connect()) as conn:
+        row = conn.execute(
+            "SELECT response_json, fetched_at, ttl_seconds FROM api_cache WHERE cache_key = ?",
+            (key,),
+        ).fetchone()
+    if row is None:
+        return None
+    response_json, fetched_at, ttl_seconds = row
+    age_seconds = time.time() - fetched_at
+    if age_seconds <= ttl_seconds or age_seconds > max_age_seconds:
+        return None
+    return json.loads(response_json)
+
+
 def store(key: str, data: Any, ttl_seconds: int) -> None:
     """データをキャッシュに保存する。"""
     with closing(_connect()) as conn:
