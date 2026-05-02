@@ -10,6 +10,9 @@ dependencies = [
     "fastmcp>=2.0",
     "python-dotenv>=1.0",
     "beautifulsoup4>=4.12",
+    "python-pptx>=1.0",
+    "openpyxl>=3.1",
+    "python-docx>=1.1",
 ]
 
 [dependency-groups]
@@ -33,6 +36,10 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 [tool.mypy]
 strict = true
 python_version = "3.12"
+
+[[tool.mypy.overrides]]
+module = ["openpyxl.*", "pptx.*", "docx.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
