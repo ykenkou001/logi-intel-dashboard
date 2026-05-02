@@ -41,3 +41,9 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+
+# 国交省公式PDF（再配布制約配慮・MD化したものをコミットする）
+core/templates/clo_plan_examples/PDF/
+
+# 出力成果物（PPT/PDF/Excel/Word/Markdown ドラフト）
+outputs/
