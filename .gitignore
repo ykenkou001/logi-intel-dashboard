@@ -42,8 +42,8 @@ dist/
 build/
 *.egg-info/
 
-# CLO テンプレート元 PDF（著作物・サイズ大）
+# 国交省公式PDF（著作物・再配布制約配慮・MD化したものをコミットする）
 core/templates/clo_plan_examples/PDF/
 
-# 生成成果物
+# 出力成果物（PPT/PDF/Excel/Word/Markdown ドラフト）
 outputs/
