@@ -41,3 +41,9 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+
+# CLO テンプレート元 PDF（著作物・サイズ大）
+core/templates/clo_plan_examples/PDF/
+
+# 生成成果物
+outputs/
