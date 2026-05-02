@@ -51,16 +51,46 @@ def _new_presentation() -> Any:
 
 
 def _add_title_slide(prs: Any, title: str, subtitle: str) -> None:
-    """表紙スライドを追加する。"""
-    layout = prs.slide_layouts[0]  # Title Slide レイアウト
+    """表紙スライドを追加する。
+
+    placeholder のレイアウトに依存すると右下に偏る等の崩れが起きるため、
+    明示的にテキストボックスを中央配置する。
+    """
+    # 6 = Blank レイアウト相当（無ければ後ろから）
+    blank_idx = 6 if len(prs.slide_layouts) > 6 else len(prs.slide_layouts) - 1
+    layout = prs.slide_layouts[blank_idx]
     slide = prs.slides.add_slide(layout)
-    if slide.shapes.title is not None:
-        slide.shapes.title.text = title
-    # サブタイトル placeholder（idx=1）
-    for ph in slide.placeholders:
-        if ph.placeholder_format.idx == 1:
-            ph.text = subtitle
-            break
+
+    slide_width = prs.slide_width
+    slide_height = prs.slide_height
+    margin = Inches(0.7)
+    box_width = slide_width - margin * 2
+
+    # タイトル: 中央上寄りに配置
+    title_box = slide.shapes.add_textbox(
+        margin, Inches(2.2), box_width, Inches(1.5),
+    )
+    title_tf = title_box.text_frame
+    title_tf.word_wrap = True
+    title_p = title_tf.paragraphs[0]
+    title_p.text = title
+    title_p.alignment = 2  # PP_ALIGN.CENTER
+    title_p.font.size = Pt(40)
+    title_p.font.bold = True
+
+    # サブタイトル: タイトルの下に配置
+    subtitle_box = slide.shapes.add_textbox(
+        margin, Inches(4.0), box_width, Inches(1.0),
+    )
+    subtitle_tf = subtitle_box.text_frame
+    subtitle_tf.word_wrap = True
+    subtitle_p = subtitle_tf.paragraphs[0]
+    subtitle_p.text = subtitle
+    subtitle_p.alignment = 2  # PP_ALIGN.CENTER
+    subtitle_p.font.size = Pt(20)
+
+    # スライドサイズが想定外（HEIGHT が違う）場合の参照用
+    _ = slide_height
 
 
 def _add_content_slide(prs: Any, content: SlideContent) -> None:

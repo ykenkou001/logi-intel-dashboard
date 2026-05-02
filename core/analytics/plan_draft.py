@@ -430,36 +430,49 @@ def _build_form3(
 
     必須3項目（積載率向上 / 荷待ち時間短縮 / 荷役等時間短縮）に
     施策をマッピングして実施措置・計画内容・実施時期を記載する。
+
+    実施時期の段階配置:
+        - 投資額が小さく短期実施可能な施策を 2026 年度に
+        - 中規模を 2027〜2028 年度に
+        - 全社展開を 2029〜2030 年度に分散
     """
-    measures_load: list[PlanMeasure] = []
-    measures_wait: list[PlanMeasure] = []
-    measures_loading: list[PlanMeasure] = []
+    # 施策ごとに（テーマ・実施措置短縮名・計画内容詳細）を生成し
+    # 投資額の小さい順に2026/2027/2028/2029年度に段階配置する
+    section_buckets: dict[str, list[tuple[float, PlanMeasure]]] = {
+        "load": [],
+        "wait": [],
+        "loading": [],
+    }
 
     for m in simulation.measures:
-        timing = _propose_timing(m.payback_years)
-        plan_measure = PlanMeasure(
-            measure=m.name,
-            description=m.description,
-            timing=timing,
+        theme = _classify_form3_theme(m.name)
+        if theme is None:
+            continue
+        measure_name, description = _split_measure_name_and_description(m, profile)
+        section_buckets[theme].append(
+            (m.investment_jpy, PlanMeasure(
+                measure=measure_name,
+                description=description,
+                timing="",  # 後で段階配置で設定
+            ))
         )
-        # 施策をテーマ別に振り分け
-        if "積載率" in m.name or "モーダルシフト" in m.name or "共同配送" in m.name:
-            measures_load.append(plan_measure)
-        if "バース" in m.name:
-            measures_wait.append(plan_measure)
-        if "中継輸送" in m.name:
-            measures_loading.append(plan_measure)
+
+    # 投資額の小さい順にソートし、年度を割り当て
+    for bucket in section_buckets.values():
+        bucket.sort(key=lambda x: x[0])
+        for i, (_, pm) in enumerate(bucket):
+            pm.timing = _propose_staged_timing(i, len(bucket))
 
     sections = [
         PlanSection(
             title="Ⅱ 積載率向上",
             shipper_class="" if profile.is_chain_franchise else "特定第一種荷主",
-            measures=measures_load,
+            measures=[pm for _, pm in section_buckets["load"]],
         ),
         PlanSection(
             title="Ⅲ 荷待ち時間短縮",
             shipper_class="" if profile.is_chain_franchise else "特定第一種荷主・第二種荷主",
-            measures=measures_wait,
+            measures=[pm for _, pm in section_buckets["wait"]],
         ),
     ]
     # 連鎖化事業者は荷役等項目なし
@@ -468,7 +481,7 @@ def _build_form3(
             PlanSection(
                 title="Ⅳ 荷役等時間短縮",
                 shipper_class="特定第一種荷主・第二種荷主",
-                measures=measures_loading,
+                measures=[pm for _, pm in section_buckets["loading"]],
             )
         )
 
@@ -485,15 +498,90 @@ def _build_form3(
     return str(path)
 
 
-def _propose_timing(payback_years: float | None) -> str:
-    """単純回収期間から実施時期文字列を提案する。"""
-    if payback_years is None:
-        return "2026〜2030年度（要詳細検討）"
-    if payback_years < 1.0:
-        return "2026年度（早期実施）"
-    if payback_years < 2.0:
+def _classify_form3_theme(measure_name: str) -> str | None:
+    """施策名を様式第3 の必須3項目のテーマに分類する。"""
+    if "積載率" in measure_name or "モーダルシフト" in measure_name \
+            or "共同配送" in measure_name:
+        return "load"
+    if "バース" in measure_name:
+        return "wait"
+    if "中継輸送" in measure_name:
+        return "loading"
+    return None
+
+
+def _split_measure_name_and_description(
+    measure: object,
+    profile: CompanyProfile,
+) -> tuple[str, str]:
+    """様式第3 用に「実施措置（短縮名）」と「計画内容（具体的アクション）」を分離する。
+
+    現状の MeasureSimulation は (name, description) を持つが、name が長く、
+    description が技術的説明になっている。様式第3 では:
+        - 実施措置: 短い見出し（「積載率向上」「モーダルシフト」等）
+        - 計画内容: 具体的アクション（数量・対象範囲・自社固有の手段）
+    として分離する。
+    """
+    m = measure  # 型はSimulationResult.measures の要素
+    name = m.name  # type: ignore[attr-defined]
+    desc = m.description  # type: ignore[attr-defined]
+
+    # 実施措置は施策名から「（〜）」を除いた短縮形にする
+    short = name.split("（")[0].strip()
+
+    # 計画内容: 自社固有の事情を反映した具体的アクション
+    site_count = len(profile.sites)
+    if "モーダルシフト" in name:
+        plan_content = (
+            f"{desc}。{profile.name}の物流ネットワーク全体（拠点数 {site_count}）"
+            "において、JR貨物コンテナ対応の積込設備整備および運送事業者との"
+            "ラウンドユース契約締結を進める。"
+        )
+    elif "積載率" in name:
+        plan_content = (
+            f"{desc}。TMS（輸配送管理システム）導入と"
+            f"パレット標準化（T11／T12）により、{site_count}拠点の"
+            "出荷データを一元管理し、配車最適化を実現する。"
+        )
+    elif "共同配送" in name:
+        plan_content = (
+            f"{desc}。同業他社・荷主団体との協議を経て、"
+            f"主要DC ({site_count}拠点) を起点とする共同配送スキームを構築。"
+            "WMS連携で配送計画を統合する。"
+        )
+    elif "中継輸送" in name:
+        plan_content = (
+            f"{desc}。長距離幹線（500km超）の中間地点に中継拠点を設置し、"
+            "ドライバー交代制を導入。改善基準告示準拠を担保する。"
+        )
+    elif "バース" in name:
+        plan_content = (
+            f"{desc}。トラック予約受付システム（VBS）を導入し、"
+            f"{site_count}拠点の入出荷時間スロットを管理。"
+            "予約遵守率の KPI を月次でモニタリング。"
+        )
+    else:
+        plan_content = desc
+
+    return short, plan_content
+
+
+def _propose_staged_timing(index: int, total: int) -> str:
+    """施策の年度配置を段階的に提案する。
+
+    投資額が小さい順に index=0, 1, 2... を渡す前提で、年度を割り当てる。
+    1〜2件: 2026年度に集中
+    3件以上: 2026年度・2027〜2028年度・2029〜2030年度に分散
+    """
+    if total <= 0:
+        return "2026〜2030年度"
+    if index == 0:
+        return "2026年度（先行実施）"
+    if index == 1:
         return "2026〜2027年度"
-    return "2026〜2030年度（段階実施）"
+    if index == 2:
+        return "2027〜2028年度"
+    return "2028〜2030年度（段階展開）"
 
 
 def build_plan_draft_summary(r: PlanDraftResult) -> str:
