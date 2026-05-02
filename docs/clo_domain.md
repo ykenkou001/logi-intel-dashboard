@@ -74,10 +74,10 @@ CLO 支援アプリとしての本プロジェクトは、**以下の公式様�
 | 項目 | 内容 |
 |------|------|
 | 様式番号 | 様式第5 定期報告書 |
-| 提出頻度 | 年1回 |
+| 提出頻度 | 年1回（毎年 7 月末） |
 | 入手元 | エネ庁省エネポータル / 国交省ポータル |
 
-→ フェーズ4 以降で対応。フェーズ3 では計画書（様式第3別紙）に集中。
+→ **フェーズ3.5 で対応**（中長期計画書と並列で初年度から提出義務が発生する）。記載例は既に `core/templates/clo_plan_examples/manufacturing_report_*.md` に MD 化済み。
 
 ### テンプレート取得の運用
 
@@ -102,15 +102,22 @@ CLO が中長期計画を策定するために必要な「外部環境データ�
 
 ## フェーズ 3 実装設計
 
-### 1. 業界ベンチマーク分析（`logi_analyze_benchmark`）
+> **命名統一**: CLO 計画策定の文脈で使うツールはすべて `logi_clo_*` プレフィックスに統一する（旧表記 `logi_analyze_*` は廃止）。
 
-**何を計算するか**: 指定都道府県の運輸業規模を全国と比較してランク化する
+### 1. 業界ベンチマーク分析（`logi_clo_benchmark_position`）
+
+**何を計算するか**: 指定都道府県の業界規模を全国と比較してランク化する
+
+**業種別分岐**:
+- **運送業者向け**（H 運輸業，郵便業）: 既存 `logi_macro_overview` のロジックを再利用
+- **荷主業種別**（製造業 D / 卸売業 I / 小売業 J）: 自社の JSIC 細分類コードに応じてベンチマーク対象を切替
 
 | 指標 | 計算方法 | データソース |
 |------|---------|------------|
 | 全国ランク（1〜47位） | 47都道府県の事業所数を並べて順位付け | e-Stat 0004005642 × 47都道府県 |
 | 全国シェア（%） | 当該都道府県 ÷ 全国合計 × 100 | 同上 |
 | 隣接ブロック比較 | 同一地方ブロック内での順位（例: 関東6都県内） | 同上 |
+| 物流効率指標 | 業種別物流原単位 × 自社売上 → 推計取扱量 vs 業界平均 | `core/static/industry_freight_coef.py` |
 
 **実装上の注意**:
 - e-Stat `getStatsData` を47回叩くと過剰アクセス → `cdArea` 未指定で全国一括取得して Python 側でフィルタ
@@ -118,7 +125,7 @@ CLO が中長期計画を策定するために必要な「外部環境データ�
 
 ---
 
-### 2. ドライバー需給ギャップ推計（`logi_analyze_driver_gap`）
+### 2. ドライバー需給ギャップ推計（`logi_clo_driver_gap`）
 
 **何を計算するか**: 2024年問題（960時間上限）による実質稼働力の減少幅を都道府県別に推計する
 
@@ -132,35 +139,45 @@ CLO が中長期計画を策定するために必要な「外部環境データ�
 
 #### データソース
 
-| データ | statsDataId | 備考 |
-|--------|------------|------|
-| 道路貨物運送業 就業者数（都道府県別）| 要探索（国勢調査 2020） | 職業: 輸送・機械運転従事者 大分類 |
-| ドライバー平均賃金（道路貨物運送業） | 00600310（賃金構造基本統計） | 全国値のみで可 |
+> **重要**: e-Stat の **`statsCode`**（省庁コード／統計分野ID）と **`statsDataId`**（個別統計表ID）は別物。`statsCode` は固定だが、`statsDataId` は調査年度ごとに新しく発行される。実装時は `getStatsList(statsCode=...)` で当年度の `statsDataId` を**動的取得**してキャッシュすること。
+
+| データ | statsCode | 備考 |
+|--------|-----------|------|
+| 道路貨物運送業 就業者数（都道府県別）| `00200521`（国勢調査） | 職業: 輸送・機械運転従事者 大分類。statsDataId は `logi_estat_search` で都度特定 |
+| ドライバー平均賃金（道路貨物運送業） | `00600310`（賃金構造基本統計） | 全国値のみで可。statsDataId は当年度版を動的取得 |
 
 **探索が必要**: 国勢調査の statsDataId は `logi_estat_search` で「輸送 就業者 都道府県」を検索して特定する（実装前に要確認ステップあり）
 
 ---
 
-### 3. 中長期計画ドラフト生成プロンプト（`clo_plan_draft`）
+### 3. 中長期計画ドラフト生成（`logi_clo_plan_draft`）
 
-**何をするか**: FastMCP の `@mcp.prompt()` として登録するプロンプトテンプレート。新たなデータ取得実装は不要で、既存ツールを組み合わせるだけ。
+**何をするか**: FastMCP の `@mcp.tool()` として登録する統合ツール。フェーズ2.5 の出口層（`core/export/`）を呼び出して**ファイル成果物**を返す。
 
 ```
-Claude が自動でやること:
+ツール内部の処理フロー:
 1. logi_macro_overview(prefecture_name) → 外部環境データ収集
-2. logi_analyze_benchmark(prefecture_name) → 業界内ポジション把握
-3. logi_analyze_driver_gap(prefecture_name) → 2024年問題の影響試算
-4. 上記データを使って3ヶ年中長期計画骨子をドラフト
+2. logi_clo_benchmark_position(company_profile) → 業界内ポジション把握
+3. logi_clo_driver_gap(prefecture_name) → 2024年問題の影響試算
+4. logi_clo_target_proposal(...) → 数値目標逆算
+5. core/export/ppt_writer.py + docx_form3_writer.py + excel_writer.py
+   → outputs/ にファイル一式を生成
+6. {summary, files, citations} 構造でレスポンス返却
 ```
 
-**計画書の構成（法定様式イメージ）**:
-1. 外部環境分析（マクロ概況）
-2. 自社ポジション（ベンチマーク）
-3. ドライバー確保・育成計画（需給ギャップ対策）
-4. 荷待ち・積載率改善目標（数値目標）
-5. 実行スケジュール（3ヶ年）
+**計画書の構成（法定様式に準拠）**:
+1. 表紙（会社名・対象期間）
+2. **エグゼクティブサマリー**（経営層向け1枚要約・2枚目固定）
+3. 外部環境分析（マクロ概況）
+4. 自社ポジション（ベンチマーク）
+5. ドライバー確保・育成計画（需給ギャップ対策）
+6. 荷待ち・積載率改善目標（数値目標）
+7. 施策一覧（実施措置・計画内容・実施時期）
+8. 実行スケジュール（3〜5ヶ年）
+9. 補助金・税制優遇（フェーズ3 Step6）
+10. 出典一覧
 
-**実装条件**: `logi_analyze_benchmark` と `logi_analyze_driver_gap` が完成してから着手する
+**実装条件**: `logi_clo_benchmark_position` と `logi_clo_driver_gap` が完成してから着手する
 
 ---
 
@@ -258,3 +275,44 @@ GET /api/v1/clo/plan/draft?company_profile=...&format=docx (様式第3別紙)
 3. **業界平均比較** > 単独数値 — 比較の文脈なしには CLO は使えない
 4. **出典明示** > 計算の精緻化 — 出典のない数字は経営会議で使えない
 5. **既存テンプレート流用** > オリジナル設計 — 公式記載事例集の構造に倣う
+
+---
+
+## 自社プロフィールデータ（CompanyProfile）
+
+**フェーズ4 までの方針**: `core/static/sample_company.py` にサンプル3社分を同梱。フェーズ4 で Web フォーム/CSV アップロードに置き換える。
+
+### スキーマ（Pydantic v2）
+
+```python
+class CompanySite(BaseModel):
+    """自社拠点。"""
+    name: str                          # 拠点名（例: "東京物流センター"）
+    site_type: Literal["factory", "dc", "store", "office"]
+    prefecture: str                    # 都道府県名
+    annual_freight_tons: float         # 年間取扱量（トン）
+
+class CompanyProfile(BaseModel):
+    """自社プロフィール（CLO 計画書ドラフト生成の入力）。"""
+    company_id: str                    # 内部ID（ファイル名にも使用）
+    name: str                          # 会社名
+    jsic_code: str                     # 日本標準産業分類 細分類4桁（例: "3159"）
+    main_business: str                 # 主たる事業（例: "電子部品製造業"）
+    annual_revenue_jpy: int            # 年間売上（円）
+    annual_freight_tons_total: float   # 年間取扱貨物量 合計（トン）— 9万トン判定用
+    is_chain_franchise: bool           # 連鎖化事業者か（コンビニ本部等）
+    fleet_count_owned: int             # 自社保有車両数
+    fleet_count_outsourced: int        # 委託車両数（おおよそ）
+    sites: list[CompanySite]           # 拠点リスト
+    clo_name: str                      # CLO 役職・氏名
+    plan_period_start_fy: int          # 計画期間 開始年度（例: 2026）
+    plan_period_end_fy: int            # 計画期間 終了年度（例: 2030）
+```
+
+### サンプル3社の業種カバレッジ
+
+- **製造業（電子部品）** JSIC 3159 — 特定第一種荷主（発荷主）想定
+- **卸売業（インテリア）** JSIC 5514 — 特定第一種・第二種荷主（両方）想定
+- **連鎖化事業者（コンビニ）** JSIC 5891 — 特定連鎖化事業者想定
+
+各サンプルは `core/templates/clo_plan_examples/` の記載事例と整合させる。
