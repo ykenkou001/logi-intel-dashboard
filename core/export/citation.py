@@ -125,6 +125,24 @@ def logistics_efficiency_law_citation() -> Citation:
     )
 
 
+def corp_number_citation() -> Citation:
+    """国税庁法人番号 API の引用テンプレート。"""
+    return Citation(
+        label="国税庁 法人番号公表サイト",
+        url="https://www.houjin-bangou.nta.go.jp/",
+        accessed_via="国税庁 法人番号 API v4",
+    )
+
+
+def xroad_citation() -> Citation:
+    """xROAD 交通量 API の引用テンプレート。"""
+    return Citation(
+        label="JARTIC 道路交通情報 API（xROAD）",
+        url="https://www.jartic.or.jp/",
+        accessed_via="JARTIC オープン API（WFS）",
+    )
+
+
 def co2_factors_citation() -> Citation:
     """CO2 排出原単位の引用テンプレート。"""
     return Citation(

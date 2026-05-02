@@ -2,6 +2,8 @@
 
 全データソースを asyncio.gather で並列呼び出しし、
 一部が失敗しても他のデータは返す（部分失敗許容）。
+
+戻り値は ToolResponse 構造（summary/files/citations/freshness_warnings）。
 """
 from __future__ import annotations
 
@@ -10,6 +12,7 @@ from collections.abc import Awaitable
 
 from fastmcp import FastMCP
 
+import core.static  # noqa: F401  -- 副作用 import で全鮮度メタデータを登録
 from core.clients.corp_number import CorpNumberApiError, CorpNumberClient
 from core.clients.energy import EnergyApiError, EnergyClient
 from core.clients.estat import EStatApiError, EStatClient
@@ -19,6 +22,14 @@ from core.clients.weather import (
     WeatherClient,
     resolve_warning_name,
 )
+from core.export.citation import (
+    corp_number_citation,
+    estat_citation,
+    fuel_price_citation,
+    jma_warning_citation,
+)
+from core.export.response import ToolResponse
+from core.static._freshness import all_warnings
 
 # 都道府県名 → 各 API コードのマッピング
 # estat: e-Stat cdArea（5桁）, corp: 国税庁都道府県コード（2桁）
@@ -152,7 +163,7 @@ def register_tools(mcp: FastMCP) -> None:
     """MCP サーバーに統合マクロ概況ツールを登録する。"""
 
     @mcp.tool()
-    async def logi_macro_overview(prefecture_name: str) -> str:
+    async def logi_macro_overview(prefecture_name: str) -> dict[str, object]:
         """都道府県の物流業界マクロ概況を全データソースから集約して返します。
 
         e-Stat・国税庁・気象庁・エネ庁を並列呼び出しし、
@@ -162,15 +173,20 @@ def register_tools(mcp: FastMCP) -> None:
             prefecture_name: 都道府県名（例: "東京都", "大阪府", "神奈川県"）
 
         Returns:
-            運輸業事業所数・運送会社法人数・気象警報・燃料価格のサマリー
+            ToolResponse 構造（summary/files/citations/freshness_warnings）の dict。
+            - summary: 運輸業事業所数・運送会社法人数・気象警報・燃料価格のサマリー
+            - citations: 各データソースの出典情報（経営会議で「出典は？」即答用）
+            - freshness_warnings: 静的データ（CO2係数・告示等）の鮮度警告
         """
         codes = _PREF_CODES.get(prefecture_name)
         if codes is None:
             pref_list = "、".join(list(_PREF_CODES.keys())[:5]) + " …"
-            return (
-                f"都道府県名 '{prefecture_name}' が認識できません。"
-                f"正式名称で入力してください（例: {pref_list}）"
-            )
+            return ToolResponse(
+                summary=(
+                    f"都道府県名 '{prefecture_name}' が認識できません。"
+                    f"正式名称で入力してください（例: {pref_list}）"
+                ),
+            ).to_dict()
 
         estat_result, corp_result, weather_result, fuel_result = await asyncio.gather(
             _with_source_timeout("運輸業事業所数", _fetch_estat(codes["estat"])),
@@ -179,10 +195,22 @@ def register_tools(mcp: FastMCP) -> None:
             _with_source_timeout("燃料価格", _fetch_fuel()),
         )
 
-        return "\n".join([
+        summary = "\n".join([
             f"=== {prefecture_name} 物流業界マクロ概況 ===",
             estat_result,
             corp_result,
             weather_result,
             fuel_result,
         ])
+
+        response = ToolResponse(summary=summary)
+        response.add_citation(estat_citation(
+            "経済センサス‐活動調査 2021 産業（大分類）別事業所数",
+            _ESTAT_STATS_ID,
+        ))
+        response.add_citation(corp_number_citation())
+        response.add_citation(jma_warning_citation())
+        response.add_citation(fuel_price_citation())
+        response.freshness_warnings = all_warnings()
+
+        return response.to_dict()
