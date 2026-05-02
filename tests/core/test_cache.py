@@ -85,3 +85,57 @@ def test_store_list() -> None:
     data = [{"id": "001", "name": "運輸業"}, {"id": "002", "name": "倉庫業"}]
     cache.store("test:list", data, ttl_seconds=60)
     assert cache.get("test:list") == data
+
+
+# ---- 燃料価格履歴テーブル ----
+
+
+def test_insert_and_get_fuel_price_history() -> None:
+    """履歴に追記して取得できる。"""
+    cache.insert_fuel_price_record(
+        date_str="2026-04-30",
+        source="gogo.gs",
+        regular=168.5,
+        diesel=148.0,
+        kerosene=110.0,
+    )
+    history = cache.get_fuel_price_history()
+    assert len(history) == 1
+    row = history[0]
+    assert row["date"] == "2026-04-30"
+    assert row["regular"] == 168.5
+
+
+def test_insert_fuel_price_dedup_on_same_date_source() -> None:
+    """同じ date+source の重複は INSERT OR IGNORE で 1 行のまま。"""
+    cache.insert_fuel_price_record("2026-04-30", "gogo.gs", 168.0, 148.0, 110.0)
+    cache.insert_fuel_price_record("2026-04-30", "gogo.gs", 999.0, 999.0, 999.0)
+    history = cache.get_fuel_price_history()
+    assert len(history) == 1
+    # 最初のレコードが残る
+    assert history[0]["regular"] == 168.0
+
+
+def test_insert_fuel_price_empty_date_no_op() -> None:
+    """date 空文字なら何も挿入しない。"""
+    cache.insert_fuel_price_record("", "gogo.gs", 100.0, 100.0, 100.0)
+    history = cache.get_fuel_price_history()
+    assert len(history) == 0
+
+
+def test_get_fuel_price_history_filter_by_source() -> None:
+    """source で絞り込める。"""
+    cache.insert_fuel_price_record("2026-04-30", "gogo.gs", 168.0, 148.0, 110.0)
+    cache.insert_fuel_price_record("2026-04-30", "other", 200.0, 180.0, 130.0)
+    gogogs_only = cache.get_fuel_price_history(source="gogo.gs")
+    assert len(gogogs_only) == 1
+    assert gogogs_only[0]["source"] == "gogo.gs"
+
+
+def test_get_fuel_price_history_orders_by_date_asc() -> None:
+    """日付昇順で並ぶ。"""
+    cache.insert_fuel_price_record("2026-05-01", "gogo.gs", 169.0, 149.0, 111.0)
+    cache.insert_fuel_price_record("2026-04-29", "gogo.gs", 168.0, 148.0, 110.0)
+    cache.insert_fuel_price_record("2026-04-30", "gogo.gs", 168.5, 148.5, 110.5)
+    history = cache.get_fuel_price_history()
+    assert [r["date"] for r in history] == ["2026-04-29", "2026-04-30", "2026-05-01"]

@@ -26,9 +26,15 @@ class GoGoGsClient(AsyncHTTPClient):
         super().__init__(_BASE_URL, max_retries=2, timeout=10.0)
 
     async def get_fuel_prices(self) -> dict[str, Any]:
-        """全国平均燃料価格（円/L）を取得する。キャッシュあれば返す。"""
+        """全国平均燃料価格（円/L）を取得する。キャッシュあれば返す。
+
+        副作用として、取得した日付・価格を `fuel_price_history` テーブルに
+        自動追記する。同一日付・ソースの重複は INSERT OR IGNORE。
+        蓄積を早く始めるほど傾向分析の価値が出るため、本フェーズで先行実装。
+        """
         cached = cache.get(_CACHE_KEY)
         if cached is not None:
+            self._record_history(cast(dict[str, Any], cached))
             return cast(dict[str, Any], cached)
 
         try:
@@ -38,7 +44,22 @@ class GoGoGsClient(AsyncHTTPClient):
 
         result = _parse_gogogs_prices(html)
         cache.store(_CACHE_KEY, result, _TTL_SECONDS)
+        self._record_history(result)
         return result
+
+    @staticmethod
+    def _record_history(prices: dict[str, Any]) -> None:
+        """履歴テーブルに 1 行追記する（重複 INSERT OR IGNORE）。"""
+        date_str = str(prices.get("date") or "")
+        if not date_str:
+            return  # 日付が抽出できなかった場合は履歴化しない
+        cache.insert_fuel_price_record(
+            date_str=date_str,
+            source="gogo.gs",
+            regular=prices.get("regular"),
+            diesel=prices.get("diesel"),
+            kerosene=prices.get("kerosene"),
+        )
 
 
 # 後方互換エイリアス（energy_tools.py / macro_tools.py のインポートを変えない）
