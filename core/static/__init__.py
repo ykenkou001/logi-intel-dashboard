@@ -9,6 +9,7 @@ from __future__ import annotations
 # 副作用 import: 各モジュールロード時に _freshness.register() が走る
 from core.static import (  # noqa: F401
     co2_factors,
+    efficiency_law_certified,
     improvement_standards,
     industry_freight_coef,
     jsic,

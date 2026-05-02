@@ -6,7 +6,7 @@
 
 ---
 
-## 現在のフェーズ: フェーズ 2.5 完了 → フェーズ 3 着手準備中
+## 現在のフェーズ: フェーズ 3 完了（Step 1〜7 全完了・2026-05-02）→ フェーズ 3.5 着手準備中
 
 ---
 
@@ -130,26 +130,60 @@
 
 > **命名統一**: CLO 計画策定の文脈で使うツールは `logi_clo_*` に統一（旧表記 `logi_analyze_*` は廃止）
 
-- [ ] **Step 1**: 業界ベンチマーク（`logi_clo_benchmark_position`）
-  - 自社業種（JSIC コード）に応じた全国順位・地域順位・業界平均比を算出
-- [ ] **Step 2**: ドライバー需給ギャップ（`logi_clo_driver_gap`）
-  - 就業者数 × 改善基準告示削減係数
-- [ ] **Step 3**: 適用判定（`logi_clo_eligibility`）
+- [x] **Step 1**: 業界ベンチマーク（`logi_clo_benchmark_position`）✅ 完了（2026-05-02）
+  - 自社業種（JSIC コード）に応じた全国・地域別事業所数・業界平均比を算出
+  - `core/analytics/benchmark.py` — BenchmarkResult + analyze_benchmark
+  - `mcp_server/tools/clo_tools.py` — logi_clo_benchmark_position 登録
+  - e-Stat 経済センサス‐基礎調査 2024（statsDataId `0004040101`、産業小分類別民営事業所数）
+    + JILS物流コスト調査（静的）を組合せ
+  - JSIC 細分類4桁の上3桁を `cd_cat01` に渡して **小分類で絞り込み**（東京都の 5411 → 4,851件で検証済）
+  - Claude Desktop 実機確認: 完了（2026-05-02）
+- [x] **Step 2**: ドライバー需給ギャップ（`logi_clo_driver_gap`）✅ 完了（2026-05-02）
+  - 就業者数 × 改善基準告示削減係数（13.5%）
+  - `core/analytics/driver_gap.py` — DriverGapResult + analyze_driver_gap
+  - `clo_tools.py` — logi_clo_driver_gap 登録
+  - e-Stat 経済センサス‐基礎調査 2024（statsDataId `0004040102`、中分類44 道路貨物運送業の従業者数）
+    + 改善基準告示（厚労省告示第367号）+ 国交省2030年試算（▲34.1%）
+  - 妥当性検証: 全国170万人＝物流2024年問題資料と一致、都道府県シェアも人口分布と整合
+- [x] **Step 3**: 適用判定（`logi_clo_eligibility`）✅ 完了（2026-05-02）
   - 業種 × 売上 × 取扱量 → 第一種/第二種/連鎖化のどれに該当するか判定
-- [ ] **Step 4**: 数値目標提案（`logi_clo_target_proposal`）
+  - `core/analytics/eligibility_analysis.py` — build_eligibility_summary
+  - `clo_tools.py` — logi_clo_eligibility 登録（既存 `core/legal/eligibility.py` をラップ）
+  - 取扱量未指定なら売上 × `industry_freight_coef` で推計、ボーダーライン警告（±30%）対応
+  - 妥当性検証: 5ケース（該当なし/大規模/連鎖化/ボーダーライン/実測値）全て期待通り
+- [x] **Step 4**: 数値目標提案（`logi_clo_target_proposal`）✅ 完了（2026-05-02）
   - 業界平均 + 物流分野固有目標（輸送量当たりCO2 ▲23.4% 等／`national_targets.py`）から逆算した目標値
-- [ ] **Step 5**: 施策効果シミュレータ（`logi_clo_simulate_*`）
-  - モーダルシフト / 積載率向上 / 共同配送 / 中継輸送 / バース予約
+  - `core/analytics/target_proposal.py` — TargetProposalResult + propose_targets
+  - `clo_tools.py` — logi_clo_target_proposal 登録
+  - 4目標を出力: CO2原単位（▲23.4%）/ 積載率（38→50%）/ モーダルシフト（鉄道+15.8%）/ 物流コスト比率（業界平均比 ▲0.3〜0.5pt）
+  - 業界平均比200%以上の規模優位企業には ▲0.5pt 提案、それ以外は ▲0.3pt
+  - 運輸業は物流コスト目標を自動除外（荷主ではないため）
+  - 妥当性検証: 4ケース（卸売・製造・運輸・小売）全て期待通り、業界平均値もJILS公表値と整合
+- [x] **Step 5**: 施策効果シミュレータ（`logi_clo_simulate_measures`）✅ 完了（2026-05-02）
+  - モーダルシフト / 積載率向上 / 共同配送 / 中継輸送 / バース予約 の5施策を1ツールで同時試算
+  - `core/analytics/simulator.py` — SimulationResult + simulate_measures
+  - `clo_tools.py` — logi_clo_simulate_measures 登録
+  - 各施策ごとに CO2 削減・コスト削減・ドライバー時間削減・必要投資・回収期間を出力
+  - co2_factors（トラック76 vs 鉄道21 g-CO2/トンキロ）+ 業界統計の標準ファクターを使用
+  - 妥当性検証: 3ケース（中堅卸/大規模製造/食肉加工）の数値が業界事例レンジと整合
 
 ### 統合ツール
 
-- [ ] **Step 6**: 認定事業マッチング（`logi_clo_certified_match`）
+- [x] **Step 6**: 認定事業マッチング（`logi_clo_certified_match`）✅ 完了（2026-05-02）
   - 物流効率化法認定事業との類似マッチング（外部補助金スクレイピングはスコープ外）
-- [ ] **Step 7**: **計画書ドラフト統合生成（`logi_clo_plan_draft`）**
+  - `core/static/efficiency_law_certified.py` — 認定事業 公表サンプル10件
+  - `core/analytics/certified_match.py` — find_matches + スコアリング
+  - `clo_tools.py` — logi_clo_certified_match 登録
+  - 業種カテゴリ一致 +3点 / 取組タイプ一致 +2点で上位5件抽出
+  - 妥当性検証: 4ケース（卸売/製造/コンビニ/運送業）全て期待通り、運送業はマッチ0件で正常表示
+- [x] **Step 7**: **計画書ドラフト統合生成（`logi_clo_plan_draft`）** ✅ 完了（2026-05-02）
   - Step 1〜6 を順次呼び、**様式第3別紙（Word）+ 経営会議 PPT + Excel + Markdown** を一括出力
   - 出力先: `outputs/{ppt,docx,excel,markdown}/`
   - PPT には**エグゼクティブサマリー（2枚目固定）**を含む
-  - 全数値に出典 URL 付与（`core/export/citation.py`）
+  - 全数値に出典 URL 付与（12件統合・URL ベース重複排除済）
+  - `core/analytics/plan_draft.py` — generate_plan_draft + build_plan_draft_summary
+  - 入力: サンプル企業ID（製造業/卸売業/連鎖化）。フェーズ4 で実データ対応予定
+  - 妥当性検証: 3サンプル全成功、12ファイル生成、CO2削減3,400-12,900トン/年が業界事例と整合
 
 ### フェーズ 3 完了条件
 
