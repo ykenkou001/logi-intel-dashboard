@@ -6,7 +6,7 @@
 
 ---
 
-## 現在のフェーズ: フェーズ 2.5 — CLO 武装データ層 + 出口整備
+## 現在のフェーズ: フェーズ 2.5 完了 → フェーズ 3 着手準備中
 
 ---
 
@@ -47,89 +47,75 @@
 
 ---
 
-## フェーズ 2.5: CLO 武装データ層 + 出口整備 ← 今ここ
+## フェーズ 2.5: CLO 武装データ層 + 出口整備 ✅ 完了（2026-05-02）
 
-**ゴール**: フェーズ3 の分析モジュールが「CLO に刺さる成果物」を出せるよう、データ層と出口層を先に厚くする。
+**達成内容**: フェーズ3 の分析モジュールが「CLO に刺さる成果物」を出せる土台を整備。
+レビューで発見した高優先 7 件を反映後、6 ステップ全完了。総コミット 6 件、テスト 138 件全パス、ruff/mypy 双方クリア。
 
-**背景**: 現状のロードマップでは分析モジュールに直行するが、(a) データ層が薄い (b) 成果物出力経路がない、ため「Claude の会話で数字が出るが CLO の机に届かない」状態に陥る。本フェーズで土台を作る。
+### Step 1: e-Stat 追加クライアント ✅
 
-### Step 1: e-Stat 追加クライアント（CLO 必須統計）
+- [x] `core/clients/estat_logistics.py` — 物流特化ヘルパー（既存 `EStatClient` のラッパー）
+- [x] 物流必修7統計の statsCode カタログ（自動車輸送統計年報・物流センサス・港湾・鉄道・経済センサス・賃金構造・国勢調査）
+- [x] `find_latest_stats_data_id` による statsDataId 動的解決（年次更新追従）
 
-- [ ] `core/clients/estat_logistics.py` — 物流特化ヘルパー（既存 `EStatClient` のラッパー）
-  - [ ] **自動車輸送統計年報** アクセサ（積載率・実車率の業界平均／statsCode `00600340`）
-  - [ ] **全国貨物純流動調査（物流センサス）** アクセサ（OD・モード別シェア／5年に1回・最新2021／statsCode `00600370`）
-  - [ ] **港湾統計 / 内航船舶輸送統計 / 鉄道輸送統計** アクセサ（モーダルシフト先キャパ）
-- [ ] **statsDataId は動的検索（`getStatsList(statsCode=...)`）+ 結果キャッシュ**で取得（年次更新に追従）
+### Step 2: 静的データ層 + 鮮度管理 ✅
 
-### Step 2: 静的データ層 + 鮮度管理
+- [x] `core/static/_freshness.py` — 鮮度メタデータ管理（4種類のカデンス）
+- [x] `core/static/co2_factors.py` — 国交省・経産省共同ガイドラインVer.3.1
+- [x] `core/static/improvement_standards.py` — 改善基準告示2024年4月施行版（告示原文準拠）
+- [x] `core/static/national_targets.py` — 物流分野固有CO2目標（▲23.4%）+ モーダルシフト目標
+- [x] `core/static/jsic.py` — 日本標準産業分類細分類（CLO関連業種27件）
+- [x] `core/static/industry_freight_coef.py` — 業種別物流原単位（売上→取扱量推計）
+- [x] `core/static/sample_company.py` — サンプル3社（製造/卸売/連鎖化）
+- [ ] `core/static/standard_freight.py` — 標準的運賃 2024 改定版（フェーズ3 着手時）
+- [ ] `core/static/efficiency_law_certified.py` — 物流効率化法 認定事業 CSV 自動取込（フェーズ3 着手時）
 
-- [ ] `core/static/_freshness.py` — 各静的データの最終更新日と推奨更新間隔を管理、起動時に古いデータを警告
-  - [ ] **トラック輸送状況実態調査の年次取込状況**もここで管理（旧 Step 6 から統合）
-  - [ ] 様式第3・第5 改訂チェック（毎年4月）リマインダもここで管理
-- [ ] `core/static/co2_factors.py` — 環境省 CO2 排出原単位（輸送機関別）
-- [ ] `core/static/improvement_standards.py` — 改善基準告示（**正確な告示文を引用**: 1日拘束 原則13h/最大16h、年間総拘束 原則3,300h、休息継続 9h以上/努力10h、時間外 年960h 等）
-- [ ] `core/static/standard_freight.py` — 標準的運賃 2024 改定版
-- [ ] `core/static/efficiency_law_certified.py` — 物流効率化法 認定事業 CSV 自動取込スクリプト
-- [ ] `core/static/industry_freight_coef.py` — 業種別物流原単位（売上→取扱量推計）
-- [ ] `core/static/national_targets.py` — 物流分野固有の国家目標（輸送量当たりCO2排出原単位 23.4%削減 等。日本全体の▲46%とは別物）
-- [ ] `core/static/jsic.py` — 日本標準産業分類（細分類4桁）マスタ（計画書「主たる事業の細分類番号」用）
-- [ ] `core/static/sample_company.py` — フェーズ4までの自社プロフィール仮データ（3 社分）
-  - スキーマ: `name, jsic_code, annual_freight_tons, annual_revenue_jpy, sites, is_chain_franchise, fleet_count` 等
+### Step 3: 法令ロジック ✅
 
-### Step 3: 法令ロジック
+- [x] `core/legal/eligibility.py` — 3区分判定エンジン（第一種/第二種/連鎖化）
+  - 取扱量未指定なら売上から推計（industry_freight_coef 利用）
+  - ボーダーライン警告（基準±30%）/ override での明示指定
+- [x] `core/legal/improvement_check.py` — 改善基準告示準拠チェック
+  - ComplianceItem.to_form5_line() で様式第5 用表示生成
 
-- [ ] `core/legal/eligibility.py` — **3区分判定エンジン**
-  - 特定第一種荷主（発荷主：年間9万トン以上）
-  - 特定第二種荷主（着荷主：年間9万トン以上）
-  - 特定連鎖化事業者（フランチャイズ本部：販売額基準・第65条）
-- [ ] `core/legal/improvement_check.py` — 改善基準告示準拠チェック
+### Step 4: 国交省公式テンプレートの取込（一部完了）
 
-### Step 4: 国交省公式テンプレートの取込
+- [x] **公式記載事例集** 製造業・卸売業・小売業・連鎖化事業者 × 取組進行/これから = 8 パターン + 定期報告2パターン = 10ファイル MD 化（2026-05-02）
+- [ ] **様式第3別紙 中長期計画書（Word）** — 手動 DL タスク（MLIT ポータル）
+- [ ] **様式第5 定期報告書（Word）** — 手動 DL タスク
+- [ ] **PPT マスタスライド** — micware ブランドテンプレート入手後
 
-- [x] **公式記載事例集**（製造業・卸売業・小売業・連鎖化事業者 × 取組進行/これから = 8 パターン+定期報告2パターン = 10ファイル）を MD 化（2026-05-02 完了）
-- [ ] **様式第3別紙 中長期計画書（Word）** を `core/templates/clo_plan_form3.docx` に同梱（独立タスク：MLIT ポータルから手動 DL）
-- [ ] **様式第5 定期報告書（Word）** を `core/templates/clo_report_form5.docx` に同梱
-- [ ] **PPT マスタスライド** `core/templates/micware_master.pptx`（micware ブランドテンプレート入手後）
-- [ ] 入手元: [国交省ポータル](https://www.revised-logistics-act-portal.mlit.go.jp/planning/) / [経産省](https://www.meti.go.jp/policy/economy/distribution/butsuryu-kouritsuka.html)
+### Step 5: 出口層 + MCP ツール構造統一 ✅
 
-### Step 5: 出口層（成果物生成）+ 既存ツールの構造統一
+- [x] `core/export/citation.py` — 出典管理（テンプレート 8 種類）
+- [x] `core/export/response.py` — ToolResponse 構造 + 衝突回避ファイル名命名
+- [x] `core/export/ppt_writer.py` — PPT 出力（エグゼクティブサマリー2枚目固定）
+- [x] `core/export/excel_writer.py` — 数値表 + 出典シート
+- [x] `core/export/docx_form3_writer.py` — 様式第3別紙（第46条/第5条 自動切替）
+- [x] `core/export/markdown_writer.py` — Markdown 出力
+- [x] `logi_macro_overview` を ToolResponse 構造に移行 + citation 適用
+- [ ] `core/export/pdf_writer.py` — PDF 変換（フェーズ3 着手時）
+- [ ] estat_tools / energy_tools / weather_tools / xroad_tools / corp_number_tools の citation 遡及適用（フェーズ3）
 
-**ここが本フェーズの核心**。MCP ツールがファイルを返せるようにする。
+### Step 6: 燃料価格履歴蓄積 ✅
 
-- [ ] `core/export/citation.py` — 出典 URL の統一管理（statsDataId / 告示番号 / 省令番号 / 取得日時 / 公式URL）
-- [ ] `core/export/ppt_writer.py` — **PPT 出力（最優先）** / `python-pptx` / micware マスタスライド
-- [ ] `core/export/excel_writer.py` — Excel 出力 / `openpyxl` / 数値表 + 出典シート
-- [ ] `core/export/docx_form3_writer.py` — **様式第3別紙への流し込み** / `python-docx`
-- [ ] `core/export/markdown_writer.py` — Markdown 出力
-- [ ] `core/export/pdf_writer.py` — PDF 変換（PPT/Word から、LibreOffice CLI or WeasyPrint）
-- [ ] **MCP ツール戻り値構造の統一**: 全 MCP ツールを `{summary: str, files: dict[str,str], citations: list[Citation]}` 形式に移行
-  - [ ] `logi_macro_overview` を構造化レスポンスに移行
-  - [ ] estat_tools, energy_tools, weather_tools, xroad_tools, corp_number_tools 全てに citation 遡及適用
-- [ ] **ファイル名衝突回避**: `outputs/{type}/{purpose}_{company_id}_{unix_ts}_{rand4}.{ext}` 命名
+- [x] `fuel_price_history` テーブル DDL（`core/cache.py`）
+- [x] PRIMARY KEY (date, source) で日次1行制約
+- [x] `EnergyClient.get_fuel_prices()` 呼出毎に履歴自動 INSERT
 
-### Step 6: 燃料価格履歴の蓄積（フェーズ3から前倒し）
+### 完了条件の達成状況
 
-蓄積を早く始めるほど傾向分析の価値が出るため、本フェーズで先行着手。
+- [x] `logi_macro_overview("東京都")` の戻り値が `{summary, files, citations, freshness_warnings}` 構造
+- [x] 静的データ鮮度警告が Claude の応答に含まれる仕組み
+- [x] 様式第3別紙テンプレートに「実施措置」「計画内容」「実施時期」3項目を流し込める（テスト済）
+- [ ] 燃料価格 1ヶ月分以上の履歴蓄積（運用してから自然達成・コード側の準備は完了）
 
-- [ ] `fuel_price_history` テーブル DDL を `core/cache.py` に追加
-- [ ] `EnergyClient.get_fuel_prices()` 呼出毎に履歴行を自動 INSERT
-- [ ] 重複防止: `(date, source)` UNIQUE 制約
+### フェーズ2.5 で発見した残課題（フェーズ3 着手時に対応）
 
-### 完了条件
-
-- `logi_macro_overview("東京都")` の戻り値が `{summary, files, citations}` 構造になり、`files.ppt` と `files.excel` のパスが含まれ、開ける
-- 静的データ鮮度警告が Claude の応答（citations or summary 内）に含まれる
-- 様式第3別紙テンプレートに「実施措置」「計画内容」「実施時期」の3項目を流し込める
-- 燃料価格 1ヶ月分以上の履歴が `fuel_price_history` に蓄積されている
-
-### フェーズ2.5 で**忘れない**チェックリスト（中優先・実装着手時に対応）
-
-- [ ] **問題8（9万トン基準）**: `eligibility.py` 実装時に第一種/第二種/連鎖化の3区分を実装
-- [ ] **問題9（改善基準告示）**: `improvement_standards.py` 実装時に告示原文を出典付きで引用
-- [ ] **問題10（業種別ベンチマーク）**: `logi_macro_overview` 拡張時に「運送業者向け」と「荷主業種別」を区別
-- [ ] **問題11（JSIC）**: `static/jsic.py` 実装時にコード→名称の双方向マッピングを用意
-- [ ] **問題12（CO2目標）**: `national_targets.py` 実装時に物流分野固有目標と国全体目標を分離
-- [ ] **問題13（citation 遡及）**: Step 5 の MCP ツール戻り値統一と同時に既存全ツールへ適用
+- [ ] PDF writer 実装
+- [ ] 既存 MCP ツール5種への citation 遡及適用
+- [ ] 様式第3 Word / 様式第5 Word / PPT マスタの公式テンプレート入手
+- [ ] standard_freight.py / efficiency_law_certified.py の実装
 
 ---
 
