@@ -1,4 +1,5 @@
 """出口層 writer の統合テスト（実ファイル生成）。"""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -101,6 +102,7 @@ def test_write_clo_plan_ppt_creates_pptx() -> None:
     prs = Presentation(str(path))
     # 表紙 + サマリー + 本文 + 出典 = 4 枚
     assert len(prs.slides) == 4
+    assert prs.slide_width > prs.slide_height
 
 
 def test_ppt_executive_summary_is_second_slide() -> None:
@@ -117,9 +119,28 @@ def test_ppt_executive_summary_is_second_slide() -> None:
     )
     prs = Presentation(str(path))
     slide2 = prs.slides[1]
-    title = slide2.shapes.title
-    assert title is not None
-    assert "エグゼクティブサマリー" in title.text
+    slide2_text = "\n".join(shape.text for shape in slide2.shapes if hasattr(shape, "text"))
+    assert "エグゼクティブサマリー" in slide2_text
+
+
+def test_ppt_uses_codex_recommended_design_surface() -> None:
+    """PPT が素の空白スライドではなく、デザイン要素を含む。"""
+    from pptx import Presentation
+
+    path = ppt_writer.write_clo_plan_draft(
+        company_name="X",
+        company_id="x",
+        plan_period="2026",
+        executive_summary=["推奨: 共同配送を先行", "投資額: 1億円"],
+        body_slides=[],
+        citations=[Citation(label="A", url="https://a.example.com")],
+    )
+    prs = Presentation(str(path))
+    first_slide_text = "\n".join(
+        shape.text for shape in prs.slides[0].shapes if hasattr(shape, "text")
+    )
+    assert "C L O   M I D - T E R M   P L A N   D R A F T" in first_slide_text
+    assert "物流効率化法 第46条／第65条 対応" in first_slide_text
 
 
 # ---- docx_form3_writer ----
@@ -154,8 +175,7 @@ def test_write_form3_docx_creates_docx() -> None:
     doc = Document(str(path))
     full_text = "\n".join(p.text for p in doc.paragraphs)
     assert "テスト株式会社" in full_text or any(
-        "テスト株式会社" in c.text
-        for table in doc.tables for row in table.rows for c in row.cells
+        "テスト株式会社" in c.text for table in doc.tables for row in table.rows for c in row.cells
     )
 
 
