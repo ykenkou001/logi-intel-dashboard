@@ -45,7 +45,12 @@ from core.analytics.target_proposal import (
     build_target_proposal_summary,
     propose_targets,
 )
-from core.export.citation import Citation
+from core.export.citation import (
+    Citation,
+    logistics_efficiency_law_article46_citation,
+    logistics_efficiency_law_article65_citation,
+    logistics_efficiency_law_article66_citation,
+)
 from core.export.docx_form3_writer import PlanMeasure, PlanSection, write_form3
 from core.export.excel_writer import write_data_table
 from core.export.markdown_writer import write_clo_plan_draft as write_md_plan
@@ -148,7 +153,11 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
     # 財務翻訳（フェーズ3.5 Step 4）— P&L インパクト変換
     financial = translate_to_pnl_impact(profile, simulation)
 
-    # 出典統合（全 Step + 財務翻訳の citations を URL ベースで重複排除）
+    # 会社区分依存の根拠条文 citation を追加（短期4・Codex 5 取込）
+    # 連鎖化事業者は第65条 / 荷主は第46条 / CLO 選任義務がある場合は第66条を必須参照
+    article_citations = _build_article_citations(eligibility)
+
+    # 出典統合（全 Step + 財務翻訳 + 区分依存条文の citations を URL ベースで重複排除）
     citations = _merge_citations(
         benchmark.citations,
         driver_gap.citations,
@@ -156,6 +165,7 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         simulation.citations,
         certified_matches.citations,
         financial.citations,
+        article_citations,
     )
 
     plan_period = f"{profile.plan_period_start_fy}年度〜{profile.plan_period_end_fy}年度"
@@ -223,15 +233,39 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
     )
 
 
+def _build_article_citations(eligibility: EligibilityResult) -> list[Citation]:
+    """会社区分に応じた根拠条文の citation を組み立てる。
+
+    連鎖化事業者は第65条 / 荷主は第46条 / CLO 選任義務がある全区分に第66条 を付与。
+    区分判定が "none" の場合は空リストを返す。
+    """
+    citations: list[Citation] = []
+    if "chain_franchise" in eligibility.categories:
+        citations.append(logistics_efficiency_law_article65_citation())
+    elif any(
+        c in eligibility.categories
+        for c in ("first_class_shipper", "second_class_shipper")
+    ):
+        citations.append(logistics_efficiency_law_article46_citation())
+    if eligibility.must_appoint_clo:
+        citations.append(logistics_efficiency_law_article66_citation())
+    return citations
+
+
 def _merge_citations(*lists: list[Citation]) -> list[Citation]:
-    """複数の citation リストを URL ベースで重複排除して結合する。"""
-    seen: set[str] = set()
+    """複数の citation リストを (URL, label) ペアで重複排除して結合する。
+
+    同じ URL でも条文番号（label）が異なる citation は区別する。
+    例: 物流効率化法ポータル URL 配下の第46条 / 第65条 / 第66条 は別 citation として残す。
+    """
+    seen: set[tuple[str, str]] = set()
     merged: list[Citation] = []
     for lst in lists:
         for c in lst:
-            if c.url not in seen:
+            key = (c.url, c.label)
+            if key not in seen:
                 merged.append(c)
-                seen.add(c.url)
+                seen.add(key)
     return merged
 
 

@@ -117,10 +117,51 @@ def improvement_standards_citation() -> Citation:
 
 
 def logistics_efficiency_law_citation() -> Citation:
-    """物流効率化法の引用テンプレート。"""
+    """物流効率化法の包括的引用テンプレート（条文非特定）。"""
     return Citation(
         label="物資の流通の効率化に関する法律（改正物流効率化法）",
         url="https://www.revised-logistics-act-portal.mlit.go.jp/",
+        accessed_via="国土交通省ポータル",
+    )
+
+
+def logistics_efficiency_law_article46_citation() -> Citation:
+    """物流効率化法 第46条 — 特定荷主の中長期計画作成義務。
+
+    特定第一種荷主（発荷主）/ 第二種荷主（着荷主）に適用。
+    年間取扱貨物量 9 万トン以上の事業者が対象。
+    """
+    return Citation(
+        label="物流効率化法 第46条（特定荷主の中長期計画作成義務）",
+        url="https://www.revised-logistics-act-portal.mlit.go.jp/",
+        ordinance_number="物流効率化法 第46条",
+        accessed_via="国土交通省ポータル",
+    )
+
+
+def logistics_efficiency_law_article65_citation() -> Citation:
+    """物流効率化法 第65条 — 特定連鎖化事業者の中長期計画作成義務。
+
+    フランチャイズ本部等。記載項目は荷待ち時間短縮 + 積載率向上の2 領域。
+    様式第3 の「第5条関係」で出力する点が荷主向けと異なる。
+    """
+    return Citation(
+        label="物流効率化法 第65条（特定連鎖化事業者の中長期計画作成義務）",
+        url="https://www.revised-logistics-act-portal.mlit.go.jp/",
+        ordinance_number="物流効率化法 第65条",
+        accessed_via="国土交通省ポータル",
+    )
+
+
+def logistics_efficiency_law_article66_citation() -> Citation:
+    """物流効率化法 第66条 — CLO（物流統括管理者）の選任義務。
+
+    特定荷主・特定連鎖化事業者に横断的に適用。役員級の選任が義務付けられる。
+    """
+    return Citation(
+        label="物流効率化法 第66条（物流統括管理者（CLO）の選任義務）",
+        url="https://www.revised-logistics-act-portal.mlit.go.jp/",
+        ordinance_number="物流効率化法 第66条",
         accessed_via="国土交通省ポータル",
     )
 

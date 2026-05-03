@@ -501,6 +501,122 @@ def test_compliance_load_factor_over_100_yields_error(tmp_path: Path) -> None:
     assert any(i.code == "LOAD_FACTOR_OVER_100" for i in issues)
 
 
+# ---- _validate_law_article_consistency（短期4: 法令区分文言整合性） ----
+
+
+def test_law_article_shipper_with_correct_article46_no_error(tmp_path: Path) -> None:
+    """荷主区分で citations に第46条が含まれていれば error なし。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.eligibility = EligibilityResult(
+        categories=["first_class_shipper"],
+        annual_freight_tons_used=120_000.0,
+        is_estimate=False,
+    )
+    from core.export.citation import logistics_efficiency_law_article46_citation
+    plan.citations.append(logistics_efficiency_law_article46_citation())
+    issues = _validate_compliance(plan)
+    assert not any(i.code.startswith("LAW_ARTICLE_MISSING") for i in issues)
+
+
+def test_law_article_chain_franchise_missing_article65_yields_error(tmp_path: Path) -> None:
+    """連鎖化事業者で第65条が citations に欠落していると error。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.eligibility = EligibilityResult(
+        categories=["chain_franchise"],
+        annual_freight_tons_used=450_000.0,
+        is_estimate=False,
+    )
+    # 第46条 / 第65条 どちらも含めない citations に差し替え
+    plan.citations = [co2_factors_citation(), logistics_efficiency_law_citation()]
+    issues = _validate_compliance(plan)
+    assert any(i.code == "LAW_ARTICLE_MISSING_65" for i in issues)
+
+
+def test_law_article_shipper_missing_article46_yields_error(tmp_path: Path) -> None:
+    """荷主で第46条が citations に欠落していると error。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.eligibility = EligibilityResult(
+        categories=["first_class_shipper"],
+        annual_freight_tons_used=120_000.0,
+        is_estimate=False,
+    )
+    plan.citations = [co2_factors_citation(), logistics_efficiency_law_citation()]
+    issues = _validate_compliance(plan)
+    assert any(i.code == "LAW_ARTICLE_MISSING_46" for i in issues)
+
+
+def test_law_article_chain_franchise_with_wrong_article46_yields_warning(
+    tmp_path: Path,
+) -> None:
+    """連鎖化事業者なのに第46条への参照が混入していると warning。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.eligibility = EligibilityResult(
+        categories=["chain_franchise"],
+        annual_freight_tons_used=450_000.0,
+        is_estimate=False,
+    )
+    from core.export.citation import (
+        logistics_efficiency_law_article46_citation,
+        logistics_efficiency_law_article65_citation,
+    )
+    plan.citations.extend([
+        logistics_efficiency_law_article65_citation(),  # 正しい
+        logistics_efficiency_law_article46_citation(),  # 混入（誤り）
+    ])
+    issues = _validate_compliance(plan)
+    assert any(i.code == "LAW_ARTICLE_MISMATCH_46" for i in issues)
+
+
+def test_law_article_shipper_with_wrong_article65_yields_warning(tmp_path: Path) -> None:
+    """荷主なのに第65条への参照が混入していると warning。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.eligibility = EligibilityResult(
+        categories=["first_class_shipper"],
+        annual_freight_tons_used=120_000.0,
+        is_estimate=False,
+    )
+    from core.export.citation import (
+        logistics_efficiency_law_article46_citation,
+        logistics_efficiency_law_article65_citation,
+    )
+    plan.citations.extend([
+        logistics_efficiency_law_article46_citation(),  # 正しい
+        logistics_efficiency_law_article65_citation(),  # 混入（誤り）
+    ])
+    issues = _validate_compliance(plan)
+    assert any(i.code == "LAW_ARTICLE_MISMATCH_65" for i in issues)
+
+
+def test_law_article_clo_required_missing_article66_yields_warning(tmp_path: Path) -> None:
+    """CLO 選任義務があるのに第66条参照が欠落していると warning。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.eligibility = EligibilityResult(
+        categories=["first_class_shipper"],
+        annual_freight_tons_used=120_000.0,
+        is_estimate=False,
+    )
+    from core.export.citation import logistics_efficiency_law_article46_citation
+    plan.citations = [
+        co2_factors_citation(),
+        logistics_efficiency_law_article46_citation(),  # 第46条あり / 第66条なし
+    ]
+    issues = _validate_compliance(plan)
+    assert any(i.code == "CLO_LAW_ARTICLE_66_MISSING" for i in issues)
+
+
+def test_law_article_no_clo_obligation_no_law_article_check(tmp_path: Path) -> None:
+    """CLO 選任義務なし（none）の場合は法令区分検査自体スキップされる。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.eligibility = EligibilityResult(
+        categories=["none"],
+        annual_freight_tons_used=None,
+        is_estimate=False,
+    )
+    plan.citations = [co2_factors_citation()]
+    issues = _validate_compliance(plan)
+    assert not any(i.category == "law_article_consistency" for i in issues)
+
+
 def test_compliance_co2_below_national_target_yields_warning(tmp_path: Path) -> None:
     plan = _make_valid_plan(tmp_path)
     new_targets = []

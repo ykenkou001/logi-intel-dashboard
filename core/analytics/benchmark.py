@@ -338,7 +338,10 @@ def build_benchmark_summary(r: BenchmarkResult) -> str:
         "",
         "【CLO 計画書への反映必須事項】",
         co2_line,
-        "  → 中長期計画に CO2 原単位削減目標の記載が必要（物流効率化法 第46条）",
+        (
+            "  → 中長期計画に CO2 原単位削減目標の記載が必要"
+            "（物流効率化法 第46条 特定荷主 / 第65条 特定連鎖化事業者）"
+        ),
     ]
 
     return "\n".join(lines)

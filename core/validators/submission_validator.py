@@ -21,6 +21,7 @@ from typing import Literal
 from docx import Document
 
 from core.analytics.plan_draft import PlanDraftResult, generate_plan_draft
+from core.legal.article_resolver import expected_plan_article_number
 from core.static.industry_benchmarks import (
     REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT,
     SANITY,
@@ -32,6 +33,7 @@ IssueCategory = Literal[
     "numeric_consistency",
     "citation",
     "compliance",
+    "law_article_consistency",
 ]
 
 # 様式第3 で必須となる 3 セクション（連鎖化事業者は荷役等を除外）
@@ -552,6 +554,93 @@ def _validate_compliance(plan: PlanDraftResult) -> list[ValidationIssue]:
                     f"{load_target.current_industry_avg}% を下回っています。"
                 ),
             ))
+
+    # 会社区分 × 引用条文の整合性検査（短期4・Codex 5 取込）
+    issues.extend(_validate_law_article_consistency(plan))
+
+    return issues
+
+
+def _validate_law_article_consistency(plan: PlanDraftResult) -> list[ValidationIssue]:
+    """会社区分（特定荷主 / 特定連鎖化事業者）と引用条文の整合性を検査する。
+
+    法令区分対応:
+        - 第46条: 特定第一種荷主 / 第二種荷主
+        - 第65条: 特定連鎖化事業者
+        - 第66条: CLO 選任義務（区分横断）
+
+    検査内容:
+        1. 自社区分に対応する条文が citations に含まれているか（error）
+        2. 自社区分と矛盾する条文が citations に含まれていないか（warning）
+        3. CLO 選任義務がある場合、第66条への参照があるか（warning）
+    """
+    issues: list[ValidationIssue] = []
+    expected_article = expected_plan_article_number(plan.eligibility)
+
+    if expected_article is None:
+        # CLO 選任義務なし — 法令区分検査は不要
+        return issues
+
+    is_chain = "chain_franchise" in plan.eligibility.categories
+    correct_article_str = f"第{expected_article}条"
+    wrong_article = 65 if expected_article == 46 else 46
+    wrong_article_str = f"第{wrong_article}条"
+
+    citation_text = " ".join(
+        (c.label or "") + " " + (c.ordinance_number or "")
+        for c in plan.citations
+    )
+
+    # 1. 期待される条文が citations に含まれているか
+    if correct_article_str not in citation_text:
+        category_label = "特定連鎖化事業者" if is_chain else "特定荷主"
+        issues.append(ValidationIssue(
+            severity="error",
+            category="law_article_consistency",
+            code=f"LAW_ARTICLE_MISSING_{expected_article}",
+            message=(
+                f"自社区分（{category_label}）の根拠条文 物流効率化法 "
+                f"{correct_article_str} が citations に含まれていません。"
+            ),
+            suggestion=(
+                f"core/export/citation.py の "
+                f"logistics_efficiency_law_article{expected_article}_citation() "
+                "を citations に追加してください。"
+            ),
+        ))
+
+    # 2. 矛盾する条文が含まれていないか（連鎖化に第46条 / 荷主に第65条）
+    if wrong_article_str in citation_text:
+        category_label = "特定連鎖化事業者" if is_chain else "特定荷主"
+        issues.append(ValidationIssue(
+            severity="warning",
+            category="law_article_consistency",
+            code=f"LAW_ARTICLE_MISMATCH_{wrong_article}",
+            message=(
+                f"自社区分は{category_label}（{correct_article_str}適用）ですが、"
+                f"citations に {wrong_article_str} への参照が混入しています。"
+            ),
+            suggestion=(
+                f"{wrong_article_str} は別区分の条文です。"
+                "PPT/Word/Markdown 本文の文言切替を含めて確認してください。"
+            ),
+        ))
+
+    # 3. CLO 選任義務がある場合、第66条への参照があるか
+    if plan.eligibility.must_appoint_clo and "第66条" not in citation_text:
+        issues.append(ValidationIssue(
+            severity="warning",
+            category="law_article_consistency",
+            code="CLO_LAW_ARTICLE_66_MISSING",
+            message=(
+                "CLO 選任義務がありますが、citations に 物流効率化法 第66条 "
+                "（CLO 選任義務）への参照が見当たりません。"
+            ),
+            suggestion=(
+                "logistics_efficiency_law_article66_citation() を citations に追加し、"
+                "提出物に CLO 選任の法的根拠を明示してください。"
+            ),
+        ))
 
     return issues
 
