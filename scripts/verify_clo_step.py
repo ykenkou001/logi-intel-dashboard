@@ -500,6 +500,137 @@ async def verify_submission_validate(sample_id: str) -> VerifyResult:
     )
 
 
+def verify_scenario_sim(sample_id: str) -> VerifyResult:
+    """scenario_sim を実行し、構造・3 区分単調性・燃料 +20% 黒字維持を検証。"""
+    from core.analytics.scenario_sim import simulate_scenarios
+    from core.static.sample_company import get_sample
+
+    profile = get_sample(sample_id)
+    if profile is None:
+        return VerifyResult(
+            "scenario_sim", sample_id, None, False, ["sample_not_found"],
+        )
+
+    issues: list[str] = []
+    try:
+        result = simulate_scenarios(profile)
+    except Exception as e:
+        return VerifyResult(
+            "scenario_sim", sample_id, profile.name, False, [f"exception:{e!r}"],
+        )
+
+    # 8 シナリオ揃っているか（baseline + 7 stress）
+    if len(result.stress_scenarios) != 7:
+        issues.append(f"stress_count_not_7:{len(result.stress_scenarios)}")
+    if result.baseline.scenario.name != "baseline":
+        issues.append(f"baseline_name_mismatch:{result.baseline.scenario.name}")
+
+    # 3 区分の単調性（baseline と全ストレスで conservative <= standard <= upside）
+    for s in (result.baseline, *result.stress_scenarios):
+        op = s.annual_operating_profit_increase_jpy
+        if not (op.conservative <= op.standard <= op.upside):
+            issues.append(f"three_band_not_monotonic:{s.scenario.name}")
+
+    # 燃料 +20% 黒字維持（フェーズ3.5 完了条件）
+    fuel_up = next(
+        (s for s in result.stress_scenarios if s.scenario.name == "fuel_up_20"),
+        None,
+    )
+    if fuel_up is None:
+        issues.append("fuel_up_20_missing")
+    elif fuel_up.annual_operating_profit_increase_jpy.standard <= 0:
+        issues.append("fuel_up_20_not_profitable")
+
+    # 投資非負
+    if result.baseline.total_investment_jpy < 0:
+        issues.append("investment_negative")
+
+    return VerifyResult(
+        tool="scenario_sim",
+        sample=sample_id,
+        company=profile.name,
+        ok=len(issues) == 0,
+        issues=issues,
+        summary_excerpt={
+            "selection_source": result.measure_selection_source,
+            "selected_count": len(result.selected_measures),
+            "synergy_multiplier": result.synergy_multiplier,
+            "baseline_op_increase_oku": round(
+                result.baseline.annual_operating_profit_increase_jpy.standard / 1e8, 2,
+            ),
+            "fuel_up_20_robustness": (
+                fuel_up.robustness_level if fuel_up else None
+            ),
+            "stress_levels": [s.robustness_level for s in result.stress_scenarios],
+        },
+    )
+
+
+async def verify_periodic_report(sample_id: str) -> VerifyResult:
+    """periodic_report を実行し、様式第5 docx 構造と提出チェックリストを検証。"""
+    from core.analytics.periodic_report import generate_periodic_report
+
+    issues: list[str] = []
+    try:
+        result = await generate_periodic_report(sample_id)
+    except Exception as e:
+        return VerifyResult(
+            "periodic_report", sample_id, None, False, [f"exception:{e!r}"],
+        )
+
+    # docx 生成確認
+    docx_path = result.files.get("docx")
+    if not docx_path:
+        issues.append("docx_path_missing")
+    elif not Path(docx_path).exists():
+        issues.append(f"docx_not_on_disk:{docx_path}")
+
+    # docx 必須セクション検査
+    if docx_path and Path(docx_path).exists():
+        from docx import Document
+        doc = Document(docx_path)
+        headings = [
+            p.text for p in doc.paragraphs
+            if p.style and p.style.name.startswith("Heading")
+        ]
+        text = "\n".join(headings)
+        for required in ("Ⅰ", "Ⅱ", "Ⅲ", "Ⅳ", "Ⅴ", "Ⅵ"):
+            if required not in text:
+                issues.append(f"docx_section_missing:{required}")
+
+    # 提出実務チェックリスト
+    if result.submission_checklist is None:
+        issues.append("submission_checklist_missing")
+    else:
+        labels = [item.label for item in result.submission_checklist.items]
+        for required_label in ("事業者の名称", "法人番号", "指定通知書番号"):
+            if required_label not in labels:
+                issues.append(f"checklist_label_missing:{required_label}")
+
+    # 連鎖化事業者は荷役等項目なし
+    if "chain_franchise" in result.eligibility_categories and result.handling_time_rows:
+        issues.append("chain_should_have_no_handling_time")
+
+    return VerifyResult(
+        tool="periodic_report",
+        sample=sample_id,
+        company=result.company_name,
+        ok=len(issues) == 0,
+        issues=issues,
+        summary_excerpt={
+            "report_period": result.report_period,
+            "compliance_status": result.compliance.overall_status,
+            "wait_rows": len(result.wait_time_rows),
+            "handling_rows": len(result.handling_time_rows),
+            "progress_rows": len(result.progress_rows),
+            "checklist_items": (
+                len(result.submission_checklist.items)
+                if result.submission_checklist else 0
+            ),
+        },
+    )
+
+
 async def verify_financial_translate(sample_id: str) -> VerifyResult:
     from core.analytics.financial_translate import translate_to_pnl_impact
     from core.analytics.plan_draft import generate_plan_draft
@@ -607,14 +738,16 @@ def _check_executive_summary_pptx(path: Path) -> list[str]:
         return [f"pptx_too_few_slides:{len(prs.slides)}"]
 
     slide2 = prs.slides[1]
-    title = slide2.shapes.title
-    if title is None or "エグゼクティブサマリー" not in title.text:
-        issues.append("pptx_slide2_not_executive_summary")
 
+    # 2 枚目の全 shape のテキストを連結して検査
+    # （_blank_layout を使うため shapes.title は None になり得る）
     body_text = ""
     for shape in slide2.shapes:
         if shape.has_text_frame:
             body_text += shape.text_frame.text
+
+    if "エグゼクティブサマリー" not in body_text:
+        issues.append("pptx_slide2_not_executive_summary")
     if "営業利益" not in body_text:
         issues.append("pptx_executive_summary_missing_operating_profit")
     if "炭素価格回避" not in body_text:
@@ -641,7 +774,9 @@ ALL_VERIFICATIONS: list[tuple[str, Any, bool]] = [
     ("playbook_search", verify_playbook_search, False),
     ("measure_eval", verify_measure_eval, False),
     ("feasibility_check", verify_feasibility_check, False),
+    ("scenario_sim", verify_scenario_sim, False),
     ("plan_draft", verify_plan_draft, True),
+    ("periodic_report", verify_periodic_report, True),
     ("submission_validate", verify_submission_validate, True),
     ("financial_translate", verify_financial_translate, True),
 ]

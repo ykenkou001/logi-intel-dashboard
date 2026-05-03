@@ -35,10 +35,18 @@ from core.analytics.measure_eval import (
     build_eval_summary,
     evaluate_measures,
 )
+from core.analytics.periodic_report import (
+    build_periodic_report_summary,
+    generate_periodic_report,
+)
 from core.analytics.plan_draft import (
     PlanDraftResult,
     build_plan_draft_summary,
     generate_plan_draft,
+)
+from core.analytics.scenario_sim import (
+    build_scenario_summary,
+    simulate_scenarios,
 )
 from core.analytics.simulator import (
     SimulationResult,
@@ -600,6 +608,117 @@ def register_tools(mcp: FastMCP) -> None:
             freshness_warnings=all_warnings(),
             files=dict(report.checked_files),
             data_source=profile.data_source if profile else "estimated",
+        )
+        return response.to_dict()
+
+    @mcp.tool()
+    async def logi_clo_scenario_sim(
+        company_id: str,
+        selected_measure_ids: list[str] | None = None,
+    ) -> dict[str, object]:
+        """シナリオシミュレーション（保守/標準/上振れ × What-if 8 種）を実行します。
+
+        フェーズ3.5 Step 3（差別化の心臓部）。Codex 3 取込で保守/標準/上振れの
+        3 区分を持ち、CFO 質問「最低でも保守シナリオで X 億円か？」に答える形で
+        baseline + 7 ストレスシナリオを試算します。
+
+        ストレスシナリオ:
+        - 燃料 ±20%: 燃料価格変動による削減効果の増減（±5%）
+        - 運賃 ±10%: 運賃変動による削減効果の増減（±10%）
+        - 需要 ±10%: 輸送量変動によるコスト・CO2 効果の増減（±10%）
+        - 改善基準強化: 改善基準告示の追加強化（投資 +30% / 効果 -20%）
+
+        重複処理: 同 form3_section に 2 施策以上 → 効果合算に 0.7 倍を適用。
+        堅牢性判定: ストレス standard 営業利益増 / baseline standard
+        - 🟢 70% 以上 / 🟡 50-70% / 🔴 50% 未満（投資判断却下リスク）
+
+        Args:
+            company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
+                "sample_chain_01"）
+            selected_measure_ids: 評価対象施策の measure_id リスト。
+                None なら logi_clo_measure_eval の Top 3 を自動採用
+
+        Returns:
+            ToolResponse 構造:
+            - summary: baseline + 7 ストレス × 3 区分の試算結果と堅牢性総合判定
+            - citations: 物流効率化法・共同ガイドライン Ver.3.2
+            - freshness_warnings: 静的データの鮮度警告
+        """
+        profile = get_sample(company_id)
+        if profile is None:
+            return ToolResponse(
+                summary=(
+                    f"サンプル企業 '{company_id}' が見つかりません。"
+                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
+                ),
+            ).to_dict()
+
+        try:
+            result = simulate_scenarios(
+                profile=profile,
+                selected_measure_ids=selected_measure_ids,
+            )
+        except ValueError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
+
+        summary = build_scenario_summary(result)
+        response = ToolResponse(
+            summary=summary,
+            citations=result.citations,
+            freshness_warnings=result.freshness_warnings,
+            data_source=profile.data_source,
+        )
+        return response.to_dict()
+
+    @mcp.tool()
+    async def logi_clo_periodic_report_draft(
+        company_id: str,
+        report_fy: int = 2026,
+    ) -> dict[str, object]:
+        """様式第5（定期報告書）ドラフトを生成します。
+
+        フェーズ3.5 Step 7（フェーズ4.5「継続運用」への橋渡し）。
+        毎年 7 月末提出の定期報告書ドラフトを Word で生成し、提出実務
+        チェックリスト（Codex 1 取込）を最終ページに統合します。
+
+        セクション構成:
+        - Ⅰ 特定荷主の名称等
+        - Ⅱ 判断基準の遵守状況（改善基準告示）
+        - Ⅲ 判断基準を遵守できなかった場合の追加措置
+        - Ⅳ 荷待ち時間等の計測データ
+        - Ⅴ 中長期計画の進捗状況
+        - Ⅵ 提出準備チェックリスト（提出経路・指定通知書番号・法人番号 等）
+
+        計測データはサンプル別の標準値テンプレート（実データ取込はフェーズ4.0）。
+        連鎖化事業者は荷役等項目を自動省略します。
+
+        Args:
+            company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
+                "sample_chain_01"）
+            report_fy: 報告対象年度（西暦・デフォルト 2026）
+
+        Returns:
+            ToolResponse 構造:
+            - summary: 各セクションのサマリー + 提出実務チェックリスト
+            - files: { "docx": 様式第5 Word のパス }
+            - citations: 改善基準告示・物流効率化法・CO2 ガイドライン
+            - freshness_warnings: 静的データの鮮度警告
+        """
+        try:
+            result = await generate_periodic_report(
+                company_id=company_id,
+                report_fy=report_fy,
+            )
+        except ValueError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
+
+        summary = build_periodic_report_summary(result)
+        response = ToolResponse(
+            summary=summary,
+            citations=result.citations,
+            freshness_warnings=result.freshness_warnings,
+            files=dict(result.files),
+            data_source=result.data_source,
         )
         return response.to_dict()
 

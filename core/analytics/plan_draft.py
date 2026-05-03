@@ -56,6 +56,10 @@ from core.export.excel_writer import write_data_table
 from core.export.markdown_writer import write_clo_plan_draft as write_md_plan
 from core.export.ppt_writer import SlideContent
 from core.export.ppt_writer import write_clo_plan_draft as write_ppt_plan
+from core.export.submission_checklist import (
+    SubmissionChecklist,
+    build_submission_checklist,
+)
 from core.legal.eligibility import EligibilityResult, evaluate_eligibility
 from core.static._freshness import all_warnings
 from core.static.sample_company import CompanyProfile, DataSource, get_sample
@@ -82,6 +86,9 @@ class PlanDraftResult:
     freshness_warnings: list[str] = field(default_factory=list)
     data_source: DataSource = "estimated"
     """入力プロフィールの出所。生成元 CompanyProfile.data_source を伝搬する。"""
+
+    submission_checklist: SubmissionChecklist | None = None
+    """提出実務チェックリスト（Codex 1 取込）。提出経路・指定通知書番号・法人番号など。"""
 
 
 async def generate_plan_draft(company_id: str) -> PlanDraftResult:
@@ -170,6 +177,16 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
 
     plan_period = f"{profile.plan_period_start_fy}年度〜{profile.plan_period_end_fy}年度"
 
+    # 提出実務チェックリスト（Codex 1 取込）
+    submission_checklist = build_submission_checklist(
+        company_name=profile.name,
+        main_business=profile.main_business,
+        jsic_code=profile.jsic_code,
+        clo_name=profile.clo_name,
+        is_chain_franchise=profile.is_chain_franchise,
+        must_appoint_clo=eligibility.must_appoint_clo,
+    )
+
     # 成果物生成
     files: dict[str, str] = {}
 
@@ -177,6 +194,7 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
     md_sections = _build_markdown_sections(
         benchmark, driver_gap, eligibility, target_proposal,
         simulation, certified_matches, profile,
+        submission_checklist=submission_checklist,
     )
     md_path = write_md_plan(
         company_name=profile.name,
@@ -194,6 +212,7 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
     body_slides = _build_ppt_slides(
         benchmark, driver_gap, eligibility, target_proposal,
         simulation, certified_matches, profile,
+        submission_checklist=submission_checklist,
     )
     ppt_path = write_ppt_plan(
         company_name=profile.name,
@@ -230,6 +249,7 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         citations=citations,
         freshness_warnings=all_warnings(),
         data_source=profile.data_source,
+        submission_checklist=submission_checklist,
     )
 
 
@@ -305,39 +325,33 @@ def _build_executive_summary_lines(
 ) -> list[str]:
     """PPT 2枚目固定のエグゼクティブサマリー（行のリスト）。
 
-    財務インパクト（営業利益・炭素回避レンジ・5年NPV）を含めて経営層が
-    一目で「何を判断すべきか」が分かる形にする。
+    PPT の `_add_executive_summary_body` は最初の 4 行を KPI カード（経営インパクト）、
+    続く 3 行を会社プロフィールとして表示するため、財務インパクト 4 KPI を上位に置く。
     """
     obligation = "あり" if eligibility.must_appoint_clo else "なし"
     cat_labels = "、".join(
         _ELIGIBILITY_CATEGORY_LABELS.get(str(c), str(c)) for c in eligibility.categories
     )
     lines = [
-        f"会社名: {profile.name}",
-        f"主たる事業: {profile.main_business}（JSIC {profile.jsic_code}）",
-        f"年間売上: {profile.annual_revenue_jpy / 1e8:.1f}億円 / "
-        f"営業利益: {profile.operating_profit_jpy / 1e8:.1f}億円 "
-        f"(利益率 {financial.base_operating_profit_margin_pct:.2f}%)",
-        f"年間取扱量: {profile.annual_freight_tons_total:,.0f}トン",
-        "",
-        f"特定荷主3区分判定: CLO選任義務 {obligation}",
-        f"  該当区分: {cat_labels}",
-        "",
-        "【施策効果（5施策合算・年間ベース）】",
-        f"  CO2 削減: 約 {simulation.total_co2_reduction_kg / 1000:,.0f}トン-CO2/年",
-        f"  物流コスト削減（= 営業利益増）: "
-        f"約 {simulation.total_cost_saving_jpy / 1e8:.2f}億円/年",
-        f"  必要投資 合計: 約 {simulation.total_investment_jpy / 1e4:,.0f}万円",
-        "",
-        "【財務インパクト（経営指標換算）】",
-        f"  営業利益 +{financial.total_operating_profit_increase_jpy / 1e8:.2f}億円/年 "
-        f"(利益率 +{financial.operating_profit_margin_lift_pp_total:.2f}pp)",
-        f"  炭素価格回避: {financial.total_carbon_avoidance_jpy_low / 1e6:.0f}〜"
-        f"{financial.total_carbon_avoidance_jpy_high / 1e6:.0f}百万円/年 "
-        "(J-クレジット〜GX-ETS想定)",
-        f"  5年累積NPV: 約 {financial.total_5y_npv_jpy / 1e8:.2f}億円 (割引率3%)",
-        "",
-        "次のアクション: 様式第3別紙（添付Word）に署名・押印し、2026年10月末までに国交省へ提出",
+        # 4 KPI カード（経営層が一目で判断する指標）
+        f"営業利益: +{financial.total_operating_profit_increase_jpy / 1e8:.2f}億円/年 "
+        f"(+{financial.operating_profit_margin_lift_pp_total:.2f}pp)",
+        f"CO2削減: 約 {simulation.total_co2_reduction_kg / 1000:,.0f}トン-CO2/年",
+        f"炭素価格回避: {financial.total_carbon_avoidance_jpy_low / 1e6:.0f}〜"
+        f"{financial.total_carbon_avoidance_jpy_high / 1e6:.0f}百万円/年",
+        f"5年累積NPV: 約 {financial.total_5y_npv_jpy / 1e8:.2f}億円 (割引率3%)",
+        # 会社プロフィール 3 行
+        f"会社名: {profile.name}（JSIC {profile.jsic_code}）",
+        f"特定荷主3区分: {cat_labels} / CLO選任義務 {obligation}",
+        f"年間売上 {profile.annual_revenue_jpy / 1e8:.1f}億円 / 営業利益率 "
+        f"{financial.base_operating_profit_margin_pct:.2f}% / "
+        f"取扱量 {profile.annual_freight_tons_total:,.0f}トン",
+        # 末尾（PPT では右下バナーに固定文言が入るため、参考情報として保持）
+        "次のアクション: 様式第3別紙（添付Word）に署名・押印し、"
+        "2026年10月末までに国交省へ提出",
+        f"必要投資 合計: 約 {simulation.total_investment_jpy / 1e4:,.0f}万円 "
+        f"/ コスト削減（= 営業利益増）: 約 "
+        f"{simulation.total_cost_saving_jpy / 1e8:.2f}億円/年",
     ]
     return lines
 
@@ -365,9 +379,10 @@ def _build_markdown_sections(
     simulation: SimulationResult,
     certified_matches: CertifiedMatchResult,
     profile: CompanyProfile,
+    submission_checklist: SubmissionChecklist | None = None,
 ) -> list[tuple[str, str]]:
     """Markdown 出力のセクション (見出し, 本文) リスト。"""
-    return [
+    sections: list[tuple[str, str]] = [
         ("Step 1: 業界ベンチマーク", build_benchmark_summary(benchmark)),
         ("Step 2: ドライバー需給ギャップ", build_driver_gap_summary(driver_gap)),
         (
@@ -387,6 +402,12 @@ def _build_markdown_sections(
             build_certified_match_summary(certified_matches),
         ),
     ]
+    if submission_checklist is not None:
+        sections.append((
+            "提出準備チェックリスト（実務）",
+            "\n".join(submission_checklist.to_markdown_lines()),
+        ))
+    return sections
 
 
 def _build_ppt_slides(
@@ -397,9 +418,10 @@ def _build_ppt_slides(
     simulation: SimulationResult,
     certified_matches: CertifiedMatchResult,
     profile: CompanyProfile,
+    submission_checklist: SubmissionChecklist | None = None,
 ) -> list[SlideContent]:
     """PPT 本文スライドのリスト（3 枚目以降）。"""
-    return [
+    slides: list[SlideContent] = [
         SlideContent(
             title="業界ベンチマーク",
             body_lines=build_benchmark_summary(benchmark).split("\n")[2:],
@@ -431,6 +453,12 @@ def _build_ppt_slides(
             body_lines=build_certified_match_summary(certified_matches).split("\n")[1:],
         ),
     ]
+    if submission_checklist is not None:
+        slides.append(SlideContent(
+            title="提出準備チェックリスト（実務）",
+            body_lines=submission_checklist.to_text_lines(),
+        ))
+    return slides
 
 
 def _build_excel(
@@ -696,8 +724,13 @@ def build_plan_draft_summary(r: PlanDraftResult) -> str:
         "  2. Word（様式第3別紙）の社内レビュー → CLO 署名 → 2026年10月末までに国交省提出",
         "  3. Excel の出典シートで「全数値の根拠」を確認（経営会議『出典は？』即答用）",
         "",
-        _format_data_source_note(r.data_source),
     ]
+
+    if r.submission_checklist is not None:
+        lines.extend(r.submission_checklist.to_text_lines())
+        lines.append("")
+
+    lines.append(_format_data_source_note(r.data_source))
 
     return "\n".join(lines)
 
