@@ -13,12 +13,20 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from typing import Literal
 
 from core.clients.estat import EStatApiError, EStatClient
 from core.export.citation import Citation, estat_citation
 from core.static._freshness import all_warnings
 from core.static.jsic import lookup
 from core.static.national_targets import LOGISTICS_CO2_TARGET
+
+# 業界平均売上比の信頼性しきい値（reference_industry_sense_ranges.md に整合）
+# 100% 前後 → 業界平均水準 / 200-1000% → 規模優位企業 / 1,000% 超 → 比較対象見直し必要
+REVENUE_VS_AVG_LARGE_SCALE_THRESHOLD_PCT: float = 200.0
+REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT: float = 1000.0
+
+ReliabilityLevel = Literal["normal", "large_scale", "low_reliability"]
 
 # 経済センサス‐基礎調査 2024（産業小分類別 民営事業所数 — 全国・都道府県・市区町村）
 # JSIC 細分類4桁の上3桁（小分類）を cd_cat01 に渡すと絞り込める。
@@ -97,6 +105,11 @@ class BenchmarkResult:
     # 国家目標
     co2_intensity_target_pct: float           # 物流分野 CO2 原単位削減目標
 
+    # 業界平均比の信頼性区分（経営会議で参照する場合の信頼度を示す）
+    # 業界統計の母集団が小規模事業所中心のため、大企業の比較は桁外れになりやすい。
+    revenue_ratio_reliability: ReliabilityLevel = "normal"
+    revenue_ratio_warning: str | None = None
+
     citations: list[Citation] = field(default_factory=list)
     freshness_warnings: list[str] = field(default_factory=list)
 
@@ -174,6 +187,9 @@ async def analyze_benchmark(
         if industry_avg_revenue_jpy and industry_avg_revenue_jpy > 0
         else None
     )
+    revenue_ratio_reliability, revenue_ratio_warning = _classify_revenue_ratio_reliability(
+        revenue_vs_avg_pct,
+    )
 
     # 物流コスト比率
     logistics_cost_ratio = (
@@ -212,6 +228,8 @@ async def analyze_benchmark(
         regional_peer_count=regional_count,
         industry_avg_revenue_jpy=industry_avg_revenue_jpy,
         revenue_vs_avg_pct=revenue_vs_avg_pct,
+        revenue_ratio_reliability=revenue_ratio_reliability,
+        revenue_ratio_warning=revenue_ratio_warning,
         logistics_cost_ratio=logistics_cost_ratio,
         industry_avg_logistics_ratio=industry_avg_logistics_ratio,
         logistics_cost_gap_pct=logistics_cost_gap_pct,
@@ -219,6 +237,29 @@ async def analyze_benchmark(
         citations=citations,
         freshness_warnings=all_warnings(),
     )
+
+
+def _classify_revenue_ratio_reliability(
+    revenue_vs_avg_pct: float | None,
+) -> tuple[ReliabilityLevel, str | None]:
+    """業界平均売上比から信頼性区分とユーザー警告を導出する。
+
+    業界平均は経済センサスの 1 事業所あたり推計値（小規模事業所中心の母集団）。
+    大企業を比較すると桁外れになりやすく、経営会議でそのまま提示すると defensibility が損なわれる。
+    """
+    if revenue_vs_avg_pct is None:
+        return "normal", None
+    if revenue_vs_avg_pct > REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT:
+        warning = (
+            f"業界平均売上比 {revenue_vs_avg_pct:.0f}% は信頼性しきい値 "
+            f"{REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT:.0f}% を超過。"
+            "業界統計の母集団（小規模事業所中心）と自社規模の乖離が大きく、"
+            "経営会議では参考値として扱い、相対参照（規模優位企業として上位帯）に留めてください。"
+        )
+        return "low_reliability", warning
+    if revenue_vs_avg_pct > REVENUE_VS_AVG_LARGE_SCALE_THRESHOLD_PCT:
+        return "large_scale", None
+    return "normal", None
 
 
 def build_benchmark_summary(r: BenchmarkResult) -> str:
@@ -268,6 +309,8 @@ def build_benchmark_summary(r: BenchmarkResult) -> str:
             f"  自社売上: {r.revenue_jpy / 1e8:.1f}億円 → 業界平均の {r.revenue_vs_avg_pct:.0f}%"
             f"（{position}）"
         )
+        if r.revenue_ratio_warning:
+            lines.append(f"  ⚠️ {r.revenue_ratio_warning}")
 
     lines += [
         "",

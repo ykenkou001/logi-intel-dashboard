@@ -93,9 +93,17 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ## 3. 現在のフェーズ
 
-**フェーズ 3 完了（Step 1〜7・2026-05-02）→ フェーズ 3.5 着手準備中**
+**フェーズ 3.5 着手中（Step 6 + 4 + 1 + 2 + 5 完了・2026-05-03）**
 
-詳細 → [docs/roadmap.md](docs/roadmap.md)
+**次セッションでの着手順**: 改善タスク（短期 4 件）→ Step 3 → Step 7
+- 短期 1: 業界平均比の桁外れ警告（30分）
+- 短期 2: 業界感覚レンジを `core/static/industry_benchmarks.py` として文書化（1〜1.5時間／Codex 4 軽量取込: data_source フラグ追加）
+- 短期 3: judgment trail（Top/Bottom 3 対比 + 実行カード簡易版）（2〜2.5時間／Codex 2 軽量取込）
+- 短期 4: ★ 法令区分の文言整合性監査（連鎖化 第65条 / 荷主 第46条 / CLO 選任 第66条）（1〜2時間／Codex 5 取込・新設）
+
+Step 3（シナリオシミュレータ）に Codex 3（保守/標準/上振れ）、Step 7（様式第5）に Codex 1（提出実務チェックリスト）を統合済。
+
+詳細 → [docs/roadmap.md](docs/roadmap.md) §フェーズ3.5「改善タスク」セクション
 
 ---
 
@@ -163,7 +171,12 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 | 2 | `logi_clo_driver_gap` | `prefecture="東京都"` |
 | 3 | `logi_clo_eligibility` | `jsic_code="5411", revenue_jpy=5_000_000_000` |
 | 4 | `logi_clo_target_proposal` | `jsic_code="5411", prefecture="東京都", revenue_jpy=5_000_000_000` |
-| 7 | `logi_clo_plan_draft` | サンプル会社プロフィールで一括生成 |
+| 7 | `logi_clo_plan_draft` | サンプル会社プロフィールで一括生成（エグゼクサマリーに財務インパクト含む） |
+| 3.5/6 | `logi_clo_submission_validate` | サンプル ID で計画書を生成→検査（PASS/準拠率/エラー警告） |
+| 3.5/4 | `logi_clo_financial_translate` | サンプル ID で施策別 P&L 翻訳（営業利益+X億・炭素回避レンジ・5年NPV） |
+| 3.5/1 | `logi_clo_playbook_search` | 業種・規模・難易度で標準10施策を絞込（投資レンジ・補助金・失敗パターン提示） |
+| 3.5/2 | `logi_clo_measure_eval` | 自社プロフィール × 10施策 → 4軸スコアリング → Top 3 推薦 + 選定根拠 |
+| 3.5/5 | `logi_clo_feasibility_check` | 施策の実行可否を 緑/黄/赤 で判定 + 積載率 KPI 到達可能性 |
 
 ---
 
@@ -182,4 +195,4 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ---
 
-最終更新: 2026-05-02（Option C戦略・7本柱を §1.5 に追加 / Step検証ルールを §7 に追加 / 現在のフェーズ更新）
+最終更新: 2026-05-03（Codex 外部レビュー反映 / 短期 4 件を roadmap に明文化 / Codex 5 点を短期4 + Step 3 + Step 7 + フェーズ4.0/4.5 に分配 / 次セッションは「短期 1 → 2 → 3 → 4 → Step 3 → Step 7」の順で着手）
