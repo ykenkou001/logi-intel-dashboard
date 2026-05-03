@@ -24,30 +24,9 @@ from docx.shared import Pt
 from core.export.response import make_output_path
 from core.export.submission_checklist import SubmissionChecklist
 from core.legal.improvement_check import ComplianceItem, ComplianceReport
+from core.static.sample_company import HandlingTimeRow, WaitTimeRow
 
 _OFFICIAL_TEMPLATE = Path("core/templates/clo_report_form5.docx")
-
-
-@dataclass(frozen=True)
-class WaitTimeRow:
-    """荷待ち時間 計測実績の 1 行。"""
-
-    bucket_label: str       # 集計区分（例: "全体", "都市部拠点"）
-    measured_count: int     # 計測便数
-    average_minutes: float
-    max_minutes: float
-    over_2h_count: int      # 2時間超 件数（基準超過の有無）
-
-
-@dataclass(frozen=True)
-class HandlingTimeRow:
-    """荷役等時間 計測実績の 1 行。"""
-
-    bucket_label: str       # 納品形態（例: "パレット納品", "バラ納品"）
-    measured_count: int
-    average_minutes: float
-    max_minutes: float
-    over_1h_pct: float      # 1時間超 割合（%）
 
 
 @dataclass(frozen=True)

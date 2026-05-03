@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastmcp import FastMCP
 
 from core.analytics.benchmark import (
@@ -63,6 +65,15 @@ from core.export.citation import (
     logistics_efficiency_law_citation,
 )
 from core.export.response import ToolResponse
+from core.io.company_loader import (
+    load_company_profile_from_csv,
+    load_company_profile_from_excel,
+)
+from core.io.company_store import save_company_profile
+from core.io.template_writer import (
+    DEFAULT_TEMPLATE_PATH,
+    write_company_template,
+)
 from core.legal.eligibility import evaluate_eligibility
 from core.playbook.filters import (
     PlaybookFilter,
@@ -760,3 +771,116 @@ def register_tools(mcp: FastMCP) -> None:
             freshness_warnings=result.freshness_warnings,
         )
         return response.to_dict()
+
+    @mcp.tool()
+    async def logi_clo_generate_template(
+        output_path: str | None = None,
+    ) -> dict[str, object]:
+        """自社プロフィール入力 Excel テンプレートを生成します（フェーズ4.0）。
+
+        CLO 担当者がこのテンプレを DL → 自社情報を記入 → logi_clo_load_company で
+        取込、というフローの起点。サンプル3社からの脱却に必須。
+
+        生成シート:
+            - profile        : 単一行（必須・基本情報）
+            - sites          : 拠点ごと 1 行
+            - wait_time      : 荷待ち時間 計測値（区分ごと）
+            - handling_time  : 荷役等時間 計測値（連鎖化事業者は省略可）
+            - kpi_history    : 直近 3 期 KPI 履歴（任意）
+            - _jsic_reference: JSIC 細分類 4 桁の参照シート
+
+        Args:
+            output_path: 出力先のパス（省略時は outputs/templates/sample_company_template.xlsx）
+
+        Returns:
+            ToolResponse 構造:
+            - summary: 生成完了メッセージと記入手順
+            - files: { "template_xlsx": Excel テンプレートのパス }
+        """
+        target = Path(output_path) if output_path else DEFAULT_TEMPLATE_PATH
+        try:
+            written = write_company_template(target)
+        except Exception as exc:
+            return ToolResponse(summary=f"テンプレ生成に失敗しました: {exc}").to_dict()
+
+        summary = (
+            f"=== 自社プロフィール入力テンプレ生成完了 ===\n"
+            f"出力先: {written}\n\n"
+            "次の手順:\n"
+            "  1. このファイルを開き、profile / sites / wait_time / "
+            "handling_time / kpi_history シートを記入\n"
+            "  2. 必須項目（[必須] と表記）はすべて埋める\n"
+            "  3. 連鎖化事業者は handling_time シートを空にしてよい\n"
+            "  4. 記入後 logi_clo_load_company(file_path=\"...\") で取込\n"
+            "  5. 取込が成功すると logi_clo_plan_draft(company_id) で実データ計画書を生成可能\n\n"
+            "詳細記入ガイド: docs/data_input_guide.md"
+        )
+        return ToolResponse(
+            summary=summary,
+            files={"template_xlsx": str(written)},
+            data_source="actual",
+        ).to_dict()
+
+    @mcp.tool()
+    async def logi_clo_load_company(file_path: str) -> dict[str, object]:
+        """記入済み Excel/CSV から CompanyProfile を構築し JSON 永続化します（フェーズ4.0）。
+
+        Excel ファイル（.xlsx）または CSV ディレクトリの両方をサポート。
+        取込が成功すると `outputs/profiles/<company_id>.json` に保存され、以降
+        サンプル3社と同じ ID 解決ルートで `logi_clo_plan_draft` 等から参照可能。
+
+        Args:
+            file_path: 記入済み Excel ファイル（.xlsx）か CSV ディレクトリのパス。
+                Excel の場合は `logi_clo_generate_template` で生成したテンプレを記入したもの。
+                CSV の場合は profile.csv / sites.csv 等を含むディレクトリ。
+
+        Returns:
+            ToolResponse 構造:
+            - summary: 取込結果の要約（company_id・拠点数・計測値件数・data_source）
+            - files: { "profile_json": JSON ファイルのパス }
+            - freshness_warnings: 必須項目の警告など
+        """
+        target = Path(file_path)
+        try:
+            if target.is_dir():
+                profile = load_company_profile_from_csv(target)
+            elif target.is_file():
+                profile = load_company_profile_from_excel(target)
+            else:
+                return ToolResponse(
+                    summary=f"ファイル/ディレクトリが見つかりません: {target}",
+                ).to_dict()
+        except (FileNotFoundError, ValueError) as exc:
+            return ToolResponse(summary=f"取込に失敗しました: {exc}").to_dict()
+
+        try:
+            json_path = save_company_profile(profile)
+        except OSError as exc:
+            return ToolResponse(
+                summary=f"JSON 永続化に失敗しました: {exc}",
+            ).to_dict()
+
+        summary = (
+            f"=== 自社プロフィール取込完了 ===\n"
+            f"company_id: {profile.company_id}\n"
+            f"会社名: {profile.name}\n"
+            f"業種: {profile.main_business} (JSIC {profile.jsic_code})\n"
+            f"年間売上: {profile.annual_revenue_jpy / 1e8:.1f} 億円\n"
+            f"年間取扱量: {profile.annual_freight_tons_total:,.0f} トン\n"
+            f"連鎖化事業者: {'はい' if profile.is_chain_franchise else 'いいえ'}\n"
+            f"拠点数: {len(profile.sites)} 件\n"
+            f"荷待ち時間 計測区分: {len(profile.wait_time_rows)} 件\n"
+            f"荷役等時間 計測区分: {len(profile.handling_time_rows)} 件\n"
+            f"KPI 履歴: {len(profile.kpi_history)} 件\n"
+            f"data_source: {profile.data_source}\n\n"
+            f"永続化先: {json_path}\n\n"
+            "次のアクション:\n"
+            f"  - logi_clo_plan_draft(company_id=\"{profile.company_id}\") で計画書ドラフト生成\n"
+            f"  - logi_clo_periodic_report_draft(company_id=\"{profile.company_id}\") で"
+            "様式第5 ドラフト生成"
+        )
+        return ToolResponse(
+            summary=summary,
+            files={"profile_json": str(json_path)},
+            data_source=profile.data_source,
+        ).to_dict()

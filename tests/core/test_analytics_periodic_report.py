@@ -41,7 +41,7 @@ async def test_generate_periodic_report_for_chain_franchise() -> None:
 
 @pytest.mark.asyncio
 async def test_invalid_company_id_raises() -> None:
-    with pytest.raises(ValueError, match="サンプル企業"):
+    with pytest.raises(ValueError, match="企業プロフィール"):
         await generate_periodic_report("nonexistent_id")
 
 

@@ -5,7 +5,10 @@
 
 設計方針:
     - 中長期計画（plan_draft）を内部で再実行して進捗比較セクションを構築
-    - 計測データはサンプル別の標準値テンプレート（実データ取込はフェーズ4.0）
+    - 計測データは CompanyProfile.wait_time_rows / handling_time_rows を直接参照
+      （サンプル3社は core/static/sample_company.py で値を保持。実データ取込時は
+      Excel 取込で書き換えられた CompanyProfile が `outputs/profiles/<id>.json` 経由で
+      get_sample() に解決される — フェーズ4.0 で実装済み）
     - 改善基準告示準拠チェックは check_truck_driver_compliance を経由
     - 提出実務チェックリスト（Codex 1 取込）を最終ページに統合
     - 連鎖化事業者は荷役等項目を docx_form5_writer 側で自動省略
@@ -25,9 +28,7 @@ from core.export.citation import (
 )
 from core.export.docx_form5_writer import (
     Form5Sections,
-    HandlingTimeRow,
     ProgressRow,
-    WaitTimeRow,
     write_form5,
 )
 from core.export.submission_checklist import (
@@ -39,7 +40,12 @@ from core.legal.improvement_check import (
     check_truck_driver_compliance,
 )
 from core.static._freshness import all_warnings
-from core.static.sample_company import DataSource, get_sample
+from core.static.sample_company import (
+    DataSource,
+    HandlingTimeRow,
+    WaitTimeRow,
+    get_sample,
+)
 
 
 @dataclass
@@ -63,133 +69,15 @@ class PeriodicReportResult:
     data_source: DataSource = "estimated"
 
 
-# サンプル別の計測値テンプレート（実データ取込はフェーズ4.0）
-# 出典: 国交省 様式第5 記載見本集（manufacturing_report_advanced.md）の数値レンジ
-_WAIT_TIME_TEMPLATES: dict[str, list[WaitTimeRow]] = {
-    "sample_mfg_01": [
-        WaitTimeRow(
-            bucket_label="全体",
-            measured_count=8420,
-            average_minutes=14,
-            max_minutes=112,
-            over_2h_count=0,
-        ),
-        WaitTimeRow(
-            bucket_label="都市部拠点（埼玉・愛知）",
-            measured_count=4100,
-            average_minutes=18,
-            max_minutes=112,
-            over_2h_count=0,
-        ),
-        WaitTimeRow(
-            bucket_label="地方拠点（兵庫）",
-            measured_count=4320,
-            average_minutes=9,
-            max_minutes=35,
-            over_2h_count=0,
-        ),
-    ],
-    "sample_wholesale_01": [
-        WaitTimeRow(
-            bucket_label="全体",
-            measured_count=12500,
-            average_minutes=35,
-            max_minutes=145,
-            over_2h_count=8,
-        ),
-        WaitTimeRow(
-            bucket_label="関東センター（千葉）",
-            measured_count=4500,
-            average_minutes=32,
-            max_minutes=130,
-            over_2h_count=3,
-        ),
-        WaitTimeRow(
-            bucket_label="関西センター（大阪）",
-            measured_count=3800,
-            average_minutes=38,
-            max_minutes=145,
-            over_2h_count=5,
-        ),
-    ],
-    "sample_chain_01": [
-        WaitTimeRow(
-            bucket_label="全体（4 DC合算）",
-            measured_count=25000,
-            average_minutes=18,
-            max_minutes=65,
-            over_2h_count=0,
-        ),
-        WaitTimeRow(
-            bucket_label="関東第一センター（埼玉）",
-            measured_count=12000,
-            average_minutes=15,
-            max_minutes=55,
-            over_2h_count=0,
-        ),
-        WaitTimeRow(
-            bucket_label="関西センター（大阪）",
-            measured_count=7000,
-            average_minutes=20,
-            max_minutes=65,
-            over_2h_count=0,
-        ),
-    ],
-}
-
-_HANDLING_TIME_TEMPLATES: dict[str, list[HandlingTimeRow]] = {
-    "sample_mfg_01": [
-        HandlingTimeRow(
-            bucket_label="パレット納品",
-            measured_count=6200,
-            average_minutes=28,
-            max_minutes=45,
-            over_1h_pct=0.0,
-        ),
-        HandlingTimeRow(
-            bucket_label="かご車納品",
-            measured_count=1800,
-            average_minutes=35,
-            max_minutes=58,
-            over_1h_pct=0.0,
-        ),
-        HandlingTimeRow(
-            bucket_label="バラ納品",
-            measured_count=420,
-            average_minutes=52,
-            max_minutes=104,
-            over_1h_pct=8.0,
-        ),
-    ],
-    "sample_wholesale_01": [
-        HandlingTimeRow(
-            bucket_label="パレット納品",
-            measured_count=5000,
-            average_minutes=30,
-            max_minutes=90,
-            over_1h_pct=0.0,
-        ),
-        HandlingTimeRow(
-            bucket_label="バラ納品",
-            measured_count=800,
-            average_minutes=75,
-            max_minutes=120,
-            over_1h_pct=12.0,
-        ),
-    ],
-    # 連鎖化（コンビニ）は荷役等時間が法令上対象外のため、参考表示のみ簡素に
-    "sample_chain_01": [],
-}
-
-
 async def generate_periodic_report(
     company_id: str,
     report_fy: int = 2026,
 ) -> PeriodicReportResult:
-    """サンプル企業プロフィールから定期報告書ドラフトを生成する。
+    """企業プロフィールから定期報告書ドラフトを生成する。
 
     Args:
-        company_id: サンプル企業ID（例: "sample_mfg_01"）
+        company_id: 企業ID（サンプル ID または
+            `outputs/profiles/<id>.json` に保存済みの実データ ID）
         report_fy: 報告対象年度（西暦・例: 2026 → 2026年4月〜2027年3月）
 
     Returns:
@@ -201,16 +89,17 @@ async def generate_periodic_report(
     profile = get_sample(company_id)
     if profile is None:
         raise ValueError(
-            f"サンプル企業 '{company_id}' が見つかりません。"
-            "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
+            f"企業プロフィール '{company_id}' が見つかりません。"
+            "サンプル: sample_mfg_01 / sample_wholesale_01 / sample_chain_01。"
+            "実データを使う場合は logi_clo_load_company で取込してください。"
         )
 
     # 中長期計画書を内部生成（Ⅴ 進捗比較セクションの基礎）
     plan = await generate_plan_draft(company_id)
 
-    # 計測データ（サンプル別テンプレート）
-    wait_rows = list(_WAIT_TIME_TEMPLATES.get(company_id, []))
-    handling_rows = list(_HANDLING_TIME_TEMPLATES.get(company_id, []))
+    # 計測データ — CompanyProfile が保持する値を直接利用（推計値も実測値も同じ経路）
+    wait_rows = list(profile.wait_time_rows)
+    handling_rows = list(profile.handling_time_rows)
 
     # 改善基準告示準拠チェック（計測データから max を抽出）
     compliance = _build_compliance(wait_rows, handling_rows)

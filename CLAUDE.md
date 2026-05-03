@@ -83,6 +83,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 | [docs/api_endpoints.md](docs/api_endpoints.md) | 利用 API 一覧・認証・TTL・制約 |
 | [docs/mcp_tools.md](docs/mcp_tools.md) | MCP ツール命名規則・実装方針 |
 | [docs/clo_domain.md](docs/clo_domain.md) | CLO 業務ドメイン知識・法的定義 |
+| [docs/data_input_guide.md](docs/data_input_guide.md) | 自社データ入力ガイド（Excel/CSV テンプレ記入と取込手順） |
 | [docs/ppt_design.md](docs/ppt_design.md) | PPT デザイン方針（Logi-Intel CLO Report）・スライドファミリー定義 |
 | [docs/oss_reference.md](docs/oss_reference.md) | 参考 OSS の方針・Attribution |
 | [docs/testing.md](docs/testing.md) | テストレベル・モック方針・カバレッジ目標 |
@@ -94,15 +95,19 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ## 3. 現在のフェーズ
 
-**フェーズ 3.5 完了（Steps 6/4/1/2/5/3/7 + 改善タスク短期 4 件 + Codex 1-5 全反映・2026-05-03）**
+**フェーズ 4.0 進行中 — 自社データ取込（Codex 4 フル版）✅ 完了（2026-05-03）**
 
-**次セッションでの着手順**: フェーズ4.0（Web ダッシュボード + AWS 移行 + 自社データ取込）
-- ✅ 短期 1〜4 すべて完了（業界平均比警告・業界感覚レンジ・judgment trail・法令区分監査）
-- ✅ Step 3: シナリオシミュレータ — Codex 3 取込（保守/標準/上振れ 3 区分・燃料 +20% で全サンプル 🟢 維持）
-- ✅ Step 7: 定期報告書（様式第5）+ 提出実務チェックリスト — Codex 1 取込
-- ⏳ フェーズ4.0: 実データ入力フォーム（Codex 4 フル版）が最優先
+**フェーズ 4.0 サブステップ**:
+- ✅ 自社データ取込（Codex 4 フル版）— Excel/CSV → CompanyProfile + JSON 永続化 + サンプル3社 ID 解決の統合
+- ⏳ FastAPI REST 層
+- ⏳ Next.js 初期化
+- ⏳ AWS 移行（SQLite→Redis、API キー→Secrets Manager、ECS/Lambda デプロイ）
 
-詳細 → [docs/roadmap.md](docs/roadmap.md) §フェーズ3.5 / memory `project_phase35_status.md`
+**新規 MCP ツール（フェーズ4.0 で追加）**:
+- `logi_clo_generate_template`: 自社プロフィール入力テンプレ Excel を生成
+- `logi_clo_load_company`: 記入済み Excel/CSV から CompanyProfile を構築・JSON 永続化
+
+詳細 → [docs/roadmap.md](docs/roadmap.md) §フェーズ4.0 / [docs/data_input_guide.md](docs/data_input_guide.md)
 
 ---
 

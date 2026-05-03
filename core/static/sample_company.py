@@ -1,7 +1,17 @@
-"""自社プロフィール仮データ（フェーズ4 まで使用するサンプル3社）。
+"""自社プロフィール仮データ（フェーズ4 まで使用するサンプル3社）+ 実データ取込用スキーマ。
+
+フェーズ4.0「実データ入力フォーム」（Codex 4 フル版）では、Excel/CSV から
+CompanyProfile を構築してサンプル3社と同じインターフェースで使えるようにする。
+
+設計方針:
+    - 既存サンプル3社の数値挙動は完全互換（既存テスト/verify-clo-step が通ること）
+    - 拡張フィールドはすべて Optional / デフォルト空 list / None
+    - WaitTimeRow / HandlingTimeRow は CompanyProfile が保持する値オブジェクト
+      （以前は core/export/docx_form5_writer.py に dataclass として定義していたが
+      Pydantic に統一して Excel 取込時のバリデーションに乗せる）
+    - data_source フラグで「推計値（estimated）」と「実測値（actual）」を区別
 
 注意:
-    - フェーズ4 で実データアップロード機能を実装するまでの暫定。
     - サンプル企業名・数値は架空であり、実在する企業とは無関係。
     - 公式記載事例集（core/templates/clo_plan_examples/）と業種コードを揃えてある。
 """
@@ -9,7 +19,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 SiteType = Literal["factory", "dc", "store", "office", "warehouse"]
 DataSource = Literal["estimated", "actual"]
@@ -22,6 +32,47 @@ class CompanySite(BaseModel):
     site_type: SiteType = Field(..., description="拠点種別")
     prefecture: str = Field(..., description="都道府県名（正式名称）")
     annual_freight_tons: float = Field(..., ge=0, description="年間取扱貨物量（トン）")
+
+
+class WaitTimeRow(BaseModel):
+    """荷待ち時間 計測実績の 1 行（様式第5 Ⅳ セクションの計測データ単位）。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    bucket_label: str = Field(..., description="集計区分（例: '全体', '都市部拠点'）")
+    measured_count: int = Field(..., ge=0, description="計測便数")
+    average_minutes: float = Field(..., ge=0, description="平均荷待ち時間（分）")
+    max_minutes: float = Field(..., ge=0, description="最大荷待ち時間（分）")
+    over_2h_count: int = Field(..., ge=0, description="2時間超 件数（基準超過の有無）")
+
+
+class HandlingTimeRow(BaseModel):
+    """荷役等時間 計測実績の 1 行。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    bucket_label: str = Field(..., description="納品形態（例: 'パレット納品', 'バラ納品'）")
+    measured_count: int = Field(..., ge=0)
+    average_minutes: float = Field(..., ge=0, description="平均荷役時間（分）")
+    max_minutes: float = Field(..., ge=0, description="最大荷役時間（分）")
+    over_1h_pct: float = Field(..., ge=0, le=100, description="1時間超 割合（%）")
+
+
+class KpiHistoryEntry(BaseModel):
+    """直近期の KPI 履歴 1 行（trend 検出・実績ベースライン構築用）。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    fy: int = Field(..., ge=2000, le=2100, description="年度（西暦・例: 2024）")
+    metric: str = Field(
+        ...,
+        description=(
+            "KPI 識別子（例: 'load_factor_pct' / 'co2_intensity_g_per_tonkm' / "
+            "'wait_time_avg_minutes' / 'fuel_liters' 等）"
+        ),
+    )
+    value: float = Field(..., description="値（unit に従う）")
+    unit: str = Field(..., description="単位（例: '%', 'g/トンキロ', '分', 'L'）")
 
 
 class CompanyProfile(BaseModel):
@@ -65,9 +116,46 @@ class CompanyProfile(BaseModel):
         ),
     )
 
+    # --- フェーズ4.0 追加: 実測値フィールド（全 Optional / 未指定時は推計挙動） ---
+    load_factor_actual_pct: float | None = Field(
+        None,
+        ge=0,
+        le=100,
+        description=(
+            "積載率実績（%）— feasibility_check の現状値として使用。"
+            "未指定時は業界平均（38%）にフォールバック"
+        ),
+    )
+    annual_fuel_liters: float | None = Field(
+        None,
+        ge=0,
+        description="年間燃料消費量（L）— CO2 ベースライン整合性検証用",
+    )
+    annual_co2_emissions_kg: float | None = Field(
+        None,
+        ge=0,
+        description="年間 CO2 排出量実績（kg-CO2）",
+    )
+    wait_time_rows: list[WaitTimeRow] = Field(
+        default_factory=list,
+        description=(
+            "荷待ち時間 計測実績（拠点別/集計区分別）。"
+            "様式第5 Ⅳ セクションに直接反映され、改善基準告示の遵守判定に使われる"
+        ),
+    )
+    handling_time_rows: list[HandlingTimeRow] = Field(
+        default_factory=list,
+        description="荷役等時間 計測実績（連鎖化事業者は対象外で空 list でよい）",
+    )
+    kpi_history: list[KpiHistoryEntry] = Field(
+        default_factory=list,
+        description="直近 3 期の KPI 履歴（trend 検出と実績ベースライン構築用）",
+    )
+
 
 # サンプル1: 製造業（電子部品）— 特定第一種荷主想定
 # 財務想定: 営業利益率 7%（電子部品業界中央値）/ 売上原価率 75%
+# 計測値: 国交省 様式第5 記載見本集（manufacturing_report_advanced.md）の数値レンジ
 SAMPLE_MANUFACTURING = CompanyProfile(
     company_id="sample_mfg_01",
     name="テクノパーツ製造株式会社（架空）",
@@ -92,6 +180,55 @@ SAMPLE_MANUFACTURING = CompanyProfile(
     plan_period_start_fy=2026,
     plan_period_end_fy=2030,
     data_source="estimated",
+    load_factor_actual_pct=None,
+    annual_fuel_liters=None,
+    annual_co2_emissions_kg=None,
+    wait_time_rows=[
+        WaitTimeRow(
+            bucket_label="全体",
+            measured_count=8420,
+            average_minutes=14,
+            max_minutes=112,
+            over_2h_count=0,
+        ),
+        WaitTimeRow(
+            bucket_label="都市部拠点（埼玉・愛知）",
+            measured_count=4100,
+            average_minutes=18,
+            max_minutes=112,
+            over_2h_count=0,
+        ),
+        WaitTimeRow(
+            bucket_label="地方拠点（兵庫）",
+            measured_count=4320,
+            average_minutes=9,
+            max_minutes=35,
+            over_2h_count=0,
+        ),
+    ],
+    handling_time_rows=[
+        HandlingTimeRow(
+            bucket_label="パレット納品",
+            measured_count=6200,
+            average_minutes=28,
+            max_minutes=45,
+            over_1h_pct=0.0,
+        ),
+        HandlingTimeRow(
+            bucket_label="かご車納品",
+            measured_count=1800,
+            average_minutes=35,
+            max_minutes=58,
+            over_1h_pct=0.0,
+        ),
+        HandlingTimeRow(
+            bucket_label="バラ納品",
+            measured_count=420,
+            average_minutes=52,
+            max_minutes=104,
+            over_1h_pct=8.0,
+        ),
+    ],
 )
 
 # サンプル2: 卸売業（インテリア）— 特定第一種・第二種荷主想定
@@ -122,6 +259,48 @@ SAMPLE_WHOLESALE = CompanyProfile(
     plan_period_start_fy=2026,
     plan_period_end_fy=2030,
     data_source="estimated",
+    load_factor_actual_pct=None,
+    annual_fuel_liters=None,
+    annual_co2_emissions_kg=None,
+    wait_time_rows=[
+        WaitTimeRow(
+            bucket_label="全体",
+            measured_count=12500,
+            average_minutes=35,
+            max_minutes=145,
+            over_2h_count=8,
+        ),
+        WaitTimeRow(
+            bucket_label="関東センター（千葉）",
+            measured_count=4500,
+            average_minutes=32,
+            max_minutes=130,
+            over_2h_count=3,
+        ),
+        WaitTimeRow(
+            bucket_label="関西センター（大阪）",
+            measured_count=3800,
+            average_minutes=38,
+            max_minutes=145,
+            over_2h_count=5,
+        ),
+    ],
+    handling_time_rows=[
+        HandlingTimeRow(
+            bucket_label="パレット納品",
+            measured_count=5000,
+            average_minutes=30,
+            max_minutes=90,
+            over_1h_pct=0.0,
+        ),
+        HandlingTimeRow(
+            bucket_label="バラ納品",
+            measured_count=800,
+            average_minutes=75,
+            max_minutes=120,
+            over_1h_pct=12.0,
+        ),
+    ],
 )
 
 # サンプル3: 連鎖化事業者（コンビニ本部）
@@ -152,6 +331,34 @@ SAMPLE_CHAIN = CompanyProfile(
     plan_period_start_fy=2026,
     plan_period_end_fy=2030,
     data_source="estimated",
+    load_factor_actual_pct=None,
+    annual_fuel_liters=None,
+    annual_co2_emissions_kg=None,
+    wait_time_rows=[
+        WaitTimeRow(
+            bucket_label="全体（4 DC合算）",
+            measured_count=25000,
+            average_minutes=18,
+            max_minutes=65,
+            over_2h_count=0,
+        ),
+        WaitTimeRow(
+            bucket_label="関東第一センター（埼玉）",
+            measured_count=12000,
+            average_minutes=15,
+            max_minutes=55,
+            over_2h_count=0,
+        ),
+        WaitTimeRow(
+            bucket_label="関西センター（大阪）",
+            measured_count=7000,
+            average_minutes=20,
+            max_minutes=65,
+            over_2h_count=0,
+        ),
+    ],
+    # 連鎖化（コンビニ）は荷役等時間が法令上対象外
+    handling_time_rows=[],
 )
 
 
@@ -164,5 +371,22 @@ ALL_SAMPLES: dict[str, CompanyProfile] = {
 
 
 def get_sample(company_id: str) -> CompanyProfile | None:
-    """サンプル企業を ID で取得する。"""
+    """企業プロフィールを ID で取得する。
+
+    優先順位:
+        1. 実データ JSON（outputs/profiles/<company_id>.json）— フェーズ4.0 で取込
+        2. サンプル辞書（ALL_SAMPLES）
+
+    Args:
+        company_id: 企業 ID
+
+    Returns:
+        CompanyProfile（実データ優先）、未登録なら None
+    """
+    # 循環 import 回避のため遅延 import
+    from core.io.company_store import load_company_profile_from_json
+
+    loaded = load_company_profile_from_json(company_id)
+    if loaded is not None:
+        return loaded
     return ALL_SAMPLES.get(company_id)

@@ -13,16 +13,26 @@
 フェーズ 2.5 CLO 武装データ層 + 出口整備                          ✅ 完了
 フェーズ 3.0 計画書ドラフト基盤                                   ✅ 完了 (2026-05-02)
 フェーズ 3.5 ★意思決定支援強化（差別化の心臓部）★              ✅ 完了 (2026-05-03)
-フェーズ 4.0 Web ダッシュボード + AWS 移行 + 自社データ取込    ← 次へ
+フェーズ 4.0 Web ダッシュボード + AWS 移行 + 自社データ取込    ← 進行中
+             └ 自社データ取込（Codex 4 フル版）                  ✅ 完了 (2026-05-03)
+             └ FastAPI REST 層 + Next.js + AWS 移行              ⏳ 未着手
 フェーズ 4.5 継続運用機能（定期報告書・進捗・法改正アラート）
 フェーズ 5   公開・記事化
 ```
 
 ---
 
-## 現在のフェーズ: フェーズ 3.5 完了（Steps 6/4/1/2/5/3/7 + 改善タスク短期 4 件 + Codex 1-5 全反映・2026-05-03）
+## 現在のフェーズ: フェーズ 4.0 進行中 — 自社データ取込（Codex 4 フル版）✅ 完了（2026-05-03）
 
-> **次セッションへの引継**: フェーズ4.0「Web ダッシュボード + AWS 移行 + 自社データ取込」着手。Codex 4 フル版（実データ入力フォーム）を最優先。
+> **次セッションへの引継**: フェーズ4.0 残り作業 — FastAPI REST 層 + Next.js 初期化 + AWS 移行（SQLite→Redis、API キー→Secrets Manager、ECS/Lambda デプロイ）。
+>
+> **自社データ取込 完了状態**:
+> - ✅ CompanyProfile スキーマ拡張（積載率実績・荷待ち時間・荷役等時間・燃料消費・KPI 履歴）
+> - ✅ Excel テンプレ生成 + 取込（CSV 補助経路あり）
+> - ✅ JSON 永続化 + サンプル3社 ID 解決の統合
+> - ✅ MCP ツール 2 個追加（`logi_clo_generate_template` / `logi_clo_load_company`）
+> - ✅ docs/data_input_guide.md 整備
+> - 詳細 → [docs/data_input_guide.md](data_input_guide.md)
 >
 > **改善タスク短期 4 件 完了状態（2026-05-03）**:
 > - ✅ 短期 1（業界平均比 1000% 超信頼性警告）— f096cf7
@@ -542,12 +552,18 @@ class ScenarioSimResult:
 - [ ] 主要画面: マクロ概況・業界ベンチマーク・ドライバー需給・施策ライブラリ・シミュレータ・**自社プロフィール入力フォーム**・計画書ダウンロード
 - [ ] 成果物（PPT/PDF/Excel/Word）ダウンロード UI（プレサインド URL 経由）
 
-### 自社データアップロード（フェーズ4.0 で本格対応）
-- [ ] `CompanyProfile` Pydantic モデルの最終確定
-- [ ] CSV / Excel / Pydantic フォーム による一括アップロード
-  - 拠点リスト・配送ルート・積載率実績・荷待ち時間実績・燃料消費等
-  - サンプルテンプレート（`outputs/sample_company_template.xlsx`）DL 提供
-- [ ] サンプルデータ（`core/static/sample_company.py`）から実データへの移行手順
+### 自社データアップロード（Codex 4 フル版・✅ 完了 2026-05-03）
+- [x] `CompanyProfile` Pydantic モデルの拡張（積載率実績・荷待ち時間・荷役等時間・燃料消費・KPI 履歴）
+- [x] **Excel 1 ファイル + マルチシート**による一括アップロード（profile / sites / wait_time / handling_time / kpi_history / _jsic_reference）
+- [x] CSV ディレクトリ経路（補助）
+- [x] サンプルテンプレート生成 `logi_clo_generate_template` MCP ツール
+- [x] 取込ツール `logi_clo_load_company`（`outputs/profiles/<company_id>.json` に永続化）
+- [x] `get_sample(company_id)` の ID 解決優先順位: 実データ JSON > サンプル3社
+- [x] サンプルデータ（`core/static/sample_company.py`）から実データへの移行手順 → `docs/data_input_guide.md`
+- [x] 実装ファイル: `core/io/template_writer.py` / `core/io/company_loader.py` / `core/io/company_store.py` + テスト 24 件
+- [x] periodic_report.py の `_WAIT_TIME_TEMPLATES` を CompanyProfile.wait_time_rows に一本化（既存挙動互換）
+
+> 残作業（フェーズ4.5 で対応）: plan_draft の docx 文章テンプレート化（公式記載見本集 MD 10 ファイルの取込）/ KPI 計測フレーム / CLO スタイル別重み付け
 
 ### AWS 移行
 - [ ] MCP サーバーを stdio モード → HTTP/SSE モードに切り替え（FastMCP 設定変更）
