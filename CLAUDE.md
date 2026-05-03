@@ -83,6 +83,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 | [docs/api_endpoints.md](docs/api_endpoints.md) | 利用 API 一覧・認証・TTL・制約 |
 | [docs/mcp_tools.md](docs/mcp_tools.md) | MCP ツール命名規則・実装方針 |
 | [docs/clo_domain.md](docs/clo_domain.md) | CLO 業務ドメイン知識・法的定義 |
+| [docs/ppt_design.md](docs/ppt_design.md) | PPT デザイン方針（Logi-Intel CLO Report）・スライドファミリー定義 |
 | [docs/oss_reference.md](docs/oss_reference.md) | 参考 OSS の方針・Attribution |
 | [docs/testing.md](docs/testing.md) | テストレベル・モック方針・カバレッジ目標 |
 | [docs/git_workflow.md](docs/git_workflow.md) | ブランチ戦略・コミットメッセージ規則 |

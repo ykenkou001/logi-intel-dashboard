@@ -128,9 +128,11 @@ logi-intel-dashboard/
 │   │   ├── docx_form3_writer.py   # 様式第3別紙への流し込み
 │   │   └── markdown_writer.py     # Markdown 出力
 │   └── templates/                 # 成果物テンプレート
-│       ├── micware_master.pptx    # PPT マスタスライド
 │       ├── clo_plan_form3.docx    # 国交省様式第3別紙（公式）
 │       └── clo_plan_examples/     # 公式記載事例（業種別 MD 化）
+│   # PPT デザインは Logi-Intel CLO Report（コード生成型・マスタファイル不使用）
+│   # → docs/ppt_design.md / DESIGN.md
+│   # ※ micware ブランドへの差し替えは将来検討（公式ガイドライン入手後）
 ├── mcp_server/                    # MCP サーバー層
 │   ├── __init__.py
 │   ├── server.py                  # FastMCP エントリポイント

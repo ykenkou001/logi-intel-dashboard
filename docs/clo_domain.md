@@ -228,7 +228,10 @@ Step 5: CLO計画プロンプト（mcp_server/prompts/clo_plan_draft.py）
 ### PPT 出力の設計方針
 
 - ライブラリ: `python-pptx`（外部依存なし、Office 不要）
-- マスタスライド: 暫定の汎用テンプレ `core/templates/micware_master.pptx` を同梱（micware ブランドは後日差し替え）
+- デザイン基盤: **Logi-Intel CLO Report**（コード生成型デザイントークン。マスタ pptx 不使用）。詳細 → [ppt_design.md](ppt_design.md) / [../DESIGN.md](../DESIGN.md)
+  - ミッドナイトネイビー（#1E2761）+ アンバー（#F5B82E）+ アイスブルー surface の経営会議向け配色
+  - 表紙 / KPI ダッシュボード / Benchmark / Verdict / Appendix の 5 スライドファミリーを定義
+  - ⏳ micware ブランドへの差し替えは将来検討（公式ブランドガイドライン入手後）
 - **標準スライド構成（CLO 計画書発表用 / フェーズ3.0 + 3.5 完成形）**:
   1. **表紙**（会社名・対象期間）
   2. **★ エグゼクティブサマリー（1 ページ）★** ← 取締役会必須・**`logi_clo_plan_draft` で必ず生成**
