@@ -146,10 +146,7 @@ def xroad_citation() -> Citation:
 def co2_factors_citation() -> Citation:
     """CO2 排出原単位の引用テンプレート。"""
     return Citation(
-        label="ロジスティクス分野におけるCO2排出量算定方法 共同ガイドライン Ver.3.1",
-        url=(
-            "https://www.mlit.go.jp/seisakutokatsu/freight/"
-            "seisakutokatsu_freight_tk1_000131.html"
-        ),
-        accessed_via="国交省・経産省共同ガイドライン",
+        label="ロジスティクス分野におけるCO2排出量算定方法 共同ガイドライン Ver.3.2",
+        url="https://www.greenpartnership.jp/guideline_ver3_2.pdf",
+        accessed_via="経産省・国交省共同ガイドライン（令和5年6月）",
     )

@@ -36,6 +36,18 @@ class CompanyProfile(BaseModel):
         ge=0,
         description="年間取扱貨物量 合計（トン）— 9万トン判定用",
     )
+    operating_profit_jpy: int = Field(
+        ...,
+        description=(
+            "年間営業利益（円）— 財務翻訳レイヤで施策効果を P&L インパクトに換算する基準。"
+            "業界平均営業利益率を参考に設定（実データはフェーズ4 で取込予定）"
+        ),
+    )
+    cost_of_goods_sold_jpy: int = Field(
+        ...,
+        ge=0,
+        description="年間売上原価（円）— 物流コスト削減を売上原価減として反映する基準",
+    )
     is_chain_franchise: bool = Field(False, description="連鎖化事業者か")
     fleet_count_owned: int = Field(0, ge=0, description="自社保有車両数")
     fleet_count_outsourced: int = Field(0, ge=0, description="委託車両数（おおよそ）")
@@ -46,6 +58,7 @@ class CompanyProfile(BaseModel):
 
 
 # サンプル1: 製造業（電子部品）— 特定第一種荷主想定
+# 財務想定: 営業利益率 7%（電子部品業界中央値）/ 売上原価率 75%
 SAMPLE_MANUFACTURING = CompanyProfile(
     company_id="sample_mfg_01",
     name="テクノパーツ製造株式会社（架空）",
@@ -53,6 +66,8 @@ SAMPLE_MANUFACTURING = CompanyProfile(
     main_business="その他の電子部品・デバイス製造業",
     annual_revenue_jpy=85_000_000_000,    # 850 億円
     annual_freight_tons_total=120_000.0,  # 12 万トン（特定第一種荷主該当）
+    operating_profit_jpy=5_950_000_000,   # 59.5 億円（営業利益率 7%）
+    cost_of_goods_sold_jpy=63_750_000_000,  # 637.5 億円（売上原価率 75%）
     is_chain_franchise=False,
     fleet_count_owned=12,
     fleet_count_outsourced=180,
@@ -70,6 +85,7 @@ SAMPLE_MANUFACTURING = CompanyProfile(
 )
 
 # サンプル2: 卸売業（インテリア）— 特定第一種・第二種荷主想定
+# 財務想定: 営業利益率 2%（卸売業界中央値）/ 売上原価率 85%
 SAMPLE_WHOLESALE = CompanyProfile(
     company_id="sample_wholesale_01",
     name="株式会社インテリアリンク商事（架空）",
@@ -77,6 +93,8 @@ SAMPLE_WHOLESALE = CompanyProfile(
     main_business="室内装飾繊維品卸売業",
     annual_revenue_jpy=42_000_000_000,    # 420 億円
     annual_freight_tons_total=180_000.0,  # 18 万トン（第一種・第二種双方該当）
+    operating_profit_jpy=840_000_000,     # 8.4 億円（営業利益率 2%）
+    cost_of_goods_sold_jpy=35_700_000_000,  # 357 億円（売上原価率 85%）
     is_chain_franchise=False,
     fleet_count_owned=8,
     fleet_count_outsourced=240,
@@ -96,6 +114,7 @@ SAMPLE_WHOLESALE = CompanyProfile(
 )
 
 # サンプル3: 連鎖化事業者（コンビニ本部）
+# 財務想定: 営業利益率 3.5%（コンビニ本部・加盟金収入主体で高め）/ 売上原価率 70%
 SAMPLE_CHAIN = CompanyProfile(
     company_id="sample_chain_01",
     name="スマートマート株式会社（架空）",
@@ -103,6 +122,8 @@ SAMPLE_CHAIN = CompanyProfile(
     main_business="コンビニエンスストア",
     annual_revenue_jpy=320_000_000_000,   # 3,200 億円
     annual_freight_tons_total=450_000.0,  # 45 万トン
+    operating_profit_jpy=11_200_000_000,  # 112 億円（営業利益率 3.5%）
+    cost_of_goods_sold_jpy=224_000_000_000,  # 2,240 億円（売上原価率 70%）
     is_chain_franchise=True,
     fleet_count_owned=0,
     fleet_count_outsourced=850,

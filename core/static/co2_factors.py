@@ -1,9 +1,11 @@
-"""輸送機関別 CO2 排出原単位（環境省・国土交通省公表値）。
+"""輸送機関別 CO2 排出原単位（経産省・国交省共同ガイドライン公表値）。
 
 出典:
-    - 国土交通省「ロジスティクス分野におけるCO2排出量算定方法 共同ガイドライン Ver.3.1」
-      https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_tk1_000131.html
+    - 経済産業省・国土交通省「ロジスティクス分野におけるCO2排出量算定方法
+      共同ガイドライン Ver.3.2」（令和5年6月）
+      https://www.greenpartnership.jp/guideline_ver3_2.pdf
     - グリーン物流パートナーシップ会議 公表値
+      https://www.greenpartnership.jp/co2
 
 単位:
     g-CO2 / トンキロ（貨物 1 トンを 1 km 運ぶ際の CO2 排出量）
@@ -11,6 +13,8 @@
 注意:
     - 営業用と自家用、車格（小型/普通/大型）で大きく異なる
     - モーダルシフト試算で使用するため、各モードの典型値を保持
+    - Ver.3.1 → Ver.3.2 では「改良トンキロ法」の燃費基準達成考慮が主な変更点で、
+      輸送機関別の典型値（モーダル比較用）は据え置き
 """
 from __future__ import annotations
 
@@ -42,13 +46,13 @@ class Co2EmissionFactors:
 CO2_FACTORS = Co2EmissionFactors()
 
 FRESHNESS = Freshness(
-    label="CO2 排出原単位（輸送機関別）",
-    last_updated=date(2024, 3, 31),  # 2024年度版ガイドライン
-    update_cadence="annual",
-    source_url=(
-        "https://www.mlit.go.jp/seisakutokatsu/freight/"
-        "seisakutokatsu_freight_tk1_000131.html"
+    label="CO2 排出原単位（共同ガイドライン Ver.3.2）",
+    last_updated=date(2023, 6, 1),  # 共同ガイドライン Ver.3.2 発行月
+    update_cadence="biennial",
+    source_url="https://www.greenpartnership.jp/guideline_ver3_2.pdf",
+    notes=(
+        "経産省・国交省共同ガイドライン Ver.3.2（2023年6月）。"
+        "Ver.3.0→3.1→3.2 のリリース実績から概ね 2 年間隔で改訂チェック。"
     ),
-    notes="国交省・経産省共同ガイドライン Ver.3.1。年次で改訂チェック。",
 )
 register("co2_factors", FRESHNESS)

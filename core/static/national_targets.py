@@ -57,10 +57,13 @@ MODAL_SHIFT_TARGET = ModalShiftTarget()
 FRESHNESS = Freshness(
     label="物流分野 国家目標（CO2・モーダルシフト）",
     last_updated=date(2023, 8, 25),  # 第3次交通政策基本計画 閣議決定日
-    update_cadence="biennial",
+    update_cadence="quinquennial",
     source_url=(
         "https://www.mlit.go.jp/sogoseisaku/transport/sosei_transport_tk_000146.html"
     ),
-    notes="計画見直しのタイミングで last_updated を更新。",
+    notes=(
+        "第3次交通政策基本計画（令和5年8月閣議決定）。"
+        "次回計画見直しは概ね 5 年後（令和10年=2028年）想定。"
+    ),
 )
 register("national_targets", FRESHNESS)

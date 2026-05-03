@@ -70,4 +70,5 @@ def test_logistics_efficiency_law_citation() -> None:
 
 def test_co2_factors_citation() -> None:
     c = co2_factors_citation()
-    assert "Ver.3.1" in c.label
+    assert "Ver.3.2" in c.label
+    assert c.url.startswith("https://")

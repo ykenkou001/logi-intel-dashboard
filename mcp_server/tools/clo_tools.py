@@ -23,6 +23,18 @@ from core.analytics.driver_gap import (
     build_driver_gap_summary,
 )
 from core.analytics.eligibility_analysis import build_eligibility_summary
+from core.analytics.feasibility_check import (
+    build_feasibility_summary,
+    check_feasibility,
+)
+from core.analytics.financial_translate import (
+    build_financial_translate_summary,
+    translate_to_pnl_impact,
+)
+from core.analytics.measure_eval import (
+    build_eval_summary,
+    evaluate_measures,
+)
 from core.analytics.plan_draft import (
     PlanDraftResult,
     build_plan_draft_summary,
@@ -44,7 +56,17 @@ from core.export.citation import (
 )
 from core.export.response import ToolResponse
 from core.legal.eligibility import evaluate_eligibility
+from core.playbook.filters import (
+    PlaybookFilter,
+    build_search_summary,
+    filter_playbook,
+)
 from core.static._freshness import all_warnings
+from core.static.sample_company import get_sample
+from core.validators.submission_validator import (
+    build_validation_summary,
+    validate_submission,
+)
 
 
 def register_tools(mcp: FastMCP) -> None:
@@ -321,6 +343,256 @@ def register_tools(mcp: FastMCP) -> None:
             citations=result.citations,
             freshness_warnings=result.freshness_warnings,
             files=result.files,
+        )
+        return response.to_dict()
+
+    @mcp.tool()
+    async def logi_clo_feasibility_check(
+        company_id: str,
+        target_year: int = 2030,
+        available_resources: list[str] | None = None,
+    ) -> dict[str, object]:
+        """施策の実行可否と KPI 到達可能性を 緑/黄/赤 で判定します。
+
+        フェーズ3.5 Step 5。Step 2（measure_eval）が「相対ランキング」で
+        Top 3 を出すのに対し、本ツールは **絶対的な実行可否**を判定します。
+        「この施策はあなたの会社では難しい」を明確に伝えることで、
+        CLO が無理筋な計画を提出して罰則リスク（勧告→命令→企業名公表）を
+        負わないよう支援します。
+
+        判定ロジック:
+        - 🟢 green: リソース充足 + 規模適合 + 難易度 ≤3
+        - 🟡 yellow: リソース 1-2件不足 OR ボーダーライン規模 OR 難易度 4
+        - 🔴 red: リソース ≥3件不足 OR 規模未達 OR 難易度 5+不足 OR 連鎖化×荷役等
+
+        併せて積載率 38→50% の年率必要改善幅を業界実績（1.5pp/年）と比較し、
+        目標年に到達可能か判定します。
+
+        Args:
+            company_id: サンプル企業ID
+            target_year: KPI 達成目標年（デフォルト 2030 = 計画期間終了）
+            available_resources: 自社が保有するリソース。None で自動推定
+
+        Returns:
+            ToolResponse 構造:
+            - summary: 緑/黄/赤 の施策別判定 + 推奨アクション + KPI到達可能性
+            - citations: 物流効率化法・CO2ガイドライン
+            - freshness_warnings: 静的データの鮮度警告
+        """
+        profile = get_sample(company_id)
+        if profile is None:
+            return ToolResponse(
+                summary=(
+                    f"サンプル企業 '{company_id}' が見つかりません。"
+                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
+                ),
+            ).to_dict()
+
+        result = check_feasibility(
+            profile=profile,
+            target_year=target_year,
+            available_resources=available_resources if available_resources else None,
+        )
+        summary = build_feasibility_summary(result)
+        response = ToolResponse(
+            summary=summary,
+            citations=result.citations,
+            freshness_warnings=result.freshness_warnings,
+        )
+        return response.to_dict()
+
+    @mcp.tool()
+    async def logi_clo_measure_eval(
+        company_id: str,
+        max_difficulty: int | None = None,
+        available_resources: list[str] | None = None,
+    ) -> dict[str, object]:
+        """自社プロフィール × プレイブック施策 → スコアリングして Top 3 を推薦します。
+
+        フェーズ3.5 Step 2（差別化の心臓部）。「どの施策を選ぶべきか」に答える意思決定支援。
+        プレイブック 10 施策を以下 4 軸で 0-100 スコアリングし、加重合計で Top 3 を推薦します:
+
+        - **ROI**（投資対効果・重み 35%）: 年間期待コスト削減 / 投資額
+        - **実装可能性**（重み 30%）: 難易度ベース + リソース欠如ペナルティ
+        - **法令適合度**（重み 25%）: 様式第3 必須セクション該当 + 法令条文紐付き
+        - **補助金カバー率**（重み 10%）: 適用補助金件数
+
+        各推薦には期待コスト削減・期待 CO2 削減・回収期間 + 選定根拠テキストを付与。
+        連鎖化事業者は荷役等セクションが必須から除外されます。
+
+        Args:
+            company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
+                "sample_chain_01"）
+            max_difficulty: 許容実装難易度の上限（1-5）。None で制約なし
+            available_resources: 自社が保有するリソース。
+                未指定なら CompanyProfile から自動推定（拠点数・自社保有車両・拠点跨ぎ等）
+
+        Returns:
+            ToolResponse 構造:
+            - summary: Top 3 推薦 + 4軸スコア + 選定根拠 + 全件ランキング
+            - citations: 物流効率化法・プレイブック出典
+            - freshness_warnings: 静的データの鮮度警告
+        """
+        profile = get_sample(company_id)
+        if profile is None:
+            return ToolResponse(
+                summary=(
+                    f"サンプル企業 '{company_id}' が見つかりません。"
+                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
+                ),
+            ).to_dict()
+
+        result = evaluate_measures(
+            profile=profile,
+            available_resources=available_resources if available_resources else None,
+            max_difficulty=max_difficulty,
+        )
+
+        summary = build_eval_summary(result)
+        response = ToolResponse(
+            summary=summary,
+            citations=result.citations,
+            freshness_warnings=result.freshness_warnings,
+        )
+        return response.to_dict()
+
+    @mcp.tool()
+    async def logi_clo_playbook_search(
+        industry: str | None = None,
+        revenue_jpy: int | None = None,
+        freight_tons: float | None = None,
+        max_difficulty: int | None = None,
+        form3_section: str | None = None,
+        measure_type: str | None = None,
+    ) -> dict[str, object]:
+        """施策プレイブックライブラリから条件に合致する標準施策を検索します。
+
+        フェーズ3.5 Step 1。Step 2（評価エンジン）/ Step 5（実現可能性チェッカー）の
+        基盤データとなる標準施策セット（10件）から、業種・規模・難易度等で絞り込みます。
+        各施策には投資レンジ・期待効果・補助金・成功事例参照・失敗パターンを保持。
+
+        Args:
+            industry: 業種カテゴリ（"manufacturing" / "wholesale" / "retail" /
+                "chain_franchise" / "transport" / "other"）
+            revenue_jpy: 自社売上（円）— min_revenue_jpy のフィルタに使用
+            freight_tons: 自社年間取扱量（トン）— min_freight_tons のフィルタに使用
+            max_difficulty: 許容実装難易度の上限（1-5）
+            form3_section: 様式第3 セクション（"load" / "wait" / "loading"）
+            measure_type: 取組タイプ（"modal_shift" / "load_factor" / "joint_delivery" /
+                "relay_transport" / "berth_booking" / "warehouse_dx"）
+
+        Returns:
+            ToolResponse 構造:
+            - summary: 該当施策の一覧（投資レンジ・期待効果・補助金・失敗パターン含む）
+            - citations: 物流効率化法の出典
+            - freshness_warnings: 静的データの鮮度警告
+        """
+        from typing import cast
+
+        from core.static.efficiency_law_certified import (
+            IndustryCategory,
+            MeasureType,
+        )
+
+        filter_ = PlaybookFilter(
+            industry=cast(IndustryCategory, industry) if industry else None,
+            revenue_jpy=revenue_jpy,
+            freight_tons=freight_tons,
+            max_difficulty=max_difficulty,
+            form3_section=form3_section if form3_section else None,
+            measure_type=cast(MeasureType, measure_type) if measure_type else None,
+        )
+        results = filter_playbook(filter_=filter_)
+        summary = build_search_summary(results, filter_)
+        response = ToolResponse(
+            summary=summary,
+            citations=[logistics_efficiency_law_citation()],
+            freshness_warnings=all_warnings(),
+        )
+        return response.to_dict()
+
+    @mcp.tool()
+    async def logi_clo_financial_translate(company_id: str) -> dict[str, object]:
+        """物流 KPI を P&L インパクト（営業利益・炭素回避額・NPV）に翻訳します。
+
+        フェーズ3.5 Step 4。経営層が「物流 KPI（積載率・荷待ち時間）」では響かないため、
+        全施策の効果を **円単位の経営指標**に変換して提示します:
+
+        1. 営業利益増加（コスト削減 = 売上原価減 → 営業利益増）
+        2. 営業利益率改善（pp ベース）
+        3. 炭素価格回避レンジ（J-クレジット 3,000円 〜 GX-ETS 5,000円）
+        4. 5 年累積 NPV（割引率 3%）
+        5. 不作為コスト（罰則 + ブランド毀損リスク）
+        6. ESG プレミアム（定性記述）
+
+        Args:
+            company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
+                "sample_chain_01"）。内部で logi_clo_plan_draft を再実行する。
+
+        Returns:
+            ToolResponse 構造:
+            - summary: 施策別 P&L インパクト・合算・定性記述
+            - citations: 共同ガイドライン Ver.3.2・J-クレジット・GX-ETS・物流効率化法
+            - freshness_warnings: 静的データの鮮度警告
+        """
+        profile = get_sample(company_id)
+        if profile is None:
+            return ToolResponse(
+                summary=(
+                    f"サンプル企業 '{company_id}' が見つかりません。"
+                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
+                ),
+            ).to_dict()
+
+        try:
+            plan = await generate_plan_draft(company_id)
+        except ValueError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
+
+        result = translate_to_pnl_impact(profile, plan.simulation)
+
+        summary = build_financial_translate_summary(result)
+        response = ToolResponse(
+            summary=summary,
+            citations=result.citations,
+            freshness_warnings=result.freshness_warnings,
+        )
+        return response.to_dict()
+
+    @mcp.tool()
+    async def logi_clo_submission_validate(company_id: str) -> dict[str, object]:
+        """CLO 計画書ドラフトの提出前バリデータを実行します。
+
+        フェーズ3.5 Step 6（差別化の心臓部）。生成済みの様式第3別紙（Word）を読み、
+        以下4観点で機械的に検査して「法定様式準拠率」を算出します:
+
+        1. 網羅性: 必須3項目 ×（実施措置/計画内容/実施時期）= 9 項目が埋まっているか
+           （連鎖化事業者は 6 項目）
+        2. 数値整合性: CO2/コスト/投資/回収期間が非負・桁妥当か
+        3. 出典欠落: CO2ガイドライン・物流効率化法・改善基準告示の出典が揃っているか
+        4. 告示準拠: 数値目標が国家目標 ▲23.4%・物理的範囲（積載率 ≤100%）と整合か
+
+        Args:
+            company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
+                "sample_chain_01"）。内部で logi_clo_plan_draft を再実行してから検査する。
+
+        Returns:
+            ToolResponse 構造:
+            - summary: PASS/FAIL 判定・準拠率・エラー警告リスト・次のアクション
+            - citations: 検査基準の出典（物流効率化法）
+            - freshness_warnings: 静的データの鮮度警告
+        """
+        try:
+            report = await validate_submission(company_id)
+        except ValueError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
+
+        summary = build_validation_summary(report)
+        response = ToolResponse(
+            summary=summary,
+            citations=[logistics_efficiency_law_citation()],
+            freshness_warnings=all_warnings(),
+            files=dict(report.checked_files),
         )
         return response.to_dict()
 

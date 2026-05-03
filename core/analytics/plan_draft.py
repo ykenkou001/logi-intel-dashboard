@@ -31,6 +31,10 @@ from core.analytics.driver_gap import (
     build_driver_gap_summary,
 )
 from core.analytics.eligibility_analysis import build_eligibility_summary
+from core.analytics.financial_translate import (
+    FinancialTranslateResult,
+    translate_to_pnl_impact,
+)
 from core.analytics.simulator import (
     SimulationResult,
     build_simulation_summary,
@@ -66,6 +70,7 @@ class PlanDraftResult:
     target_proposal: TargetProposalResult
     simulation: SimulationResult
     certified_matches: CertifiedMatchResult
+    financial: FinancialTranslateResult
 
     files: dict[str, str] = field(default_factory=dict)
     citations: list[Citation] = field(default_factory=list)
@@ -138,13 +143,17 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         interested_measure_types=interested_measure_types,
     )
 
-    # 出典統合（全 Step の citations を URL ベースで重複排除）
+    # 財務翻訳（フェーズ3.5 Step 4）— P&L インパクト変換
+    financial = translate_to_pnl_impact(profile, simulation)
+
+    # 出典統合（全 Step + 財務翻訳の citations を URL ベースで重複排除）
     citations = _merge_citations(
         benchmark.citations,
         driver_gap.citations,
         target_proposal.citations,
         simulation.citations,
         certified_matches.citations,
+        financial.citations,
     )
 
     plan_period = f"{profile.plan_period_start_fy}年度〜{profile.plan_period_end_fy}年度"
@@ -162,7 +171,7 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         company_id=profile.company_id,
         plan_period=plan_period,
         executive_summary=_build_executive_summary_text(
-            profile, benchmark, eligibility, simulation,
+            profile, benchmark, eligibility, simulation, financial,
         ),
         sections=md_sections,
         citations=citations,
@@ -179,7 +188,7 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         company_id=profile.company_id,
         plan_period=plan_period,
         executive_summary=_build_executive_summary_lines(
-            profile, benchmark, eligibility, simulation,
+            profile, benchmark, eligibility, simulation, financial,
         ),
         body_slides=body_slides,
         citations=citations,
@@ -204,6 +213,7 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         target_proposal=target_proposal,
         simulation=simulation,
         certified_matches=certified_matches,
+        financial=financial,
         files=files,
         citations=citations,
         freshness_warnings=all_warnings(),
@@ -254,8 +264,13 @@ def _build_executive_summary_lines(
     benchmark: BenchmarkResult,
     eligibility: EligibilityResult,
     simulation: SimulationResult,
+    financial: FinancialTranslateResult,
 ) -> list[str]:
-    """PPT 2枚目固定のエグゼクティブサマリー（行のリスト）。"""
+    """PPT 2枚目固定のエグゼクティブサマリー（行のリスト）。
+
+    財務インパクト（営業利益・炭素回避レンジ・5年NPV）を含めて経営層が
+    一目で「何を判断すべきか」が分かる形にする。
+    """
     obligation = "あり" if eligibility.must_appoint_clo else "なし"
     cat_labels = "、".join(
         _ELIGIBILITY_CATEGORY_LABELS.get(str(c), str(c)) for c in eligibility.categories
@@ -264,17 +279,26 @@ def _build_executive_summary_lines(
         f"会社名: {profile.name}",
         f"主たる事業: {profile.main_business}（JSIC {profile.jsic_code}）",
         f"年間売上: {profile.annual_revenue_jpy / 1e8:.1f}億円 / "
+        f"営業利益: {profile.operating_profit_jpy / 1e8:.1f}億円 "
+        f"(利益率 {financial.base_operating_profit_margin_pct:.2f}%)",
         f"年間取扱量: {profile.annual_freight_tons_total:,.0f}トン",
         "",
         f"特定荷主3区分判定: CLO選任義務 {obligation}",
         f"  該当区分: {cat_labels}",
         "",
-        f"業界平均売上比: {benchmark.revenue_vs_avg_pct:.0f}%"
-        if benchmark.revenue_vs_avg_pct
-        else "業界平均比: データ不足",
-        f"5施策合算 CO2 削減: 約 {simulation.total_co2_reduction_kg / 1000:,.0f}トン-CO2/年",
-        f"5施策合算 コスト削減: 約 {simulation.total_cost_saving_jpy / 1e8:.2f}億円/年",
+        "【施策効果（5施策合算・年間ベース）】",
+        f"  CO2 削減: 約 {simulation.total_co2_reduction_kg / 1000:,.0f}トン-CO2/年",
+        f"  物流コスト削減（= 営業利益増）: "
+        f"約 {simulation.total_cost_saving_jpy / 1e8:.2f}億円/年",
         f"  必要投資 合計: 約 {simulation.total_investment_jpy / 1e4:,.0f}万円",
+        "",
+        "【財務インパクト（経営指標換算）】",
+        f"  営業利益 +{financial.total_operating_profit_increase_jpy / 1e8:.2f}億円/年 "
+        f"(利益率 +{financial.operating_profit_margin_lift_pp_total:.2f}pp)",
+        f"  炭素価格回避: {financial.total_carbon_avoidance_jpy_low / 1e6:.0f}〜"
+        f"{financial.total_carbon_avoidance_jpy_high / 1e6:.0f}百万円/年 "
+        "(J-クレジット〜GX-ETS想定)",
+        f"  5年累積NPV: 約 {financial.total_5y_npv_jpy / 1e8:.2f}億円 (割引率3%)",
         "",
         "次のアクション: 様式第3別紙（添付Word）に署名・押印し、2026年10月末までに国交省へ提出",
     ]
@@ -286,10 +310,13 @@ def _build_executive_summary_text(
     benchmark: BenchmarkResult,
     eligibility: EligibilityResult,
     simulation: SimulationResult,
+    financial: FinancialTranslateResult,
 ) -> str:
     """Markdown 用エグゼクティブサマリー（複数行テキスト）。"""
     return "\n".join(
-        _build_executive_summary_lines(profile, benchmark, eligibility, simulation)
+        _build_executive_summary_lines(
+            profile, benchmark, eligibility, simulation, financial,
+        )
     )
 
 
@@ -445,7 +472,7 @@ def _build_form3(
     }
 
     for m in simulation.measures:
-        theme = _classify_form3_theme(m.name)
+        theme = _classify_form3_theme(m.name, is_chain_franchise=profile.is_chain_franchise)
         if theme is None:
             continue
         measure_name, description = _split_measure_name_and_description(m, profile)
@@ -498,15 +525,23 @@ def _build_form3(
     return str(path)
 
 
-def _classify_form3_theme(measure_name: str) -> str | None:
-    """施策名を様式第3 の必須3項目のテーマに分類する。"""
+def _classify_form3_theme(
+    measure_name: str, is_chain_franchise: bool = False,
+) -> str | None:
+    """施策名を様式第3 の必須3項目のテーマに分類する。
+
+    連鎖化事業者は様式第3「第5条関係」で荷役等時間短縮セクションを持たないため、
+    本来 loading に分類される施策（中継輸送等）はドライバー拘束時間の文脈が近い
+    荷待ち時間短縮（wait）に流用する。これにより、シミュレータで効果が計上されている
+    施策が計画書に未記載となる脱落を防ぐ。
+    """
     if "積載率" in measure_name or "モーダルシフト" in measure_name \
             or "共同配送" in measure_name:
         return "load"
     if "バース" in measure_name:
         return "wait"
     if "中継輸送" in measure_name:
-        return "loading"
+        return "wait" if is_chain_franchise else "loading"
     return None
 
 
@@ -606,12 +641,18 @@ def build_plan_draft_summary(r: PlanDraftResult) -> str:
         "",
         "【サマリー】",
         f"  CLO 選任義務: {'あり' if r.eligibility.must_appoint_clo else 'なし'}",
-        f"  業界平均売上比: {r.benchmark.revenue_vs_avg_pct:.0f}%"
-        if r.benchmark.revenue_vs_avg_pct
-        else "  業界平均比: データ不足",
+        _format_revenue_ratio_line(r.benchmark),
         f"  5施策合算 CO2削減: 約 {r.simulation.total_co2_reduction_kg / 1000:,.0f}トン-CO2/年",
-        f"  5施策合算 コスト削減: 約 {r.simulation.total_cost_saving_jpy / 1e8:.2f}億円/年",
+        f"  5施策合算 物流コスト削減（= 営業利益増）: "
+        f"約 {r.simulation.total_cost_saving_jpy / 1e8:.2f}億円/年",
         f"  必要投資 合計: 約 {r.simulation.total_investment_jpy / 1e4:,.0f}万円",
+        "",
+        "【財務インパクト（経営指標換算）】",
+        f"  営業利益 +{r.financial.total_operating_profit_increase_jpy / 1e8:.2f}億円/年 "
+        f"(利益率 +{r.financial.operating_profit_margin_lift_pp_total:.2f}pp)",
+        f"  炭素価格回避: {r.financial.total_carbon_avoidance_jpy_low / 1e6:.0f}〜"
+        f"{r.financial.total_carbon_avoidance_jpy_high / 1e6:.0f}百万円/年",
+        f"  5年累積NPV: 約 {r.financial.total_5y_npv_jpy / 1e8:.2f}億円 (割引率3%)",
         "",
         "【次のアクション】",
         "  1. PPT を経営会議で説明（2枚目のエグゼクティブサマリーから始める）",
@@ -620,3 +661,18 @@ def build_plan_draft_summary(r: PlanDraftResult) -> str:
     ]
 
     return "\n".join(lines)
+
+
+def _format_revenue_ratio_line(benchmark: BenchmarkResult) -> str:
+    """業界平均売上比のサマリー行を信頼性区分で出し分ける。
+
+    業界平均は経済センサスの 1 事業所あたり推計値で、母集団が小規模事業所中心。
+    大企業の単純比較は桁外れになりやすいため、信頼性低下時は数値を出さず参考表記にする。
+    """
+    if benchmark.revenue_vs_avg_pct is None:
+        return "  業界平均比: データ不足"
+    if benchmark.revenue_ratio_reliability == "low_reliability":
+        return (
+            "  業界平均売上比: 規模優位企業（業界統計の母集団と乖離大のため数値表示は省略）"
+        )
+    return f"  業界平均売上比: {benchmark.revenue_vs_avg_pct:.0f}%"
