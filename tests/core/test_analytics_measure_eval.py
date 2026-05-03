@@ -244,3 +244,96 @@ def test_build_eval_summary_chain_franchise() -> None:
     text = build_eval_summary(result)
     assert "スマートマート" in text
     assert "chain_franchise" in text
+
+
+# ---- 短期3: Bottom 3 + judgment trail + 実行カード ----
+
+
+def test_evaluate_returns_bottom_3_when_eligible_count_sufficient() -> None:
+    """評価対象が 6 件以上なら bottom_candidates が 3 件返る。"""
+    profile = get_sample("sample_mfg_01")
+    assert profile is not None
+    result = evaluate_measures(profile)
+    assert result.eligible_count >= 6
+    assert len(result.bottom_candidates) == 3
+
+
+def test_evaluate_bottom_candidates_disjoint_from_top() -> None:
+    """Top と Bottom のスコアは厳密分離（同じ施策が両方に入らない）。"""
+    profile = get_sample("sample_mfg_01")
+    assert profile is not None
+    result = evaluate_measures(profile)
+    top_ids = {s.measure.measure_id for s in result.top_recommendations}
+    bottom_ids = {s.measure.measure_id for s in result.bottom_candidates}
+    assert not (top_ids & bottom_ids)
+
+
+def test_evaluate_bottom_lower_score_than_top() -> None:
+    """Bottom の最高スコア < Top の最低スコア。"""
+    profile = get_sample("sample_wholesale_01")
+    assert profile is not None
+    result = evaluate_measures(profile)
+    if result.top_recommendations and result.bottom_candidates:
+        min_top = min(s.total_score for s in result.top_recommendations)
+        max_bottom = max(s.total_score for s in result.bottom_candidates)
+        assert max_bottom <= min_top
+
+
+def test_evaluate_chain_franchise_no_bottom_when_too_few_eligible() -> None:
+    """連鎖化事業者は eligible が 5 件と少ないため bottom は空。"""
+    profile = get_sample("sample_chain_01")
+    assert profile is not None
+    result = evaluate_measures(profile)
+    if result.eligible_count < 6:
+        assert result.bottom_candidates == []
+
+
+def test_top_recommendations_have_execution_cards() -> None:
+    """Top 3 全件に主管部門・想定月次 KPI・依存関係が付与される。"""
+    profile = get_sample("sample_mfg_01")
+    assert profile is not None
+    result = evaluate_measures(profile)
+    for s in result.top_recommendations:
+        assert s.responsible_dept != ""
+        assert s.monthly_kpi != ""
+        assert isinstance(s.dependencies, list)
+        assert len(s.dependencies) >= 1
+
+
+def test_top_recommendations_have_comparison_note() -> None:
+    """Top 3 全件に他施策との比較ポイントが付与される。"""
+    profile = get_sample("sample_mfg_01")
+    assert profile is not None
+    result = evaluate_measures(profile)
+    for s in result.top_recommendations:
+        assert s.comparison_note != ""
+
+
+def test_bottom_candidates_have_comparison_note() -> None:
+    """Bottom 3 全件に不採用理由（比較ノート）が付与される。"""
+    profile = get_sample("sample_mfg_01")
+    assert profile is not None
+    result = evaluate_measures(profile)
+    for s in result.bottom_candidates:
+        assert s.comparison_note != ""
+
+
+def test_build_eval_summary_includes_bottom_section() -> None:
+    """サマリーに Bottom 3 セクションと対比表が含まれる。"""
+    profile = get_sample("sample_mfg_01")
+    assert profile is not None
+    result = evaluate_measures(profile)
+    text = build_eval_summary(result)
+    assert "Bottom 3" in text or "不採用候補" in text
+    assert "Top/Bottom スコア対比" in text
+
+
+def test_build_eval_summary_includes_execution_card_fields() -> None:
+    """サマリーに主管部門・月次 KPI・依存関係が表示される。"""
+    profile = get_sample("sample_mfg_01")
+    assert profile is not None
+    result = evaluate_measures(profile)
+    text = build_eval_summary(result)
+    assert "主管部門" in text
+    assert "想定月次 KPI" in text
+    assert "依存関係" in text or "依存" in text

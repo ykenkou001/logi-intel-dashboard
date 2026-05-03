@@ -28,8 +28,10 @@ _WEIGHT_FEASIBILITY: float = 0.30
 _WEIGHT_COMPLIANCE: float = 0.25
 _WEIGHT_SUBSIDY: float = 0.10
 
-# Top N 推薦
+# Top N 推薦 / Bottom N 不採用提示（judgment trail）
 _TOP_N: int = 3
+_BOTTOM_N: int = 3
+_BOTTOM_MIN_TOTAL: int = 6  # 評価対象が 6 件未満なら Bottom は省略
 
 # 必須 form3 セクション（特定荷主 / 連鎖化事業者）
 _REQUIRED_SECTIONS_NON_CHAIN = ("load", "wait", "loading")
@@ -45,8 +47,69 @@ _ADDRESSABLE_SHARE: dict[str, float] = {
     "warehouse_dx": 0.60,       # 倉庫オペ全般
 }
 
+# 実行カード簡易版（Codex 2 軽量取込）— 各施策の主管部門・想定月次 KPI・依存関係。
+# フル版（関係部門・外部関係者・決裁事項・リスク 等）はフェーズ4.5 で対応。
+_EXECUTION_CARDS: dict[str, tuple[str, str, list[str]]] = {
+    "modal_shift_to_rail": (
+        "物流部・調達部",
+        "鉄道貨物トンキロ比率 月次 +0.5pp",
+        ["JR貨物との運送契約", "鉄道発着拠点の立地評価", "対象荷種の温湿度要件確認"],
+    ),
+    "load_factor_tms": (
+        "物流部・情報システム部",
+        "営業用普通貨物車 積載率 月次 +0.5pp",
+        ["TMS 導入（パッケージ選定+検収）", "拠点別積載率の可視化基盤"],
+    ),
+    "joint_delivery_competitor": (
+        "物流部・営業部",
+        "共同配送便数 月次 +5%",
+        ["同業他社との協定締結", "個建て運賃のシェア合意", "競争法リスクレビュー"],
+    ),
+    "pallet_standardization": (
+        "物流部・調達部",
+        "T11/T12 標準パレット使用率 月次 +5pp",
+        ["取引先パレット規格合意", "パレットプール契約"],
+    ),
+    "visualization_baseline": (
+        "物流部・情報システム部",
+        "拠点別データ取得率 月次 +10pp（最終 100%）",
+        ["拠点別データ収集体制", "BI ダッシュボード基盤"],
+    ),
+    "lead_time_review": (
+        "営業部・物流部",
+        "平均注文ロット 月次 +5%",
+        ["着荷主との発注ロット見直し合意", "受発注 EDI 対応"],
+    ),
+    "berth_booking_vbs": (
+        "物流部・情報システム部",
+        "平均荷待ち時間 月次 -10 分",
+        ["VBS（バース予約）導入", "運送会社向け予約ガイドライン整備"],
+    ),
+    "delivery_time_distribution": (
+        "物流部・営業部",
+        "配送時間帯分散度（HHI 換算）月次 -5%",
+        ["着荷主との納入時間帯合意", "配車計画の刷新"],
+    ),
+    "relay_transport": (
+        "物流部",
+        "中継拠点利用率 月次 +5pp",
+        ["パートナー運送会社との連携契約", "中継拠点の立地確保"],
+    ),
+    "warehouse_dx_wms": (
+        "物流部・情報システム部",
+        "倉庫稼働率 月次 +3pp / ピッキング誤出荷率 月次 -10%",
+        ["WMS 導入（パッケージ選定+検収）", "ハンディターミナル整備"],
+    ),
+}
 
-@dataclass(frozen=True)
+_DEFAULT_EXECUTION_CARD: tuple[str, str, list[str]] = (
+    "物流部",
+    "施策固有の月次 KPI を定義してください",
+    ["主管部門・KPI 定義の社内合意"],
+)
+
+
+@dataclass
 class MeasureScore:
     """単一施策の評価スコア。"""
 
@@ -72,6 +135,15 @@ class MeasureScore:
     # リソース充足判定
     missing_resources: list[RequiredResource]
 
+    # 実行カード簡易版（Codex 2 軽量取込・短期3）
+    responsible_dept: str = ""
+    monthly_kpi: str = ""
+    dependencies: list[str] = field(default_factory=list)
+
+    # 他施策との比較ポイント（judgment trail・短期3）
+    # Top 推薦時は「他より優れた点」、Bottom 時は「不採用理由」を入れる。
+    comparison_note: str = ""
+
 
 @dataclass
 class MeasureEvalResult:
@@ -86,6 +158,10 @@ class MeasureEvalResult:
     scored_count: int
 
     top_recommendations: list[MeasureScore] = field(default_factory=list)
+    bottom_candidates: list[MeasureScore] = field(default_factory=list)
+    """不採用施策（最下位 _BOTTOM_N 件）。judgment trail 用。
+    eligible_count < _BOTTOM_MIN_TOTAL のときは空リスト。"""
+
     all_scored: list[MeasureScore] = field(default_factory=list)
 
     citations: list[Citation] = field(default_factory=list)
@@ -142,6 +218,17 @@ def evaluate_measures(
     # 合計スコア降順
     scored.sort(key=lambda s: s.total_score, reverse=True)
 
+    top = scored[:_TOP_N]
+    bottom = (
+        list(reversed(scored[-_BOTTOM_N:]))
+        if len(scored) >= _BOTTOM_MIN_TOTAL
+        else []
+    )
+
+    # judgment trail: Top と Bottom それぞれに比較ノートを付与
+    # 経営会議「なぜ採用/不採用？」に即答できる形にする
+    _annotate_comparison_notes(top, bottom)
+
     return MeasureEvalResult(
         company_id=profile.company_id,
         company_name=profile.name,
@@ -149,13 +236,76 @@ def evaluate_measures(
         derived_resources=resources,
         eligible_count=len(eligible),
         scored_count=len(scored),
-        top_recommendations=scored[:_TOP_N],
+        top_recommendations=top,
+        bottom_candidates=bottom,
         all_scored=scored,
         citations=[
             logistics_efficiency_law_citation(),
         ],
         freshness_warnings=all_warnings(),
     )
+
+
+def _annotate_comparison_notes(
+    top: list[MeasureScore], bottom: list[MeasureScore],
+) -> None:
+    """Top/Bottom 双方に「なぜ採用/不採用か」の比較テキストを付与する。
+
+    判断根拠を残すため、各推薦と各不採用に最大の差分軸を 1〜2 つ提示する。
+    """
+    if not top:
+        return
+
+    top_avg_roi = sum(s.roi_score for s in top) / len(top)
+    top_avg_feas = sum(s.feasibility_score for s in top) / len(top)
+    top_avg_comp = sum(s.compliance_score for s in top) / len(top)
+
+    for s in top:
+        s.comparison_note = _build_top_comparison(
+            s, top_avg_roi, top_avg_feas, top_avg_comp,
+        )
+
+    for s in bottom:
+        s.comparison_note = _build_bottom_comparison(
+            s, top_avg_roi, top_avg_feas, top_avg_comp,
+        )
+
+
+def _build_top_comparison(
+    s: MeasureScore, avg_roi: float, avg_feas: float, avg_comp: float,
+) -> str:
+    """Top 推薦施策の「他施策との比較ポイント」を生成する。"""
+    diffs = [
+        ("ROI", s.roi_score - avg_roi),
+        ("実装可能性", s.feasibility_score - avg_feas),
+        ("法令適合", s.compliance_score - avg_comp),
+    ]
+    diffs.sort(key=lambda x: x[1], reverse=True)
+    best_axis, best_delta = diffs[0]
+    if best_delta >= 5.0:
+        return f"Top 3 内で {best_axis} が +{best_delta:.0f}pt 優位"
+    return "Top 3 内では総合バランス型（突出した優位軸なし）"
+
+
+def _build_bottom_comparison(
+    s: MeasureScore, avg_roi: float, avg_feas: float, avg_comp: float,
+) -> str:
+    """Bottom（不採用）施策の不採用理由を生成する。"""
+    deltas = [
+        ("ROI", avg_roi - s.roi_score),
+        ("実装可能性", avg_feas - s.feasibility_score),
+        ("法令適合", avg_comp - s.compliance_score),
+    ]
+    deltas.sort(key=lambda x: x[1], reverse=True)
+    worst_axis, worst_delta = deltas[0]
+    parts: list[str] = []
+    if worst_delta >= 5.0:
+        parts.append(f"Top 3 平均比 {worst_axis} ▲{worst_delta:.0f}pt")
+    if s.missing_resources:
+        parts.append(f"前提リソース不足: {', '.join(s.missing_resources)}")
+    if not parts:
+        parts.append("総合スコア僅差での不採用")
+    return " / ".join(parts)
 
 
 def _derive_available_resources(profile: CompanyProfile) -> list[RequiredResource]:
@@ -223,6 +373,10 @@ def _score_measure(
         est_cost_saving, est_payback, missing,
     )
 
+    responsible_dept, monthly_kpi, dependencies = _EXECUTION_CARDS.get(
+        m.measure_id, _DEFAULT_EXECUTION_CARD,
+    )
+
     return MeasureScore(
         measure=m,
         roi_score=roi,
@@ -235,6 +389,9 @@ def _score_measure(
         estimated_payback_years=est_payback,
         selection_reason=reason,
         missing_resources=missing,
+        responsible_dept=responsible_dept,
+        monthly_kpi=monthly_kpi,
+        dependencies=list(dependencies),
     )
 
 
@@ -376,7 +533,12 @@ def _build_selection_reason(
 
 
 def build_eval_summary(r: MeasureEvalResult) -> str:
-    """MeasureEvalResult から CLO 向けサマリーテキストを生成する。"""
+    """MeasureEvalResult から CLO 向けサマリーテキストを生成する。
+
+    Top 3 には実行カード簡易版（主管・月次KPI・依存関係）と他施策との比較ポイント、
+    Bottom 3 には不採用理由を併記し、judgment trail として経営会議で
+    「なぜ採用/不採用？」即答できる形で出力する。
+    """
     lines: list[str] = [
         f"=== 施策評価: {r.company_name} ===",
         f"業種: {r.industry} / 推定リソース: {', '.join(r.derived_resources) or '（なし）'}",
@@ -390,42 +552,100 @@ def build_eval_summary(r: MeasureEvalResult) -> str:
         "loading": "Ⅳ 荷役等時間短縮",
     }
     for i, s in enumerate(r.top_recommendations, start=1):
-        lines.append(
-            f"  {i}. [{s.measure.measure_id}] {s.measure.name}"
-            f"  総合 {s.total_score:.1f}/100"
-        )
-        lines.append(
-            f"     分類: {section_labels.get(s.measure.form3_section, s.measure.form3_section)}"
-            f" / 難易度 {s.measure.implementation_difficulty}/5"
-        )
-        lines.append(
-            f"     スコア: ROI {s.roi_score:.0f} / 実装可能性 {s.feasibility_score:.0f}"
-            f" / 法令適合 {s.compliance_score:.0f} / 補助金 {s.subsidy_score:.0f}"
-        )
-        if s.estimated_annual_cost_saving_jpy:
-            line = (
-                f"     期待効果: 年 約{s.estimated_annual_cost_saving_jpy / 1e8:.2f}億円削減"
-            )
-            if s.estimated_payback_years is not None:
-                if s.estimated_payback_years < 0.1:
-                    line += " / 回収 1年未満"
-                else:
-                    line += f" / 回収 約{s.estimated_payback_years:.1f}年"
-            lines.append(line)
-        if s.estimated_annual_co2_reduction_kg:
-            lines.append(
-                f"     CO2 削減: 約 {s.estimated_annual_co2_reduction_kg / 1000:,.0f}トン-CO2/年"
-            )
+        lines.extend(_format_score_block(s, rank=i, section_labels=section_labels))
+        lines.append(f"     主管部門: {s.responsible_dept}")
+        lines.append(f"     想定月次 KPI: {s.monthly_kpi}")
+        if s.dependencies:
+            lines.append(f"     依存関係: {' / '.join(s.dependencies)}")
         lines.append(f"     選定根拠: {s.selection_reason}")
+        if s.comparison_note:
+            lines.append(f"     他施策との比較: {s.comparison_note}")
+        lines.append("")
+
+    if r.bottom_candidates:
+        lines.append("【不採用候補（Bottom 3 / judgment trail）】")
+        for s in r.bottom_candidates:
+            lines.append(
+                f"  ✗ [{s.measure.measure_id}] {s.measure.name}"
+                f"  総合 {s.total_score:.1f}/100"
+            )
+            lines.append(
+                f"     スコア: ROI {s.roi_score:.0f} / 実装可能性 {s.feasibility_score:.0f}"
+                f" / 法令適合 {s.compliance_score:.0f} / 補助金 {s.subsidy_score:.0f}"
+            )
+            if s.comparison_note:
+                lines.append(f"     不採用理由: {s.comparison_note}")
+        lines.append("")
+
+    if r.top_recommendations and r.bottom_candidates:
+        lines.append("【Top/Bottom スコア対比】")
+        lines.append("  軸          Top 3 平均  Bottom 3 平均  差分")
+        for axis, top_attr, bot_attr in [
+            ("総合      ", "total_score", "total_score"),
+            ("ROI       ", "roi_score", "roi_score"),
+            ("実装可能性", "feasibility_score", "feasibility_score"),
+            ("法令適合  ", "compliance_score", "compliance_score"),
+            ("補助金    ", "subsidy_score", "subsidy_score"),
+        ]:
+            top_avg = sum(getattr(s, top_attr) for s in r.top_recommendations) / len(
+                r.top_recommendations,
+            )
+            bot_avg = sum(getattr(s, bot_attr) for s in r.bottom_candidates) / len(
+                r.bottom_candidates,
+            )
+            lines.append(
+                f"  {axis}    {top_avg:5.1f}        {bot_avg:5.1f}     "
+                f"+{top_avg - bot_avg:.1f}pt"
+            )
         lines.append("")
 
     if len(r.all_scored) > _TOP_N:
         lines.append("【全施策ランキング（参考）】")
         for s in r.all_scored:
-            marker = "★" if s in r.top_recommendations else "  "
+            if s in r.top_recommendations:
+                marker = "★"
+            elif s in r.bottom_candidates:
+                marker = "✗"
+            else:
+                marker = "  "
             lines.append(
                 f"  {marker} {s.total_score:5.1f}  [{s.measure.measure_id}]"
                 f" {s.measure.name}"
             )
 
     return "\n".join(lines)
+
+
+def _format_score_block(
+    s: MeasureScore, rank: int, section_labels: dict[str, str],
+) -> list[str]:
+    """単一スコアの基本ブロック（ランキング・分類・スコア・期待効果）を返す。"""
+    block: list[str] = [
+        (
+            f"  {rank}. [{s.measure.measure_id}] {s.measure.name}"
+            f"  総合 {s.total_score:.1f}/100"
+        ),
+        (
+            f"     分類: {section_labels.get(s.measure.form3_section, s.measure.form3_section)}"
+            f" / 難易度 {s.measure.implementation_difficulty}/5"
+        ),
+        (
+            f"     スコア: ROI {s.roi_score:.0f} / 実装可能性 {s.feasibility_score:.0f}"
+            f" / 法令適合 {s.compliance_score:.0f} / 補助金 {s.subsidy_score:.0f}"
+        ),
+    ]
+    if s.estimated_annual_cost_saving_jpy:
+        line = (
+            f"     期待効果: 年 約{s.estimated_annual_cost_saving_jpy / 1e8:.2f}億円削減"
+        )
+        if s.estimated_payback_years is not None:
+            if s.estimated_payback_years < 0.1:
+                line += " / 回収 1年未満"
+            else:
+                line += f" / 回収 約{s.estimated_payback_years:.1f}年"
+        block.append(line)
+    if s.estimated_annual_co2_reduction_kg:
+        block.append(
+            f"     CO2 削減: 約 {s.estimated_annual_co2_reduction_kg / 1000:,.0f}トン-CO2/年"
+        )
+    return block
