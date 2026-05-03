@@ -63,9 +63,12 @@ CLO ツール群の自動検証。Claude Desktop を起動せずに `scripts/ver
 
 ## LLM 妥当性判定（Claude 側で追加）
 
-スクリプト出力後、以下の観点で **業界感覚に照らした判定** を追加せよ:
+スクリプト出力後、以下の観点で **業界感覚に照らした判定** を追加せよ。
+**判定基準は `core/static/industry_benchmarks.py` に集約**されており、coding 上の判定は同モジュールの定数（`OPERATING_PROFIT_MARGIN_PCT` / `SANITY` / `KPI_REACHABILITY`）と整合させること。LLM は同モジュールの定数値を起点に判定する。
 
 ### 1. 業種別の利益率改善（margin_lift_pp）
+
+`industry_benchmarks.SANITY.profit_margin_lift_max_pp = 3.0pp` を超えると submission_validator が `PROFIT_MARGIN_LIFT_EXCESSIVE` warning を発行する。
 
 | 業種 | 期待レンジ | 異常判定 |
 |------|-----------|---------|
@@ -81,11 +84,28 @@ CLO ツール群の自動検証。Claude Desktop を起動せずに `scripts/ver
 
 ### 3. 5年累積 NPV と投資の比率
 
-- 必要投資 vs 5年 NPV が **100 倍以上** → 試算が甘い可能性（過大評価）
-- **0.5 倍未満** → 投資判断として却下されるレベル
+`industry_benchmarks.SANITY` に集約されたしきい値:
+- `npv_to_investment_max_multiple = 100.0` 倍を超えると `NPV_RATIO_EXCESSIVE` warning（過大評価の疑い）
+- `npv_to_investment_min_multiple = 0.5` 倍を下回ると `NPV_RATIO_TOO_LOW` warning（投資判断却下レベル）
 - 通常レンジは 5〜50 倍
 
-### 4. 業種特異な観察
+### 4. 営業利益増の妥当性
+
+`SANITY.operating_profit_increase_max_ratio = 0.30`（現状営業利益の 30%）を超えると `OPERATING_PROFIT_INCREASE_EXCESSIVE` warning が出る。施策効果の重複・楽観前提を疑う。
+
+### 5. 業界平均比の信頼性
+
+benchmark.py の `revenue_ratio_reliability` フィールド（`industry_benchmarks.REVENUE_VS_AVG_*_THRESHOLD_PCT` で分類）:
+- `normal` / `large_scale` → 通常表示
+- `low_reliability`（>1000%）→ 経営会議では数値非表示・規模優位企業として相対参照
+
+### 6. データ出所の確認
+
+ToolResponse の `data_source` フィールド:
+- `estimated`（サンプル3社・業界統計推計）→ 提出前には実測値への差し替えを推奨
+- `actual`（自社実績）→ そのまま提出可
+
+### 7. 業種特異な観察
 
 - 連鎖化事業者は荷役等項目が docx に存在しない（仕様）
 - 中継輸送が連鎖化事業者の form3 wait セクションに流用される（Step 6 後の修正）

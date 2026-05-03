@@ -53,7 +53,7 @@ from core.export.ppt_writer import SlideContent
 from core.export.ppt_writer import write_clo_plan_draft as write_ppt_plan
 from core.legal.eligibility import EligibilityResult, evaluate_eligibility
 from core.static._freshness import all_warnings
-from core.static.sample_company import CompanyProfile, get_sample
+from core.static.sample_company import CompanyProfile, DataSource, get_sample
 
 
 @dataclass
@@ -75,6 +75,8 @@ class PlanDraftResult:
     files: dict[str, str] = field(default_factory=dict)
     citations: list[Citation] = field(default_factory=list)
     freshness_warnings: list[str] = field(default_factory=list)
+    data_source: DataSource = "estimated"
+    """入力プロフィールの出所。生成元 CompanyProfile.data_source を伝搬する。"""
 
 
 async def generate_plan_draft(company_id: str) -> PlanDraftResult:
@@ -217,6 +219,7 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         files=files,
         citations=citations,
         freshness_warnings=all_warnings(),
+        data_source=profile.data_source,
     )
 
 
@@ -658,9 +661,21 @@ def build_plan_draft_summary(r: PlanDraftResult) -> str:
         "  1. PPT を経営会議で説明（2枚目のエグゼクティブサマリーから始める）",
         "  2. Word（様式第3別紙）の社内レビュー → CLO 署名 → 2026年10月末までに国交省提出",
         "  3. Excel の出典シートで「全数値の根拠」を確認（経営会議『出典は？』即答用）",
+        "",
+        _format_data_source_note(r.data_source),
     ]
 
     return "\n".join(lines)
+
+
+def _format_data_source_note(data_source: DataSource) -> str:
+    """データ出所注釈をサマリー末尾に表示する（推計値 vs 実測値の defensibility 担保）。"""
+    if data_source == "actual":
+        return "※ 入力プロフィールは自社実績データ（actual）に基づく。"
+    return (
+        "※ 入力プロフィールは業界統計からの推計値（estimated）。"
+        "提出前には自社実測データへの差し替えを推奨（フェーズ4.0 で実データ取込予定）。"
+    )
 
 
 def _format_revenue_ratio_line(benchmark: BenchmarkResult) -> str:

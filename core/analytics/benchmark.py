@@ -18,13 +18,12 @@ from typing import Literal
 from core.clients.estat import EStatApiError, EStatClient
 from core.export.citation import Citation, estat_citation
 from core.static._freshness import all_warnings
+from core.static.industry_benchmarks import (
+    REVENUE_VS_AVG_LARGE_SCALE_THRESHOLD_PCT,
+    REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT,
+)
 from core.static.jsic import lookup
 from core.static.national_targets import LOGISTICS_CO2_TARGET
-
-# 業界平均売上比の信頼性しきい値（reference_industry_sense_ranges.md に整合）
-# 100% 前後 → 業界平均水準 / 200-1000% → 規模優位企業 / 1,000% 超 → 比較対象見直し必要
-REVENUE_VS_AVG_LARGE_SCALE_THRESHOLD_PCT: float = 200.0
-REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT: float = 1000.0
 
 ReliabilityLevel = Literal["normal", "large_scale", "low_reliability"]
 

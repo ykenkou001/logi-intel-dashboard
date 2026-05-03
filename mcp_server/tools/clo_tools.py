@@ -337,12 +337,14 @@ def register_tools(mcp: FastMCP) -> None:
         except ValueError as exc:
             return ToolResponse(summary=str(exc)).to_dict()
 
+        profile = get_sample(company_id)
         summary = build_plan_draft_summary(result)
         response = ToolResponse(
             summary=summary,
             citations=result.citations,
             freshness_warnings=result.freshness_warnings,
             files=result.files,
+            data_source=profile.data_source if profile else "estimated",
         )
         return response.to_dict()
 
@@ -398,6 +400,7 @@ def register_tools(mcp: FastMCP) -> None:
             summary=summary,
             citations=result.citations,
             freshness_warnings=result.freshness_warnings,
+            data_source=profile.data_source,
         )
         return response.to_dict()
 
@@ -453,6 +456,7 @@ def register_tools(mcp: FastMCP) -> None:
             summary=summary,
             citations=result.citations,
             freshness_warnings=result.freshness_warnings,
+            data_source=profile.data_source,
         )
         return response.to_dict()
 
@@ -556,6 +560,7 @@ def register_tools(mcp: FastMCP) -> None:
             summary=summary,
             citations=result.citations,
             freshness_warnings=result.freshness_warnings,
+            data_source=profile.data_source,
         )
         return response.to_dict()
 
@@ -587,12 +592,14 @@ def register_tools(mcp: FastMCP) -> None:
         except ValueError as exc:
             return ToolResponse(summary=str(exc)).to_dict()
 
+        profile = get_sample(company_id)
         summary = build_validation_summary(report)
         response = ToolResponse(
             summary=summary,
             citations=[logistics_efficiency_law_citation()],
             freshness_warnings=all_warnings(),
             files=dict(report.checked_files),
+            data_source=profile.data_source if profile else "estimated",
         )
         return response.to_dict()
 

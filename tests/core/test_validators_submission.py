@@ -386,6 +386,71 @@ def test_numeric_consistency_benchmark_ratio_none_no_warning(tmp_path: Path) -> 
     assert not any(i.code == "BENCHMARK_RATIO_OUTLIER" for i in issues)
 
 
+# ---- _validate_financial_sanity（業界感覚レンジ検証） ----
+
+
+def test_sanity_operating_profit_increase_excessive_yields_warning(tmp_path: Path) -> None:
+    """営業利益増 / 現状営業利益 が 30% を超えると warning。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.financial.base_operating_profit_jpy = 1_000_000_000  # 10 億円
+    plan.financial.total_operating_profit_increase_jpy = 500_000_000  # 5 億円 = 50%
+    issues = _validate_numeric_consistency(plan)
+    assert any(i.code == "OPERATING_PROFIT_INCREASE_EXCESSIVE" for i in issues)
+
+
+def test_sanity_operating_profit_increase_within_threshold_no_warning(tmp_path: Path) -> None:
+    """営業利益増 / 現状営業利益 が 30% 以下なら warning なし。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.financial.base_operating_profit_jpy = 1_000_000_000
+    plan.financial.total_operating_profit_increase_jpy = 200_000_000  # 20%
+    issues = _validate_numeric_consistency(plan)
+    assert not any(i.code == "OPERATING_PROFIT_INCREASE_EXCESSIVE" for i in issues)
+
+
+def test_sanity_profit_margin_lift_excessive_yields_warning(tmp_path: Path) -> None:
+    """利益率改善幅が 3pp を超えると warning。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.financial.operating_profit_margin_lift_pp_total = 5.0
+    issues = _validate_numeric_consistency(plan)
+    assert any(i.code == "PROFIT_MARGIN_LIFT_EXCESSIVE" for i in issues)
+
+
+def test_sanity_npv_ratio_excessive_yields_warning(tmp_path: Path) -> None:
+    """NPV / 投資 が 100 倍を超えると warning。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.financial.total_investment_jpy = 1_000_000  # 100 万円
+    plan.financial.total_5y_npv_jpy = 200_000_000  # 2 億円 = 200倍
+    issues = _validate_numeric_consistency(plan)
+    assert any(i.code == "NPV_RATIO_EXCESSIVE" for i in issues)
+
+
+def test_sanity_npv_ratio_too_low_yields_warning(tmp_path: Path) -> None:
+    """NPV / 投資 が 0.5 倍未満なら投資判断却下レベル warning。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.financial.total_investment_jpy = 100_000_000  # 1 億円
+    plan.financial.total_5y_npv_jpy = 20_000_000  # 0.2 倍
+    issues = _validate_numeric_consistency(plan)
+    assert any(i.code == "NPV_RATIO_TOO_LOW" for i in issues)
+
+
+def test_sanity_npv_ratio_within_range_no_warning(tmp_path: Path) -> None:
+    """NPV / 投資 が 0.5 〜 100 倍の範囲内なら warning なし。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.financial.total_investment_jpy = 100_000_000  # 1 億円
+    plan.financial.total_5y_npv_jpy = 1_000_000_000  # 10 倍
+    issues = _validate_numeric_consistency(plan)
+    assert not any(i.code in {"NPV_RATIO_EXCESSIVE", "NPV_RATIO_TOO_LOW"} for i in issues)
+
+
+def test_sanity_zero_investment_skips_npv_check(tmp_path: Path) -> None:
+    """投資ゼロの場合は NPV 倍率チェックをスキップ（ZeroDivisionError 防止）。"""
+    plan = _make_valid_plan(tmp_path)
+    plan.financial.total_investment_jpy = 0.0
+    plan.financial.total_5y_npv_jpy = 1_000_000_000
+    issues = _validate_numeric_consistency(plan)
+    assert not any(i.code in {"NPV_RATIO_EXCESSIVE", "NPV_RATIO_TOO_LOW"} for i in issues)
+
+
 # ---- _validate_citations ----
 
 

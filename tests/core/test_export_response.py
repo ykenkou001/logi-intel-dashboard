@@ -18,6 +18,13 @@ def test_tool_response_to_dict_basic() -> None:
     assert d["files"] == {}
     assert d["citations"] == []
     assert d["freshness_warnings"] == []
+    assert d["data_source"] == "estimated"
+
+
+def test_tool_response_data_source_actual() -> None:
+    """data_source='actual' が to_dict に伝搬する。"""
+    resp = ToolResponse(summary="ok", data_source="actual")
+    assert resp.to_dict()["data_source"] == "actual"
 
 
 def test_tool_response_with_citations() -> None:

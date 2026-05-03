@@ -12,6 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 SiteType = Literal["factory", "dc", "store", "office", "warehouse"]
+DataSource = Literal["estimated", "actual"]
 
 
 class CompanySite(BaseModel):
@@ -55,6 +56,14 @@ class CompanyProfile(BaseModel):
     clo_name: str = Field(..., description="CLO 役職・氏名")
     plan_period_start_fy: int = Field(..., ge=2026, description="計画期間 開始年度")
     plan_period_end_fy: int = Field(..., ge=2026, description="計画期間 終了年度")
+    data_source: DataSource = Field(
+        "estimated",
+        description=(
+            "プロフィール数値の出所。'estimated' は業界統計からの推計値（サンプル3社・"
+            "フェーズ4 までの暫定）、'actual' は自社実績データ（CSV/Excel 取込）。"
+            "経営会議での defensibility のため、出力サマリーで明示する。"
+        ),
+    )
 
 
 # サンプル1: 製造業（電子部品）— 特定第一種荷主想定
@@ -82,6 +91,7 @@ SAMPLE_MANUFACTURING = CompanyProfile(
     clo_name="専務執行役員 田中 雄一",
     plan_period_start_fy=2026,
     plan_period_end_fy=2030,
+    data_source="estimated",
 )
 
 # サンプル2: 卸売業（インテリア）— 特定第一種・第二種荷主想定
@@ -111,6 +121,7 @@ SAMPLE_WHOLESALE = CompanyProfile(
     clo_name="専務執行役員 佐藤 一郎",
     plan_period_start_fy=2026,
     plan_period_end_fy=2030,
+    data_source="estimated",
 )
 
 # サンプル3: 連鎖化事業者（コンビニ本部）
@@ -140,6 +151,7 @@ SAMPLE_CHAIN = CompanyProfile(
     clo_name="専務執行役員 佐藤 一郎",
     plan_period_start_fy=2026,
     plan_period_end_fy=2030,
+    data_source="estimated",
 )
 
 

@@ -15,10 +15,13 @@ import secrets
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 from core.export.citation import Citation
 
 OUTPUTS_DIR = Path("outputs")
+
+DataSource = Literal["estimated", "actual"]
 
 
 @dataclass
@@ -29,6 +32,9 @@ class ToolResponse:
     citations: list[Citation] = field(default_factory=list)
     files: dict[str, str] = field(default_factory=dict)
     freshness_warnings: list[str] = field(default_factory=list)
+    data_source: DataSource = "estimated"
+    """入力データの出所。'estimated' は業界統計からの推計値（サンプル3社）、
+    'actual' は自社実績データ。経営会議での defensibility 担保のため明示する。"""
 
     def to_dict(self) -> dict[str, object]:
         """MCP の戻り値として返す dict 形式。"""
@@ -37,6 +43,7 @@ class ToolResponse:
             "files": dict(self.files) if self.files else {},
             "citations": [c.to_dict() for c in self.citations],
             "freshness_warnings": list(self.freshness_warnings),
+            "data_source": self.data_source,
         }
 
     def add_citation(self, citation: Citation) -> None:

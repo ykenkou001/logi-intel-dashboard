@@ -21,6 +21,10 @@ from typing import Literal
 from docx import Document
 
 from core.analytics.plan_draft import PlanDraftResult, generate_plan_draft
+from core.static.industry_benchmarks import (
+    REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT,
+    SANITY,
+)
 
 Severity = Literal["error", "warning", "info"]
 IssueCategory = Literal[
@@ -57,10 +61,6 @@ MAX_CO2_REDUCTION_KG_PER_YEAR: float = 1_000_000_000.0  # 100 万トン-CO2/年�
 MAX_COST_SAVING_JPY_PER_YEAR: float = 100_000_000_000.0  # 1,000 億円/年
 MAX_INVESTMENT_JPY: float = 50_000_000_000.0  # 500 億円
 MAX_PAYBACK_YEARS: float = 30.0  # 30 年（計画期間 5 年に対し過大）
-
-# 業界平均売上比の信頼性しきい値（reference_industry_sense_ranges.md と整合）
-# 業界統計の母集団は小規模事業所中心のため、大企業の単純比較は桁外れになりやすい。
-MAX_REVENUE_VS_AVG_PCT_RELIABLE: float = 1000.0
 
 
 @dataclass(frozen=True)
@@ -352,14 +352,14 @@ def _validate_numeric_consistency(plan: PlanDraftResult) -> list[ValidationIssue
     # 業界統計の母集団（小規模事業所中心）と自社規模が乖離すると桁外れの値が出る。
     # 経営会議で単純表示すると defensibility が崩れるため warning を発行する。
     revenue_ratio = plan.benchmark.revenue_vs_avg_pct
-    if revenue_ratio is not None and revenue_ratio > MAX_REVENUE_VS_AVG_PCT_RELIABLE:
+    if revenue_ratio is not None and revenue_ratio > REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT:
         issues.append(ValidationIssue(
             severity="warning",
             category="numeric_consistency",
             code="BENCHMARK_RATIO_OUTLIER",
             message=(
                 f"業界平均売上比 {revenue_ratio:.0f}% が信頼性しきい値 "
-                f"{MAX_REVENUE_VS_AVG_PCT_RELIABLE:.0f}% を超過。"
+                f"{REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT:.0f}% を超過。"
                 "業界統計の母集団と自社規模の乖離が大きく、経営会議では参考値として扱ってください。"
             ),
             suggestion=(
@@ -367,6 +367,83 @@ def _validate_numeric_consistency(plan: PlanDraftResult) -> list[ValidationIssue
                 "に置き換えてください。"
             ),
         ))
+
+    # 財務インパクトの業界感覚レンジ検証（過大評価/却下レベルの両方を捕捉）
+    issues.extend(_validate_financial_sanity(plan))
+
+    return issues
+
+
+def _validate_financial_sanity(plan: PlanDraftResult) -> list[ValidationIssue]:
+    """財務翻訳結果が業界感覚レンジに収まっているかを検査する。
+
+    過大評価（重複考慮不足・楽観前提）と過小評価（投資判断却下レベル）の両方を弾く。
+    しきい値は core/static/industry_benchmarks.py:SANITY に集約。
+    """
+    issues: list[ValidationIssue] = []
+    f = plan.financial
+
+    base_op_profit = f.base_operating_profit_jpy
+    increase = f.total_operating_profit_increase_jpy
+    if base_op_profit > 0 and increase > 0:
+        ratio = increase / base_op_profit
+        if ratio > SANITY.operating_profit_increase_max_ratio:
+            issues.append(ValidationIssue(
+                severity="warning",
+                category="numeric_consistency",
+                code="OPERATING_PROFIT_INCREASE_EXCESSIVE",
+                message=(
+                    f"営業利益増加 {increase / 1e8:.2f}億円が現状営業利益の "
+                    f"{ratio * 100:.1f}% に達し、業界感覚しきい値 "
+                    f"{SANITY.operating_profit_increase_max_ratio * 100:.0f}% を超過。"
+                    "施策効果の重複や楽観前提が織り込まれていないか確認してください。"
+                ),
+                suggestion=(
+                    "Step 3 シナリオシミュレータで保守シナリオの値を併記し、"
+                    "CFO 質問に「最低でも保守シナリオで X 億円」と答えられる形にしてください。"
+                ),
+            ))
+
+    if f.operating_profit_margin_lift_pp_total > SANITY.profit_margin_lift_max_pp:
+        issues.append(ValidationIssue(
+            severity="warning",
+            category="numeric_consistency",
+            code="PROFIT_MARGIN_LIFT_EXCESSIVE",
+            message=(
+                f"営業利益率改善幅 {f.operating_profit_margin_lift_pp_total:.2f}pp が"
+                f"業界感覚しきい値 {SANITY.profit_margin_lift_max_pp:.1f}pp を超過。"
+                "業界水準として極端な値です。"
+            ),
+        ))
+
+    if f.total_investment_jpy > 0:
+        npv_multiple = f.total_5y_npv_jpy / f.total_investment_jpy
+        if npv_multiple > SANITY.npv_to_investment_max_multiple:
+            issues.append(ValidationIssue(
+                severity="warning",
+                category="numeric_consistency",
+                code="NPV_RATIO_EXCESSIVE",
+                message=(
+                    f"5年累積NPV / 必要投資 = {npv_multiple:.1f}倍 が業界感覚しきい値 "
+                    f"{SANITY.npv_to_investment_max_multiple:.0f}倍 を超過。"
+                    "投資額の桁・割引前提・効果の重複を確認してください。"
+                ),
+            ))
+        elif npv_multiple < SANITY.npv_to_investment_min_multiple:
+            issues.append(ValidationIssue(
+                severity="warning",
+                category="numeric_consistency",
+                code="NPV_RATIO_TOO_LOW",
+                message=(
+                    f"5年累積NPV / 必要投資 = {npv_multiple:.2f}倍 が業界感覚しきい値 "
+                    f"{SANITY.npv_to_investment_min_multiple:.1f}倍 を下回り、"
+                    "投資判断却下レベルです。"
+                ),
+                suggestion=(
+                    "施策の組合せ・段階導入・補助金活用で投資効率を引き上げるか、"
+                    "別の施策候補に差し替えを検討してください。"
+                ),
+            ))
 
     return issues
 
