@@ -32,7 +32,7 @@
 | 静的データ層 | `core/static/` | CO2 排出原単位・改善基準告示・標準的運賃等、API 不要のデータ。鮮度メタデータで更新リマインド |
 | 出口層（成果物） | `core/export/` | PPT / PDF / Excel / Word / Markdown 出力。**ここが CLO に届く価値の最終地点** |
 | MCP サーバー層 | `mcp_server/` | core を呼び出す薄いラッパー。Claude が叩くツール定義のみ。**戻り値はファイルパスを含む** |
-| REST API 層 | `api/` | core を呼び出す薄いラッパー。Web フロントが叩く（フェーズ4）。成果物ファイルをダウンロード配信 |
+| REST API 層 | `api/` | core を呼び出す薄いラッパー。Web フロントが叩く（フェーズ4）。成果物ファイルをダウンロード配信。**フェーズ4.0 で実装完了（21 エンドポイント・FastAPI）** |
 
 **重要原則**:
 - ビジネスロジックは必ず `core/` に置く。MCP・REST 層には書かない
@@ -142,9 +142,19 @@ logi-intel-dashboard/
 │   │   └── ...                    # ※ resas_tools.py は作成しない（API 終了）
 │   └── prompts/                   # MCP プロンプト
 │       └── clo_plan_draft.py
-├── api/                           # REST API 層（フェーズ4）
-│   └── main.py
-├── web/                           # フロント（フェーズ4）
+├── api/                           # REST API 層（フェーズ4.0 ✅ 実装済）
+│   ├── __init__.py
+│   ├── main.py                    # FastAPI エントリ + ヘルスチェック + CORS
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── clo.py                 # /api/v1/clo/* (12 エンドポイント)
+│   │   ├── macro.py               # /api/v1/macro/overview
+│   │   ├── company.py             # /api/v1/company/{template,load,samples}
+│   │   └── files.py               # /api/v1/files/{path} ダウンロード
+│   └── schemas/
+│       ├── __init__.py
+│       └── responses.py           # ToolResponseModel / CitationModel (Pydantic)
+├── web/                           # フロント（フェーズ4 Next.js）
 ├── outputs/                       # 成果物の出力先（gitignore 対象）
 │   ├── ppt/
 │   ├── pdf/

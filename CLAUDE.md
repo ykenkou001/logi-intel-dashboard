@@ -95,11 +95,11 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ## 3. 現在のフェーズ
 
-**フェーズ 4.0 進行中 — 自社データ取込（Codex 4 フル版）✅ 完了（2026-05-03）**
+**フェーズ 4.0 進行中 — 自社データ取込（Codex 4 フル版）+ FastAPI REST 層 ✅ 完了（2026-05-03）**
 
 **フェーズ 4.0 サブステップ**:
 - ✅ 自社データ取込（Codex 4 フル版）— Excel/CSV → CompanyProfile + JSON 永続化 + サンプル3社 ID 解決の統合
-- ⏳ FastAPI REST 層
+- ✅ FastAPI REST 層 — 21 エンドポイント公開（CLO 12 / macro 1 / company 3 / files 1 / meta 4）。MCP と同じ ToolResponse 構造で JSON 返却・tests/api/ 27 件全 pass
 - ⏳ Next.js 初期化
 - ⏳ AWS 移行（SQLite→Redis、API キー→Secrets Manager、ECS/Lambda デプロイ）
 

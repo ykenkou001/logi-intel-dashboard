@@ -15,7 +15,8 @@
 フェーズ 3.5 ★意思決定支援強化（差別化の心臓部）★              ✅ 完了 (2026-05-03)
 フェーズ 4.0 Web ダッシュボード + AWS 移行 + 自社データ取込    ← 進行中
              └ 自社データ取込（Codex 4 フル版）                  ✅ 完了 (2026-05-03)
-             └ FastAPI REST 層 + Next.js + AWS 移行              ⏳ 未着手
+             └ FastAPI REST 層                                   ✅ 完了 (2026-05-03)
+             └ Next.js 初期化 + AWS 移行                          ⏳ 未着手
 フェーズ 4.5 継続運用機能（定期報告書・進捗・法改正アラート）
 フェーズ 5   公開・記事化
 ```
@@ -547,7 +548,13 @@ class ScenarioSimResult:
 **ゴール**: 社内全員が HTTPS でアクセスできる Web ダッシュボードを AWS 上に構築し、CSV/Excel で自社データをアップロードできるようにする。
 
 ### Web ダッシュボード
-- [ ] FastAPI REST 層（`api/` ディレクトリ）
+- [x] **FastAPI REST 層**（`api/` ディレクトリ）— ✅ 完了（2026-05-03）
+  - 21 エンドポイント公開（CLO 12 / macro 1 / company 3 / files 1 / meta 4）
+  - MCP ツールと同じ ToolResponse 構造を JSON で返却（フロントは MCP/REST 同一パーサで処理可能）
+  - OpenAPI / Swagger UI / ReDoc を `/docs` `/redoc` で公開
+  - `outputs/` 配下のダウンロード経路（パストラバーサル防止）
+  - FastAPI テスト 27 件（tests/api/）全 pass・全 421 テスト regression なし
+  - 起動: `uv run uvicorn api.main:app --reload --port 8000`
 - [ ] Next.js 初期化
 - [ ] 主要画面: マクロ概況・業界ベンチマーク・ドライバー需給・施策ライブラリ・シミュレータ・**自社プロフィール入力フォーム**・計画書ダウンロード
 - [ ] 成果物（PPT/PDF/Excel/Word）ダウンロード UI（プレサインド URL 経由）
