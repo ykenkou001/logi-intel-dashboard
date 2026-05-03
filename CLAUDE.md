@@ -85,6 +85,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 | [docs/clo_domain.md](docs/clo_domain.md) | CLO 業務ドメイン知識・法的定義 |
 | [docs/data_input_guide.md](docs/data_input_guide.md) | 自社データ入力ガイド（Excel/CSV テンプレ記入と取込手順） |
 | [docs/ppt_design.md](docs/ppt_design.md) | PPT デザイン方針（Logi-Intel CLO Report）・スライドファミリー定義 |
+| [docs/aws_migration_plan.md](docs/aws_migration_plan.md) | AWS 移行計画（フェーズ4.0 後半・8 Step 手順書） |
 | [docs/oss_reference.md](docs/oss_reference.md) | 参考 OSS の方針・Attribution |
 | [docs/testing.md](docs/testing.md) | テストレベル・モック方針・カバレッジ目標 |
 | [docs/git_workflow.md](docs/git_workflow.md) | ブランチ戦略・コミットメッセージ規則 |
@@ -95,13 +96,14 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ## 3. 現在のフェーズ
 
-**フェーズ 4.0 進行中 — 自社データ取込（Codex 4 フル版）+ FastAPI REST 層 ✅ 完了（2026-05-03）**
+**フェーズ 4.0 進行中 — 自社データ取込 + FastAPI + Next.js 初期化 + AWS 移行コード準備 ✅ 完了（2026-05-03）**
 
 **フェーズ 4.0 サブステップ**:
 - ✅ 自社データ取込（Codex 4 フル版）— Excel/CSV → CompanyProfile + JSON 永続化 + サンプル3社 ID 解決の統合
 - ✅ FastAPI REST 層 — 21 エンドポイント公開（CLO 12 / macro 1 / company 3 / files 1 / meta 4）。MCP と同じ ToolResponse 構造で JSON 返却・tests/api/ 27 件全 pass
-- ⏳ Next.js 初期化
-- ⏳ AWS 移行（SQLite→Redis、API キー→Secrets Manager、ECS/Lambda デプロイ）
+- ✅ Next.js 15 初期化（web/）— App Router + TypeScript + Tailwind + Recharts。型付き API クライアント・3 画面（トップ・マクロ概況・計画書ドラフト）。`npm run build` 成功
+- ✅ AWS 移行 コード準備 — Dockerfile + docker-compose + 8 Step 移行計画書（docs/aws_migration_plan.md）
+- ⏳ AWS 実環境展開（健一の承認後）— Terraform IaC・ECS Fargate・ElastiCache・Secrets Manager・S3
 
 **新規 MCP ツール（フェーズ4.0 で追加）**:
 - `logi_clo_generate_template`: 自社プロフィール入力テンプレ Excel を生成
@@ -201,4 +203,4 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ---
 
-最終更新: 2026-05-03（フェーズ3.5 完了：Steps 1-7 + 改善タスク短期 4 件 + Codex 1-5 全反映。Step 7 で定期報告書（様式第5）Word + 提出実務チェックリスト（Codex 1 取込）を完成し plan_draft / periodic_report 双方の出力末尾に統合 — テスト 367 件全パス、verify-clo-step periodic_report 3/3 PASS。次セッションはフェーズ4.0「Web ダッシュボード + AWS 移行 + 自社データ取込」着手、Codex 4 フル版（実データ入力フォーム）が最優先）
+最終更新: 2026-05-03（フェーズ4.0 進行中：自社データ取込 Codex 4 フル版・FastAPI REST 層・Next.js 15 初期化・AWS 移行コード準備が完了。FastAPI 21 エンドポイント／tests 421 件全 pass・Next.js `npm run build` 成功（6 ページ静的生成、First Load JS 102KB）・Dockerfile + docker-compose + docs/aws_migration_plan.md 整備。次セッションは AWS 実環境展開の方針確認 + Next.js の残り画面（ベンチマーク・ドライバー需給・施策ライブラリ・シミュレータ・自社プロフィール入力フォーム）実装）

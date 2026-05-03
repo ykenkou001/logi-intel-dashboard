@@ -1,0 +1,137 @@
+/**
+ * FastAPI バックエンドと通信する型付き API クライアント。
+ *
+ * `api/schemas/responses.py` の Pydantic モデルと構造を一致させている。
+ * バックエンドのレスポンス変更時はこちらも追従させること。
+ */
+
+export type DataSource = "estimated" | "actual";
+
+export interface Citation {
+  label: string;
+  url: string;
+  stats_data_id: string | null;
+  notice_number: string | null;
+  ordinance_number: string | null;
+  fetched_at: string;
+  accessed_via: string | null;
+}
+
+export interface ToolResponse {
+  summary: string;
+  files: Record<string, string>;
+  citations: Citation[];
+  freshness_warnings: string[];
+  data_source: DataSource;
+}
+
+export interface SampleCompany {
+  company_id: string;
+  name: string;
+  industry: string;
+  data_source: DataSource;
+}
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
+async function request<T>(
+  path: string,
+  init?: RequestInit & { searchParams?: Record<string, string | number | boolean | undefined> },
+): Promise<T> {
+  const url = new URL(`${API_BASE}${path}`);
+  if (init?.searchParams) {
+    for (const [key, value] of Object.entries(init.searchParams)) {
+      if (value !== undefined) {
+        url.searchParams.set(key, String(value));
+      }
+    }
+  }
+  const response = await fetch(url.toString(), {
+    method: init?.method ?? "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...init?.headers,
+    },
+    body: init?.body,
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`API ${response.status}: ${detail}`);
+  }
+  return (await response.json()) as T;
+}
+
+// ─── 業界ベンチマーク ──────────────────────────────────────────
+export async function fetchBenchmark(params: {
+  jsic_code: string;
+  prefecture: string;
+  revenue_jpy: number;
+  logistics_cost_jpy?: number;
+}): Promise<ToolResponse> {
+  return request<ToolResponse>("/api/v1/clo/benchmark", { searchParams: params });
+}
+
+// ─── ドライバー需給ギャップ ────────────────────────────────────
+export async function fetchDriverGap(prefecture: string): Promise<ToolResponse> {
+  return request<ToolResponse>("/api/v1/clo/driver-gap", {
+    searchParams: { prefecture },
+  });
+}
+
+// ─── 適用判定 ─────────────────────────────────────────────────
+export async function fetchEligibility(params: {
+  jsic_code: string;
+  annual_revenue_jpy?: number;
+  annual_freight_tons_total?: number;
+  is_chain_franchise?: boolean;
+}): Promise<ToolResponse> {
+  return request<ToolResponse>("/api/v1/clo/eligibility", { searchParams: params });
+}
+
+// ─── プレイブック検索 ─────────────────────────────────────────
+export async function fetchPlaybook(params: {
+  industry?: string;
+  max_difficulty?: number;
+  form3_section?: string;
+  measure_type?: string;
+}): Promise<ToolResponse> {
+  return request<ToolResponse>("/api/v1/clo/playbook", { searchParams: params });
+}
+
+// ─── 施策評価エンジン（Top 3 推薦）─────────────────────────────
+export async function fetchMeasureEval(companyId: string): Promise<ToolResponse> {
+  return request<ToolResponse>(`/api/v1/clo/measure-eval/${companyId}`);
+}
+
+// ─── 計画書ドラフト統合生成 ──────────────────────────────────
+export async function generatePlanDraft(companyId: string): Promise<ToolResponse> {
+  return request<ToolResponse>(`/api/v1/clo/plan-draft/${companyId}`, {
+    method: "POST",
+  });
+}
+
+// ─── マクロ概況 ─────────────────────────────────────────────
+export async function fetchMacroOverview(prefecture: string): Promise<ToolResponse> {
+  return request<ToolResponse>("/api/v1/macro/overview", {
+    searchParams: { prefecture },
+  });
+}
+
+// ─── サンプル企業一覧 ────────────────────────────────────────
+export async function fetchSamples(): Promise<SampleCompany[]> {
+  return request<SampleCompany[]>("/api/v1/company/samples");
+}
+
+// ─── ヘルスチェック ──────────────────────────────────────────
+export async function fetchHealth(): Promise<{ status: string; service: string }> {
+  return request<{ status: string; service: string }>("/health");
+}
+
+// ─── 成果物ダウンロード URL ─────────────────────────────────
+export function fileDownloadUrl(relativePath: string): string {
+  // 例: "outputs/ppt/clo_plan_xxx.pptx" → "/api/v1/files/ppt/clo_plan_xxx.pptx"
+  const cleaned = relativePath.replace(/^outputs[\\/]/, "");
+  return `${API_BASE}/api/v1/files/${cleaned.replace(/\\/g, "/")}`;
+}

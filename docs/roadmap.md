@@ -555,9 +555,15 @@ class ScenarioSimResult:
   - `outputs/` 配下のダウンロード経路（パストラバーサル防止）
   - FastAPI テスト 27 件（tests/api/）全 pass・全 421 テスト regression なし
   - 起動: `uv run uvicorn api.main:app --reload --port 8000`
-- [ ] Next.js 初期化
-- [ ] 主要画面: マクロ概況・業界ベンチマーク・ドライバー需給・施策ライブラリ・シミュレータ・**自社プロフィール入力フォーム**・計画書ダウンロード
-- [ ] 成果物（PPT/PDF/Excel/Word）ダウンロード UI（プレサインド URL 経由）
+- [x] **Next.js 15 初期化**（`web/` ディレクトリ）— ✅ 完了（2026-05-03）
+  - App Router + TypeScript + Tailwind + Recharts（依存予約）
+  - Logi-Intel CLO Report のデザイントークンを Tailwind に反映（primary / accent / muted）
+  - 型付き API クライアント `web/lib/api.ts`（`ToolResponse` を Pydantic と一致させる）
+  - 実装済み 3 画面: トップ / `/dashboard/macro` / `/dashboard/plan-draft`
+  - `npm run build` 成功（392 packages, 6 ページ静的生成、First Load JS 102KB）
+  - 起動: `cd web && npm install && npm run dev`
+- [ ] 残りダッシュボード画面: ベンチマーク・ドライバー需給・施策ライブラリ・シミュレータ・自社プロフィール入力フォーム
+- [ ] 成果物（PPT/PDF/Excel/Word）ダウンロード UI（plan-draft 画面で着手済・全画面に展開予定）
 
 ### 自社データアップロード（Codex 4 フル版・✅ 完了 2026-05-03）
 - [x] `CompanyProfile` Pydantic モデルの拡張（積載率実績・荷待ち時間・荷役等時間・燃料消費・KPI 履歴）
@@ -572,15 +578,27 @@ class ScenarioSimResult:
 
 > 残作業（フェーズ4.5 で対応）: plan_draft の docx 文章テンプレート化（公式記載見本集 MD 10 ファイルの取込）/ KPI 計測フレーム / CLO スタイル別重み付け
 
-### AWS 移行
+### AWS 移行（コード準備フェーズ ✅ 着手済 2026-05-03）
+
+**準備済み**:
+- [x] `Dockerfile`（マルチステージ・非 root・healthcheck 統合）
+- [x] `.dockerignore`
+- [x] `docker-compose.yml`（API + Redis ローカル統合検証用）
+- [x] `docs/aws_migration_plan.md`（8 Step の移行手順書・「やらないこと」リスト・推定運用コスト含む）
+
+**実環境への展開（健一の承認後）**:
 - [ ] MCP サーバーを stdio モード → HTTP/SSE モードに切り替え（FastMCP 設定変更）
-- [ ] `core/cache.py` を SQLite → Redis（ElastiCache）に差し替え
+- [ ] `core/cache.py` を SQLite → Redis（ElastiCache）に差し替え（Backend 抽象化が前提）
 - [ ] API キーを AWS Secrets Manager に移行
-- [ ] ECS または Lambda にデプロイ
+- [ ] 自社プロフィール JSON を S3 化
+- [ ] Terraform で IaC 整備（VPC / ECS / ALB / ElastiCache / S3 / Secrets Manager / Cognito）
+- [ ] ECS Fargate にデプロイ
+- [ ] Next.js を CloudFront + S3 静的エクスポート
 - [ ] Claude Desktop 設定をローカル起動から AWS エンドポイントに変更
 - [ ] VPN 内からの接続確認
 
-詳細設計 → [docs/architecture.md](docs/architecture.md)（AWS 移行計画セクション）
+詳細手順 → [docs/aws_migration_plan.md](aws_migration_plan.md)
+詳細設計 → [docs/architecture.md](architecture.md)（AWS 移行計画セクション）
 
 ### 自社データ取込（本格実装）
 - [ ] Pydantic `CompanyDataset` モデル（拠点・ルート・KPI 履歴）

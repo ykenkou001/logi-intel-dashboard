@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 30, 30, 30;
+  --background-rgb: 245, 245, 245;
+}
+
+body {
+  font-family:
+    "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo", system-ui,
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "palt";
+}
+
+/* CLO 計画書の数値表示用 */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}

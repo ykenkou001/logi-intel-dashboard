@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+
+# Node / Next.js
+web/node_modules/
+web/.next/
+web/out/
+
+# Environment / Secrets
+.env
+.env.local
+*.env
+!.env.example
+
+# Local dev artifacts
+outputs/
+.logi_cache.db
+*.sqlite
+*.sqlite3
+
+# Git / CI
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Docs / IDE
+docs/
+.vscode/
+.idea/
+*.md
+
+# Tests
+tests/
+
+# Already in builder, don't double copy
+Dockerfile
+docker-compose.yml
