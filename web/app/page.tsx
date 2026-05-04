@@ -6,52 +6,52 @@ const FEATURES: { href: string; title: string; description: string; phase: strin
     title: "都道府県マクロ概況",
     description:
       "e-Stat / 国税庁 / 気象庁 / エネ庁を並列フェッチし、運輸業事業所数・燃料価格・気象警報を一覧表示",
-    phase: "実装予定",
+    phase: "実装済",
   },
   {
     href: "/dashboard/benchmark",
     title: "業界ベンチマーク",
     description:
       "JSIC 細分類 × 都道府県で全国・地域内の規模感と業界平均物流コスト比率を提示",
-    phase: "実装予定",
+    phase: "実装済",
   },
   {
     href: "/dashboard/driver-gap",
     title: "ドライバー需給ギャップ",
     description: "改善基準告示（13.5%減）+ 国交省2030年試算（▲34.1%）から都道府県別ギャップを試算",
-    phase: "実装予定",
+    phase: "実装済",
   },
   {
     href: "/dashboard/playbook",
     title: "施策プレイブック",
     description: "標準10施策（モーダルシフト・積載率向上・共同配送 等）を業種・難易度で絞込",
-    phase: "実装予定",
+    phase: "実装済",
   },
   {
     href: "/dashboard/measure-eval",
     title: "施策評価（Top 3 推薦）",
     description: "自社プロフィール × 4軸スコアリングで Top 3 を推薦・選定根拠を可視化",
-    phase: "実装予定",
+    phase: "実装済",
   },
   {
     href: "/dashboard/scenario-sim",
     title: "シナリオシミュレーション",
     description:
       "保守/標準/上振れ × What-if 8 種で「燃料 +20% でも黒字維持」を検証",
-    phase: "実装予定",
+    phase: "実装済",
   },
   {
     href: "/dashboard/company",
     title: "自社プロフィール入力",
     description:
       "Excel テンプレ DL → 記入 → アップロードで CompanyProfile を構築・JSON 永続化",
-    phase: "実装予定",
+    phase: "実装済",
   },
   {
     href: "/dashboard/plan-draft",
     title: "計画書ドラフト統合生成",
     description: "PPT / Word（様式第3別紙）/ Excel / Markdown を一括生成・ダウンロード",
-    phase: "実装予定",
+    phase: "実装済",
   },
 ];
 

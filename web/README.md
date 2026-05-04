@@ -23,18 +23,27 @@ http://localhost:3000 でダッシュボードが開く。
 
 ```
 web/
-├── app/                      # Next.js App Router
-│   ├── layout.tsx            # 共通レイアウト
-│   ├── page.tsx              # トップページ（機能カード一覧）
-│   ├── globals.css           # Tailwind + 日本語フォント設定
+├── app/                                # Next.js App Router
+│   ├── layout.tsx                      # 共通レイアウト
+│   ├── page.tsx                        # トップページ（機能カード一覧）
+│   ├── globals.css                     # Tailwind + 日本語フォント設定
 │   └── dashboard/
-│       ├── macro/page.tsx          # 都道府県マクロ概況
-│       └── plan-draft/page.tsx     # 計画書ドラフト統合生成
+│       ├── macro/page.tsx              # 都道府県マクロ概況
+│       ├── benchmark/page.tsx          # 業界ベンチマーク
+│       ├── driver-gap/page.tsx         # ドライバー需給ギャップ
+│       ├── playbook/page.tsx           # 施策プレイブック検索
+│       ├── measure-eval/page.tsx       # 施策評価（Top 3 推薦）
+│       ├── scenario-sim/page.tsx       # シナリオシミュレーション
+│       ├── company/page.tsx            # 自社プロフィール入力フォーム
+│       └── plan-draft/page.tsx         # 計画書ドラフト統合生成
+├── components/
+│   └── ToolResponseDisplay.tsx         # ToolResponse 共通表示 + ErrorBanner
 ├── lib/
-│   └── api.ts                # 型付き API クライアント（FastAPI へ）
-├── tailwind.config.ts        # Logi-Intel CLO Report のデザイントークン
+│   ├── api.ts                          # 型付き API クライアント（FastAPI へ）
+│   └── constants.ts                    # 都道府県・JSIC・施策タイプ等の定数
+├── tailwind.config.ts                  # Logi-Intel CLO Report のデザイントークン
 ├── tsconfig.json
-├── next.config.ts            # /api/proxy/* → FastAPI rewrites
+├── next.config.ts                      # /api/proxy/* → FastAPI rewrites
 └── package.json
 ```
 
@@ -55,13 +64,13 @@ web/
 |--------|------|------|
 | `/` | トップ（機能カード一覧） | ✅ |
 | `/dashboard/macro` | 都道府県マクロ概況 | ✅ |
+| `/dashboard/benchmark` | 業界ベンチマーク | ✅ |
+| `/dashboard/driver-gap` | ドライバー需給ギャップ | ✅ |
+| `/dashboard/playbook` | 施策プレイブック検索 | ✅ |
+| `/dashboard/measure-eval` | 施策評価（Top 3 推薦） | ✅ |
+| `/dashboard/scenario-sim` | シナリオシミュレーション | ✅ |
+| `/dashboard/company` | 自社プロフィール入力フォーム | ✅ |
 | `/dashboard/plan-draft` | 計画書ドラフト統合生成 | ✅ |
-| `/dashboard/benchmark` | 業界ベンチマーク | ⏳ 実装予定 |
-| `/dashboard/driver-gap` | ドライバー需給ギャップ | ⏳ 実装予定 |
-| `/dashboard/playbook` | 施策プレイブック検索 | ⏳ 実装予定 |
-| `/dashboard/measure-eval` | 施策評価（Top 3） | ⏳ 実装予定 |
-| `/dashboard/scenario-sim` | シナリオシミュレーション | ⏳ 実装予定 |
-| `/dashboard/company` | 自社プロフィール入力フォーム | ⏳ 実装予定 |
 
 ## 環境変数
 

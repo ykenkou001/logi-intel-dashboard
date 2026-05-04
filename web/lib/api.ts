@@ -112,6 +112,50 @@ export async function generatePlanDraft(companyId: string): Promise<ToolResponse
   });
 }
 
+// ─── シナリオシミュレーション ────────────────────────────────
+export async function runScenarioSim(
+  companyId: string,
+  selectedMeasureIds?: string[],
+): Promise<ToolResponse> {
+  const url = new URL(`${API_BASE}/api/v1/clo/scenario-sim/${companyId}`);
+  if (selectedMeasureIds && selectedMeasureIds.length > 0) {
+    for (const id of selectedMeasureIds) {
+      url.searchParams.append("selected_measure_ids", id);
+    }
+  }
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`API ${response.status}: ${detail}`);
+  }
+  return (await response.json()) as ToolResponse;
+}
+
+// ─── 自社プロフィール: テンプレ生成 ───────────────────────────
+export async function generateCompanyTemplate(): Promise<ToolResponse> {
+  return request<ToolResponse>("/api/v1/company/template", { method: "POST" });
+}
+
+// ─── 自社プロフィール: 取込 (Excel multipart) ─────────────────
+export async function loadCompanyProfile(file: File): Promise<ToolResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${API_BASE}/api/v1/company/load`, {
+    method: "POST",
+    body: formData,
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`API ${response.status}: ${detail}`);
+  }
+  return (await response.json()) as ToolResponse;
+}
+
 // ─── マクロ概況 ─────────────────────────────────────────────
 export async function fetchMacroOverview(prefecture: string): Promise<ToolResponse> {
   return request<ToolResponse>("/api/v1/macro/overview", {
