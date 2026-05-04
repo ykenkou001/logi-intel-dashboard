@@ -96,15 +96,21 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ## 3. 現在のフェーズ
 
-**フェーズ 4.0 進行中 — 自社データ取込 + FastAPI + Next.js 初期化 + AWS 移行コード準備 ✅ 完了（2026-05-03）**
+**フェーズ 4.0 ✅ 完了（2026-05-05）— AWS PoC デプロイ済**
+
+**社内レビュー URL**: https://d1zei8qivkf3cr.cloudfront.net/
 
 **フェーズ 4.0 サブステップ**:
 - ✅ 自社データ取込（Codex 4 フル版）— Excel/CSV → CompanyProfile + JSON 永続化 + サンプル3社 ID 解決の統合
-- ✅ FastAPI REST 層 — 21 エンドポイント公開（CLO 12 / macro 1 / company 3 / files 1 / meta 4）。MCP と同じ ToolResponse 構造で JSON 返却・tests/api/ 27 件全 pass
-- ✅ Next.js 15 ダッシュボード（web/）— App Router + TypeScript + Tailwind + Recharts。型付き API クライアント・全 8 画面実装（トップ・マクロ概況・ベンチマーク・ドライバー需給・プレイブック・施策評価 Top 3・シナリオシミュレーション・自社プロフィール入力・計画書ドラフト）。`npm run build` 成功（12 ページ静的生成、First Load JS 102-106KB）
-- ✅ AWS 移行計画書（PoC 最安構成 $1〜$5/月）— Lambda Web Adapter + Lambda Function URL + CloudFront + S3 + SSM Parameter Store。詳細 → [docs/aws_migration_plan.md](docs/aws_migration_plan.md)
-- ⏳ AWS 移行コード改修中 — outputs / company_store の S3 切替・Next.js 静的化・Lambda エントリ
-- ⏳ AWS 実環境展開（健一個人アカウント・AdministratorAccess）
+- ✅ FastAPI REST 層 — 21 エンドポイント公開（CLO 12 / macro 1 / company 3 / files 1 / meta 4）。MCP と同じ ToolResponse 構造・tests/api/ 27 件全 pass
+- ✅ Next.js 15 ダッシュボード（web/）— App Router + TypeScript + Tailwind。全 8 画面実装。`npm run build` 12 ページ静的生成
+- ✅ AWS PoC デプロイ — API Gateway HTTP API + Lambda (Mangum/Python 3.12) + CloudFront + S3 + SSM Parameter Store。Terraform IaC `infra/main.tf`。月額 $1〜$3 想定
+- ✅ ストレージ層抽象化（`core/storage.py`）+ シークレット層抽象化（`core/secrets.py`）— ローカル開発互換性を保ったまま AWS 切替
+
+**残課題（次セッションで対応）**:
+- ⏳ e-Stat API キーが Lambda 上で正しく読めるか実動作確認（macro / benchmark / driver-gap）
+- ⏳ サンプル sample_chain_01 / sample_wholesale_01 で plan-draft 動作確認
+- ⏳ Codex 指摘の **PPT 視覚化強化**（施策ポートフォリオ図・効果ウォーターフォール・KPI ロードマップ）
 
 **新規 MCP ツール（フェーズ4.0 で追加）**:
 - `logi_clo_generate_template`: 自社プロフィール入力テンプレ Excel を生成
@@ -204,4 +210,4 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ---
 
-最終更新: 2026-05-04（フェーズ4.0 進行中：自社データ取込 Codex 4 フル版・FastAPI REST 層・Next.js 15 ダッシュボード全 8 画面・AWS 移行コード準備が完了。FastAPI 21 エンドポイント／tests 421 件全 pass・Next.js 12 ページ全静的生成成功・Dockerfile + docker-compose + docs/aws_migration_plan.md 整備。次セッションは AWS 実環境展開の方針確認 + Recharts による可視化強化 / プロフィール JSON 切替 UI 等の改善）
+最終更新: 2026-05-05（フェーズ4.0 完了：AWS PoC デプロイ完了。社内レビュー URL `https://d1zei8qivkf3cr.cloudfront.net/` で 8 画面 + plan-draft / 成果物 DL まで稼働確認済。tests 422 件全 pass / ruff clean。月額試算 $1〜$3。次セッションは (1) e-Stat API 実動作確認 (2) sample_chain_01 / sample_wholesale_01 での plan-draft 動作確認 (3) Codex 指摘の PPT 視覚化強化 — 詳細は HANDOFF_NEXT_SESSION.md 参照）

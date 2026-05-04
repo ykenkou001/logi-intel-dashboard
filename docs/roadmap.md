@@ -583,28 +583,45 @@ class ScenarioSimResult:
 
 > 残作業（フェーズ4.5 で対応）: plan_draft の docx 文章テンプレート化（公式記載見本集 MD 10 ファイルの取込）/ KPI 計測フレーム / CLO スタイル別重み付け
 
-### AWS 移行（PoC 最安構成・着手中 2026-05-04）
+### AWS 移行（PoC 最安構成・✅ デプロイ完了 2026-05-05）
 
-> 旧 ECS Fargate + ALB + ElastiCache 案は廃案。PoC のため Lambda + S3 + CloudFront の月額 $1〜$5 構成に切替。
-> Dockerfile / docker-compose.yml / .dockerignore は撤去済み。詳細 → [docs/aws_migration_plan.md](aws_migration_plan.md)
+> 旧 ECS Fargate + ALB + ElastiCache 案は廃案。PoC のため Lambda + S3 + CloudFront の月額 $1〜$3 構成。
+> 詳細 → [docs/aws_migration_plan.md](aws_migration_plan.md)
 
-**コード改修（着手予定）**:
-- [ ] `core/export/response.py` の outputs を S3 切替対応（LOGI_OUTPUTS_BACKEND={local|s3}）
-- [ ] `core/io/company_store.py` の自社プロフィール JSON を S3 切替対応
-- [ ] `api/routers/files.py` をプレサインド URL リダイレクトに
-- [ ] Next.js を `output: "export"` 化
-- [ ] `lambda/run.sh` + Lambda Web Adapter エントリ
-- [ ] `infra/main.tf`（S3 / Lambda / CloudFront / SSM）
+**社内レビュー用 URL**: https://d1zei8qivkf3cr.cloudfront.net/
+**API Gateway 直接 URL**: https://fgwicoog66.execute-api.ap-northeast-1.amazonaws.com
+**AWS アカウント**: 538099532416（健一個人・AdministratorAccess）
 
-**デプロイ実行（健一個人 AWS アカウント・AdministratorAccess）**:
-- [ ] SSM Parameter Store にシークレット投入（ESTAT_APP_ID 等）
-- [ ] Terraform で IaC apply
-- [ ] Lambda zip デプロイ + Next.js 静的を S3 に同期
-- [ ] CloudFront URL の動作確認（/health + /api/v1/clo/plan-draft）
+**完了済 コード改修**:
+- [x] `core/storage.py` 新規（LOGI_STORAGE_BACKEND={local|s3} 切替）
+- [x] `core/secrets.py` 新規（LOGI_SECRETS_BACKEND={env|ssm} 切替）
+- [x] `core/io/company_store.py` の自社プロフィール JSON を S3 切替対応
+- [x] `api/routers/files.py` を S3 プレサインド URL リダイレクト（302）に
+- [x] `api/lambda_handler.py` Mangum で FastAPI を Lambda 化
+- [x] Next.js を `output: "export"` で 12 ページ静的化
+- [x] `core/macro/sources.py` 切り出し（fastmcp 依存を api/ から除去 → Lambda zip サイズ削減）
+- [x] `lambda/requirements-lambda.txt` (Lambda 専用最小依存リスト・43MB zip)
+
+**完了済 デプロイ**:
+- [x] SSM Parameter Store に ESTAT_APP_ID 投入（CORP_NUMBER_APP_ID は未取得・ダミー不要・該当機能エラー表示で代替）
+- [x] Terraform で IaC apply（S3 + Lambda + API Gateway HTTP API + CloudFront + IAM）
+- [x] Lambda zip デプロイ（45MB / Python 3.12 / 1024MB / timeout 300s / /tmp 1GB）
+- [x] Next.js 静的を S3 同期（73 ファイル / 約 1MB）
+- [x] CloudFront URL 動作確認（/health 200 / /api/v1/clo/plan-draft 200 / S3 プレサインド DL 動作）
+
+**設計上の決定（トラブル対応の記録）**:
+- ❌ Lambda Function URL（NONE auth）→ 403。Block Public Access 系の挙動と推測
+- ❌ Lambda Function URL（AWS_IAM auth）+ CloudFront OAC → 403（OAC 経由の sigv4 が通らず原因特定困難）
+- ✅ 結論: API Gateway HTTP API + Lambda Proxy Integration が最も確実。コスト差は <$0.01/月なので PoC では妥協
 
 **MCP モード切替（後続・必要時）**:
 - [ ] MCP サーバーを HTTP/SSE モードに切替（FastMCP 設定変更）
 - [ ] Claude Desktop 設定をローカル起動から AWS エンドポイントに変更
+
+**残課題（次セッション）**:
+- [ ] e-Stat API キーが Lambda 上で正しく読めるか実動作確認（macro / benchmark / driver-gap）
+- [ ] サンプル sample_chain_01 / sample_wholesale_01 での plan-draft 動作確認（製造業のみ実機確認済）
+- [ ] Codex 指摘の **PPT 視覚化強化**（charts/tables/pictures = 0 状態を脱却・施策ポートフォリオ図 等）
 
 ### 自社データ取込（本格実装）
 - [ ] Pydantic `CompanyDataset` モデル（拠点・ルート・KPI 履歴）
