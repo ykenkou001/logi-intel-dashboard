@@ -101,7 +101,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 **フェーズ 4.0 サブステップ**:
 - ✅ 自社データ取込（Codex 4 フル版）— Excel/CSV → CompanyProfile + JSON 永続化 + サンプル3社 ID 解決の統合
 - ✅ FastAPI REST 層 — 21 エンドポイント公開（CLO 12 / macro 1 / company 3 / files 1 / meta 4）。MCP と同じ ToolResponse 構造で JSON 返却・tests/api/ 27 件全 pass
-- ✅ Next.js 15 初期化（web/）— App Router + TypeScript + Tailwind + Recharts。型付き API クライアント・3 画面（トップ・マクロ概況・計画書ドラフト）。`npm run build` 成功
+- ✅ Next.js 15 ダッシュボード（web/）— App Router + TypeScript + Tailwind + Recharts。型付き API クライアント・全 8 画面実装（トップ・マクロ概況・ベンチマーク・ドライバー需給・プレイブック・施策評価 Top 3・シナリオシミュレーション・自社プロフィール入力・計画書ドラフト）。`npm run build` 成功（12 ページ静的生成、First Load JS 102-106KB）
 - ✅ AWS 移行 コード準備 — Dockerfile + docker-compose + 8 Step 移行計画書（docs/aws_migration_plan.md）
 - ⏳ AWS 実環境展開（健一の承認後）— Terraform IaC・ECS Fargate・ElastiCache・Secrets Manager・S3
 
@@ -203,4 +203,4 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ---
 
-最終更新: 2026-05-03（フェーズ4.0 進行中：自社データ取込 Codex 4 フル版・FastAPI REST 層・Next.js 15 初期化・AWS 移行コード準備が完了。FastAPI 21 エンドポイント／tests 421 件全 pass・Next.js `npm run build` 成功（6 ページ静的生成、First Load JS 102KB）・Dockerfile + docker-compose + docs/aws_migration_plan.md 整備。次セッションは AWS 実環境展開の方針確認 + Next.js の残り画面（ベンチマーク・ドライバー需給・施策ライブラリ・シミュレータ・自社プロフィール入力フォーム）実装）
+最終更新: 2026-05-04（フェーズ4.0 進行中：自社データ取込 Codex 4 フル版・FastAPI REST 層・Next.js 15 ダッシュボード全 8 画面・AWS 移行コード準備が完了。FastAPI 21 エンドポイント／tests 421 件全 pass・Next.js 12 ページ全静的生成成功・Dockerfile + docker-compose + docs/aws_migration_plan.md 整備。次セッションは AWS 実環境展開の方針確認 + Recharts による可視化強化 / プロフィール JSON 切替 UI 等の改善）

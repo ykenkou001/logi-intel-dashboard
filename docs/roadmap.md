@@ -559,11 +559,16 @@ class ScenarioSimResult:
   - App Router + TypeScript + Tailwind + Recharts（依存予約）
   - Logi-Intel CLO Report のデザイントークンを Tailwind に反映（primary / accent / muted）
   - 型付き API クライアント `web/lib/api.ts`（`ToolResponse` を Pydantic と一致させる）
-  - 実装済み 3 画面: トップ / `/dashboard/macro` / `/dashboard/plan-draft`
-  - `npm run build` 成功（392 packages, 6 ページ静的生成、First Load JS 102KB）
   - 起動: `cd web && npm install && npm run dev`
-- [ ] 残りダッシュボード画面: ベンチマーク・ドライバー需給・施策ライブラリ・シミュレータ・自社プロフィール入力フォーム
-- [ ] 成果物（PPT/PDF/Excel/Word）ダウンロード UI（plan-draft 画面で着手済・全画面に展開予定）
+- [x] **ダッシュボード全 8 画面実装** — ✅ 完了（2026-05-04）
+  - `/` トップ / `/dashboard/macro` / `/dashboard/benchmark` / `/dashboard/driver-gap`
+  - `/dashboard/playbook` / `/dashboard/measure-eval` / `/dashboard/scenario-sim`
+  - `/dashboard/company`（テンプレ DL + Excel アップロード）/ `/dashboard/plan-draft`
+  - 共通化: `components/ToolResponseDisplay.tsx`（summary / files / citations / freshness / data_source 統一表示）+ `lib/constants.ts`（都道府県・JSIC プリセット等）
+  - `npm run build` 成功（12 ページ全静的生成、First Load JS 102-106KB）
+- [x] **成果物ダウンロード UI** — ✅ 完了（2026-05-04）
+  - `lib/api.ts:fileDownloadUrl` で `outputs/...` 相対パスを `/api/v1/files/...` URL に変換（Windows バックスラッシュも吸収）
+  - 全画面の `ToolResponseDisplay` が `files` 一覧をリンク表示（PPT/Word/Excel/Markdown/PDF/テンプレ Excel/プロフィール JSON）
 
 ### 自社データアップロード（Codex 4 フル版・✅ 完了 2026-05-03）
 - [x] `CompanyProfile` Pydantic モデルの拡張（積載率実績・荷待ち時間・荷役等時間・燃料消費・KPI 履歴）
