@@ -20,12 +20,14 @@ CLO 計画書発表用の標準スライド構成:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from pptx import Presentation
+from pptx.chart.data import CategoryChartData, XyChartData
 from pptx.dml.color import RGBColor
+from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION, XL_LEGEND_POSITION
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
@@ -55,12 +57,29 @@ _FOOTER_TEXT = "Logi-Intel Dashboard | CLO中長期計画書ドラフト"
 
 
 @dataclass
+class ChartSpec:
+    """python-pptx ネイティブチャート描画指定。
+
+    kind:
+        - "portfolio": 施策ポートフォリオ（散布図 / x=CO2 削減・y=コスト削減）
+        - "waterfall": コスト削減ウォーターフォール（横棒）
+        - "roadmap"  : KPI 5 ヶ年ロードマップ（折れ線）
+    data: kind ごとに必要なフィールドを保持する辞書（描画関数側で取り出し）
+    """
+
+    kind: str
+    data: dict[str, Any]
+    note: str = ""
+
+
+@dataclass
 class SlideContent:
     """1 スライド分のコンテンツ。"""
 
     title: str
-    body_lines: list[str]
+    body_lines: list[str] = field(default_factory=list)
     footnote: str = ""
+    chart: ChartSpec | None = None
 
 
 def _new_presentation() -> Any:
@@ -183,7 +202,13 @@ def _english_label(title: str, slide_no: int) -> str:
         return "REGULATORY ASSESSMENT"
     if "数値" in title or "目標" in title:
         return "TARGETS"
-    if "KPI" in title or "ポートフォリオ" in title:
+    if "ロードマップ" in title:
+        return "KPI ROADMAP"
+    if "ポートフォリオ" in title:
+        return "MEASURE PORTFOLIO"
+    if "ウォーターフォール" in title:
+        return "COST WATERFALL"
+    if "KPI" in title:
         return "KPI DASHBOARD"
     if "シミュレーション" in title or "効果" in title:
         return "IMPACT SIMULATION"
@@ -415,7 +440,9 @@ def _add_content_slide(
         color=_PRIMARY,
         bold=True,
     )
-    if executive:
+    if content.chart is not None:
+        _add_chart_body(slide, content.chart)
+    elif executive:
         _add_text(
             slide,
             "2026-2030 中長期計画 主要指標と次のアクション",
@@ -895,6 +922,244 @@ def _add_ranked_list_body(slide: Any, lines: list[str]) -> None:
             size=8,
             color=_MUTED,
         )
+
+
+# ─── ネイティブチャートスライド ────────────────────────────────────
+# 施策ポートフォリオ / コスト削減ウォーターフォール / KPI 5 ヶ年ロードマップ
+
+
+def _style_chart(chart: Any, *, primary_hex: str = _PRIMARY) -> None:
+    """凡例位置とフォントを統一する小さな整形ヘルパー。"""
+    chart.has_title = False
+    chart.has_legend = True
+    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+    chart.legend.include_in_layout = False
+    chart.legend.font.size = Pt(10)
+    chart.legend.font.name = _FONT
+
+
+def _draw_chart_intro(
+    slide: Any,
+    headline: str,
+    note: str,
+) -> None:
+    """チャート上部に1行ヘッドラインと補足説明を描く。"""
+    _add_text(
+        slide,
+        headline,
+        Inches(0.52),
+        Inches(1.7),
+        Inches(12.3),
+        Inches(0.32),
+        size=13,
+        color=_PRIMARY,
+        bold=True,
+    )
+    if note:
+        _add_text(
+            slide,
+            note,
+            Inches(0.52),
+            Inches(2.06),
+            Inches(12.3),
+            Inches(0.28),
+            size=10,
+            color=_MUTED,
+        )
+
+
+def _add_portfolio_chart_body(slide: Any, spec: ChartSpec) -> None:
+    """施策ポートフォリオ散布図（x=CO2 削減 t/年・y=コスト削減 万円/年）。
+
+    data: {"items": [{"name": str, "co2_t": float, "cost_man": float}], "headline": str}
+    """
+    items: list[dict[str, Any]] = list(spec.data.get("items", []))
+    headline = str(spec.data.get("headline", "施策ごとの効果ポートフォリオ（年間）"))
+    _draw_chart_intro(
+        slide,
+        headline,
+        spec.note or "右上ほど高効果。x: CO2 削減（トン/年） / y: コスト削減（万円/年）",
+    )
+
+    if not items:
+        _add_text(
+            slide,
+            "効果データがありません（施策評価結果を取得できませんでした）",
+            Inches(0.52),
+            Inches(3.6),
+            Inches(12.3),
+            Inches(0.4),
+            size=14,
+            color=_MUTED,
+        )
+        return
+
+    chart_data = XyChartData()
+    for item in items:
+        name = str(item.get("name", ""))[:18]  # 凡例が長すぎないように短縮
+        series = chart_data.add_series(name)
+        series.add_data_point(
+            float(item.get("co2_t", 0) or 0),
+            float(item.get("cost_man", 0) or 0),
+        )
+
+    chart_shape = slide.shapes.add_chart(
+        XL_CHART_TYPE.XY_SCATTER,
+        Inches(0.52),
+        Inches(2.4),
+        Inches(12.3),
+        Inches(4.4),
+        chart_data,
+    )
+    chart = chart_shape.chart
+    _style_chart(chart)
+    chart.category_axis.tick_labels.font.size = Pt(9)
+    chart.value_axis.tick_labels.font.size = Pt(9)
+    chart.category_axis.tick_labels.font.name = _FONT
+    chart.value_axis.tick_labels.font.name = _FONT
+
+
+def _add_waterfall_chart_body(slide: Any, spec: ChartSpec) -> None:
+    """コスト削減ウォーターフォール（横棒・基準→各施策→削減後）。
+
+    data: {
+      "baseline_man": float,       # 基準 物流コスト（万円/年）
+      "items": [{"name": str, "saving_man": float}],
+      "headline": str,
+    }
+    """
+    baseline = float(spec.data.get("baseline_man", 0) or 0)
+    items: list[dict[str, Any]] = list(spec.data.get("items", []))
+    headline = str(spec.data.get("headline", "施策別 コスト削減効果（万円/年）"))
+    total_saving = sum(float(it.get("saving_man", 0) or 0) for it in items)
+    after = max(baseline - total_saving, 0)
+
+    default_note = (
+        f"基準 {baseline:,.0f} 万円 → 削減後 {after:,.0f} 万円"
+        f"（年間 ▲{total_saving:,.0f} 万円）"
+    )
+    _draw_chart_intro(slide, headline, spec.note or default_note)
+
+    if not items:
+        _add_text(
+            slide,
+            "施策効果データがありません",
+            Inches(0.52),
+            Inches(3.6),
+            Inches(12.3),
+            Inches(0.4),
+            size=14,
+            color=_MUTED,
+        )
+        return
+
+    categories = ["現状コスト"] + [str(it.get("name", ""))[:20] for it in items] + ["削減後"]
+    values = [baseline] + [float(it.get("saving_man", 0) or 0) for it in items] + [after]
+
+    chart_data = CategoryChartData()
+    chart_data.categories = categories
+    chart_data.add_series("万円/年", values)
+
+    chart_shape = slide.shapes.add_chart(
+        XL_CHART_TYPE.BAR_CLUSTERED,
+        Inches(0.52),
+        Inches(2.4),
+        Inches(12.3),
+        Inches(4.4),
+        chart_data,
+    )
+    chart = chart_shape.chart
+    _style_chart(chart)
+    chart.has_legend = False
+    plot = chart.plots[0]
+    plot.has_data_labels = True
+    data_labels = plot.data_labels
+    data_labels.font.size = Pt(9)
+    data_labels.font.name = _FONT
+    data_labels.position = XL_LABEL_POSITION.OUTSIDE_END
+    data_labels.number_format = "#,##0"
+    chart.category_axis.tick_labels.font.size = Pt(9)
+    chart.value_axis.tick_labels.font.size = Pt(9)
+    chart.category_axis.tick_labels.font.name = _FONT
+    chart.value_axis.tick_labels.font.name = _FONT
+
+
+def _add_roadmap_chart_body(slide: Any, spec: ChartSpec) -> None:
+    """KPI 5 ヶ年ロードマップ（折れ線・年次推移）。
+
+    data: {
+      "years": [int],
+      "series": [{"name": str, "values": [float]}],
+      "headline": str,
+    }
+    """
+    years: list[int] = list(spec.data.get("years", []))
+    series_list: list[dict[str, Any]] = list(spec.data.get("series", []))
+    headline = str(spec.data.get("headline", "KPI 5 ヶ年ロードマップ"))
+
+    default_note = (
+        "業界平均値を基準（100）として相対化"
+        "（積載率は高いほど良い／CO2 原単位は低いほど良い）"
+    )
+    _draw_chart_intro(slide, headline, spec.note or default_note)
+
+    if not years or not series_list:
+        _add_text(
+            slide,
+            "KPI 推移データがありません",
+            Inches(0.52),
+            Inches(3.6),
+            Inches(12.3),
+            Inches(0.4),
+            size=14,
+            color=_MUTED,
+        )
+        return
+
+    chart_data = CategoryChartData()
+    chart_data.categories = [f"{y}年" for y in years]
+    for s in series_list:
+        chart_data.add_series(str(s.get("name", "")), [float(v) for v in s.get("values", [])])
+
+    chart_shape = slide.shapes.add_chart(
+        XL_CHART_TYPE.LINE,
+        Inches(0.52),
+        Inches(2.4),
+        Inches(12.3),
+        Inches(4.4),
+        chart_data,
+    )
+    chart = chart_shape.chart
+    _style_chart(chart)
+    chart.category_axis.tick_labels.font.size = Pt(10)
+    chart.value_axis.tick_labels.font.size = Pt(10)
+    chart.category_axis.tick_labels.font.name = _FONT
+    chart.value_axis.tick_labels.font.name = _FONT
+
+
+_CHART_DISPATCH = {
+    "portfolio": _add_portfolio_chart_body,
+    "waterfall": _add_waterfall_chart_body,
+    "roadmap": _add_roadmap_chart_body,
+}
+
+
+def _add_chart_body(slide: Any, spec: ChartSpec) -> None:
+    """ChartSpec.kind に応じて描画関数へディスパッチ。"""
+    handler = _CHART_DISPATCH.get(spec.kind)
+    if handler is None:
+        _add_text(
+            slide,
+            f"未対応の chart kind: {spec.kind}",
+            Inches(0.52),
+            Inches(3.6),
+            Inches(12.3),
+            Inches(0.4),
+            size=14,
+            color=_NEGATIVE,
+        )
+        return
+    handler(slide, spec)
 
 
 def _add_citations_slide(prs: Any, citations: list[Citation], total_slides: int) -> None:

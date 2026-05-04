@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from typing import Any
 
 from core.analytics.benchmark import (
     BenchmarkResult,
@@ -54,7 +55,7 @@ from core.export.citation import (
 from core.export.docx_form3_writer import PlanMeasure, PlanSection, write_form3
 from core.export.excel_writer import write_data_table
 from core.export.markdown_writer import write_clo_plan_draft as write_md_plan
-from core.export.ppt_writer import SlideContent
+from core.export.ppt_writer import ChartSpec, SlideContent
 from core.export.ppt_writer import write_clo_plan_draft as write_ppt_plan
 from core.export.submission_checklist import (
     SubmissionChecklist,
@@ -468,17 +469,124 @@ def _build_ppt_slides(
             title="施策効果シミュレーション",
             body_lines=build_simulation_summary(simulation).split("\n")[1:],
         ),
+    ]
+    # ─── Codex 指摘対応: 視覚化 3 枚を施策シミュレーションの直後に挿入 ───────────
+    slides.extend(_build_chart_slides(simulation, target_proposal, benchmark, profile))
+    # 認定マッチング以降は従来通り
+    slides.append(
         SlideContent(
             title="認定事業 類似マッチング",
             body_lines=build_certified_match_summary(certified_matches).split("\n")[1:],
         ),
-    ]
+    )
     if submission_checklist is not None:
         slides.append(SlideContent(
             title="提出準備チェックリスト（実務）",
             body_lines=submission_checklist.to_text_lines(),
         ))
     return slides
+
+
+def _build_chart_slides(
+    simulation: SimulationResult,
+    target_proposal: TargetProposalResult,
+    benchmark: BenchmarkResult,
+    profile: CompanyProfile,
+) -> list[SlideContent]:
+    """python-pptx ネイティブチャートで 3 枚のビジュアルを生成する。
+
+    1. 施策ポートフォリオ（散布図 / x=CO2 削減・y=コスト削減）
+    2. コスト削減ウォーターフォール（基準 → 各施策 → 削減後）
+    3. KPI 5 ヶ年ロードマップ（折れ線・業界平均=100 で相対化）
+    """
+    portfolio_items = [
+        {
+            "name": m.name,
+            "co2_t": (m.co2_reduction_kg_per_year or 0) / 1000.0,
+            "cost_man": (m.cost_saving_jpy_per_year or 0) / 1.0e4,
+        }
+        for m in simulation.measures
+    ]
+    portfolio_slide = SlideContent(
+        title="施策ポートフォリオ（効果マップ）",
+        chart=ChartSpec(
+            kind="portfolio",
+            data={
+                "items": portfolio_items,
+                "headline": "施策別の年間効果（CO2 × コスト）",
+            },
+            note="右上ほど高効果。x: CO2 削減（トン/年） / y: コスト削減（万円/年）",
+        ),
+    )
+
+    # ── ウォーターフォール ──
+    cost_ratio = benchmark.industry_avg_logistics_ratio or 0.05
+    baseline_man = (profile.annual_revenue_jpy * cost_ratio) / 1.0e4
+    waterfall_items = sorted(
+        [
+            {
+                "name": m.name,
+                "saving_man": (m.cost_saving_jpy_per_year or 0) / 1.0e4,
+            }
+            for m in simulation.measures
+            if (m.cost_saving_jpy_per_year or 0) > 0
+        ],
+        key=lambda x: x["saving_man"],
+        reverse=True,
+    )[:5]
+    waterfall_slide = SlideContent(
+        title="物流コスト削減ウォーターフォール（年間）",
+        chart=ChartSpec(
+            kind="waterfall",
+            data={
+                "baseline_man": baseline_man,
+                "items": waterfall_items,
+                "headline": "現状コスト → 主要施策 → 削減後（上位5施策）",
+            },
+            note=(
+                f"基準: 売上 × 業界平均物流コスト比率 {cost_ratio * 100:.1f}% "
+                "（出典: JILS 物流コスト実態調査）で推計"
+            ),
+        ),
+    )
+
+    # ── KPI 5 ヶ年ロードマップ ──
+    valid_targets = [
+        t for t in target_proposal.targets
+        if t.current_industry_avg is not None and t.current_industry_avg != 0
+    ]
+    if valid_targets:
+        base_year = min(t.base_year for t in valid_targets)
+        target_year = max(t.target_year for t in valid_targets)
+    else:
+        base_year, target_year = 2026, 2030
+    years = list(range(base_year, target_year + 1))
+    span = max(target_year - base_year, 1)
+
+    series: list[dict[str, Any]] = []
+    for t in valid_targets:
+        # 業界平均=100 として proposed_target を相対化
+        ratio_target = (t.proposed_target / t.current_industry_avg) * 100  # type: ignore[operator]
+        values = [100 + (ratio_target - 100) * (y - base_year) / span for y in years]
+        series.append({"name": t.name[:18], "values": values})
+
+    roadmap_slide = SlideContent(
+        title="KPI 5 ヶ年ロードマップ",
+        chart=ChartSpec(
+            kind="roadmap",
+            data={
+                "years": years,
+                "series": series,
+                "headline": f"{base_year}-{target_year} 年 KPI 推移（業界平均=100 相対）",
+            },
+            note=(
+                "業界平均値を 100 として線形補間で表示（積載率は高いほど良い／"
+                "CO2 原単位は低いほど良い）"
+            ),
+        ),
+    )
+
+    return [portfolio_slide, waterfall_slide, roadmap_slide]
 
 
 def _build_excel(
