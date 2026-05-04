@@ -52,3 +52,12 @@ outputs/
 lambda/build/
 lambda/function.zip
 lambda/requirements.txt
+
+# Terraform 実行計画（一時ファイル・機密情報含む可能性あり）
+*.tfplan
+tfplan
+
+# Playwright MCP 生成ファイル（Claude Code のブラウザ操作で自動生成）
+.playwright-mcp/
+screenshot-*.png
+screenshot-*.jpeg
