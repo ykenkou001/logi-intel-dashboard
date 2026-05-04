@@ -286,29 +286,61 @@ resource "aws_lambda_function" "api" {
   ]
 }
 
-resource "aws_lambda_function_url" "api" {
-  function_name      = aws_lambda_function.api.function_name
-  authorization_type = "AWS_IAM"
-  invoke_mode        = "BUFFERED" # 通常レスポンスサイズ制限 6MB（PPT/Excel もこれ以下）
+# Lambda Function URL は使わない（OAC + AWS_IAM 経路で動作させられず 403 から脱却できなかった）。
+# 代わりに API Gateway HTTP API を Lambda の前面に置く。
+# 旧 aws_lambda_function_url / aws_lambda_permission (function_url_*) は terraform state から
+# 削除済み。HTTP API + Proxy integration で同等の機能を実現する。
 
-  # CloudFront からの request は OAC で sigv4 署名されるため AuthType=AWS_IAM とする。
-  # NONE よりセキュア（Function URL を直接叩いても 403）かつ AWS の "Block public access for
-  # Lambda" 機能と衝突しない。CORS は CloudFront 側で吸収されるため簡素化。
-  cors {
+# ─── API Gateway HTTP API ─────────────────────────────────────
+
+resource "aws_apigatewayv2_api" "api" {
+  name          = "${local.name_prefix}-http-api"
+  protocol_type = "HTTP"
+  description   = "Logi-Intel Dashboard FastAPI front (HTTP API)"
+
+  cors_configuration {
     allow_origins = ["*"]
-    allow_methods = ["*"]
+    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"]
     allow_headers = ["*"]
     max_age       = 86400
   }
+
+  tags = local.common_tags
 }
 
-# CloudFront → Lambda Function URL の sigv4 署名を許可
-resource "aws_lambda_permission" "function_url_cloudfront" {
-  statement_id  = "AllowCloudFrontInvokeFunctionUrl"
-  action        = "lambda:InvokeFunctionUrl"
+resource "aws_apigatewayv2_integration" "lambda" {
+  api_id                 = aws_apigatewayv2_api.api.id
+  integration_type       = "AWS_PROXY"
+  integration_uri        = aws_lambda_function.api.invoke_arn
+  payload_format_version = "2.0"
+  timeout_milliseconds   = 30000
+}
+
+resource "aws_apigatewayv2_route" "default" {
+  api_id    = aws_apigatewayv2_api.api.id
+  route_key = "$default"
+  target    = "integrations/${aws_apigatewayv2_integration.lambda.id}"
+}
+
+resource "aws_apigatewayv2_stage" "default" {
+  api_id      = aws_apigatewayv2_api.api.id
+  name        = "$default"
+  auto_deploy = true
+
+  default_route_settings {
+    throttling_burst_limit = 10
+    throttling_rate_limit  = 20
+  }
+
+  tags = local.common_tags
+}
+
+resource "aws_lambda_permission" "api_gateway_invoke" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.api.function_name
-  principal     = "cloudfront.amazonaws.com"
-  source_arn    = aws_cloudfront_distribution.main.arn
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.api.execution_arn}/*/*"
 }
 
 # ─── CloudFront ───────────────────────────────────────────────────
@@ -322,14 +354,8 @@ resource "aws_cloudfront_origin_access_control" "s3" {
   signing_protocol                  = "sigv4"
 }
 
-# Lambda Function URL への OAC（CloudFront が sigv4 署名して呼ぶ）
-resource "aws_cloudfront_origin_access_control" "lambda" {
-  name                              = "${local.name_prefix}-lambda-oac"
-  description                       = "OAC for Lambda Function URL"
-  origin_access_control_origin_type = "lambda"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
+# Lambda OAC は使わない（API Gateway HTTP API 経由に変更したため）。
+# state からの削除を terraform に検知させるためにブロックそのものを削除。
 
 resource "aws_cloudfront_distribution" "main" {
   enabled             = true
@@ -346,11 +372,10 @@ resource "aws_cloudfront_distribution" "main" {
     origin_access_control_id = aws_cloudfront_origin_access_control.s3.id
   }
 
-  # Lambda Function URL オリジン（OAC 経由で sigv4 署名）
+  # API Gateway HTTP API オリジン
   origin {
-    domain_name              = replace(replace(aws_lambda_function_url.api.function_url, "https://", ""), "/", "")
-    origin_id                = "lambda-api"
-    origin_access_control_id = aws_cloudfront_origin_access_control.lambda.id
+    domain_name = "${aws_apigatewayv2_api.api.id}.execute-api.${var.region}.amazonaws.com"
+    origin_id   = "apigw-api"
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -373,7 +398,7 @@ resource "aws_cloudfront_distribution" "main" {
   # /api/* と /health は Lambda へ
   ordered_cache_behavior {
     path_pattern           = "/api/*"
-    target_origin_id       = "lambda-api"
+    target_origin_id       = "apigw-api"
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
     cached_methods         = ["GET", "HEAD"]
@@ -385,7 +410,7 @@ resource "aws_cloudfront_distribution" "main" {
 
   ordered_cache_behavior {
     path_pattern           = "/health"
-    target_origin_id       = "lambda-api"
+    target_origin_id       = "apigw-api"
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
@@ -396,7 +421,7 @@ resource "aws_cloudfront_distribution" "main" {
 
   ordered_cache_behavior {
     path_pattern           = "/docs"
-    target_origin_id       = "lambda-api"
+    target_origin_id       = "apigw-api"
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
@@ -407,7 +432,7 @@ resource "aws_cloudfront_distribution" "main" {
 
   ordered_cache_behavior {
     path_pattern           = "/openapi.json"
-    target_origin_id       = "lambda-api"
+    target_origin_id       = "apigw-api"
     viewer_protocol_policy = "redirect-to-https"
     allowed_methods        = ["GET", "HEAD", "OPTIONS"]
     cached_methods         = ["GET", "HEAD"]
@@ -470,9 +495,9 @@ output "lambda_function_name" {
   value       = aws_lambda_function.api.function_name
 }
 
-output "lambda_function_url" {
-  description = "Lambda Function URL（CloudFront を介さず直接叩く場合）"
-  value       = aws_lambda_function_url.api.function_url
+output "apigw_invoke_url" {
+  description = "API Gateway HTTP API の base URL（CloudFront を介さず直接叩く場合）"
+  value       = aws_apigatewayv2_api.api.api_endpoint
 }
 
 output "s3_bucket" {
