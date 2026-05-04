@@ -24,7 +24,10 @@ async def test_with_source_timeout_returns_result() -> None:
 async def test_with_source_timeout_returns_timeout_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(macro_tools, "_SOURCE_TIMEOUT_SECONDS", 0.01)
+    # 実体は core.macro.sources にあるため、そちらを patch する
+    from core.macro import sources as macro_sources
+
+    monkeypatch.setattr(macro_sources, "SOURCE_TIMEOUT_SECONDS", 0.01)
 
     async def slow() -> str:
         await asyncio.sleep(1)

@@ -18,16 +18,16 @@ from core.export.citation import (
     jma_warning_citation,
 )
 from core.export.response import ToolResponse
-from core.static._freshness import all_warnings
-from mcp_server.tools.macro_tools import (
-    _ESTAT_STATS_ID,
-    _PREF_CODES,
-    _fetch_corp,
-    _fetch_estat,
-    _fetch_fuel,
-    _fetch_weather,
-    _with_source_timeout,
+from core.macro.sources import (
+    ESTAT_STATS_ID,
+    PREF_CODES,
+    fetch_corp,
+    fetch_estat,
+    fetch_fuel,
+    fetch_weather,
+    with_source_timeout,
 )
+from core.static._freshness import all_warnings
 
 router = APIRouter(prefix="/api/v1/macro", tags=["macro"])
 
@@ -37,7 +37,7 @@ async def macro_overview(
     prefecture: Annotated[str, Query(description="都道府県名（例: '東京都', '大阪府'）")],
 ) -> ToolResponseModel:
     """都道府県の物流業界マクロ概況を全データソースから集約。"""
-    codes = _PREF_CODES.get(prefecture)
+    codes = PREF_CODES.get(prefecture)
     if codes is None:
         raise HTTPException(
             status_code=400,
@@ -48,10 +48,10 @@ async def macro_overview(
         )
 
     estat_result, corp_result, weather_result, fuel_result = await asyncio.gather(
-        _with_source_timeout("運輸業事業所数", _fetch_estat(codes["estat"])),
-        _with_source_timeout("運送会社法人数", _fetch_corp(codes["corp"], prefecture)),
-        _with_source_timeout("気象警報", _fetch_weather(codes["jma"])),
-        _with_source_timeout("燃料価格", _fetch_fuel()),
+        with_source_timeout("運輸業事業所数", fetch_estat(codes["estat"])),
+        with_source_timeout("運送会社法人数", fetch_corp(codes["corp"], prefecture)),
+        with_source_timeout("気象警報", fetch_weather(codes["jma"])),
+        with_source_timeout("燃料価格", fetch_fuel()),
     )
 
     summary = "\n".join([
@@ -66,7 +66,7 @@ async def macro_overview(
     response.add_citation(
         estat_citation(
             "経済センサス‐活動調査 2021 産業（大分類）別事業所数",
-            _ESTAT_STATS_ID,
+            ESTAT_STATS_ID,
         )
     )
     response.add_citation(corp_number_citation())

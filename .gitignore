@@ -47,3 +47,8 @@ core/templates/clo_plan_examples/PDF/
 
 # 出力成果物（PPT/PDF/Excel/Word/Markdown ドラフト）
 outputs/
+
+# Lambda パッケージング成果物（再現可能なため git 管理しない）
+lambda/build/
+lambda/function.zip
+lambda/requirements.txt
