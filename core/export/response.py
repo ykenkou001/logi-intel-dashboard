@@ -11,6 +11,7 @@
 """
 from __future__ import annotations
 
+import os
 import secrets
 import time
 from dataclasses import dataclass, field
@@ -19,7 +20,8 @@ from typing import Literal
 
 from core.export.citation import Citation
 
-OUTPUTS_DIR = Path("outputs")
+# 環境変数 LOGI_OUTPUTS_DIR で書出先を切替（Lambda は "/tmp/outputs" 等）
+OUTPUTS_DIR = Path(os.environ.get("LOGI_OUTPUTS_DIR", "outputs"))
 
 DataSource = Literal["sample", "estimated", "actual"]
 """データの出所:

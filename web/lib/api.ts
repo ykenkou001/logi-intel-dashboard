@@ -38,6 +38,14 @@ export interface SampleCompany {
   data_source: DataSource;
 }
 
+/**
+ * API ベース URL。
+ * - ローカル: `http://localhost:8000`
+ * - 本番（CloudFront 同居）: `""`（同一 origin の `/api/v1/...` を直接叩く）
+ *
+ * 環境変数 `NEXT_PUBLIC_API_BASE_URL` で上書き可能。
+ * 静的エクスポート時はビルド時に固定されるため、本番ビルド時は明示的に "" を渡すこと。
+ */
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 

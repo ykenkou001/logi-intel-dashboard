@@ -36,6 +36,7 @@ from core.playbook.filters import PlaybookFilter, build_search_summary, filter_p
 from core.static._freshness import all_warnings
 from core.static.efficiency_law_certified import IndustryCategory, MeasureType
 from core.static.sample_company import get_sample
+from core.storage import get_storage
 from core.validators.submission_validator import (
     build_validation_summary,
     validate_submission,
@@ -60,7 +61,28 @@ def _resolve_profile_or_404(company_id: str):  # type: ignore[no-untyped-def]
     return profile
 
 
+def _publish_files(response: ToolResponse) -> None:
+    """ToolResponse.files の各値をストレージに公開しキーで上書きする。
+
+    LocalStorage では outputs/ から見た相対パスに正規化、S3Storage では
+    アップロード後 S3 オブジェクトキーに置換される。
+    """
+    if not response.files:
+        return
+    from pathlib import Path
+
+    storage = get_storage()
+    new_files: dict[str, str] = {}
+    for key, value in response.files.items():
+        try:
+            new_files[key] = storage.publish(Path(value))
+        except Exception:
+            new_files[key] = value
+    response.files = new_files
+
+
 def _to_model(response: ToolResponse) -> ToolResponseModel:
+    _publish_files(response)
     return ToolResponseModel.model_validate(response.to_dict())
 
 

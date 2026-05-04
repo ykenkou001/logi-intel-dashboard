@@ -6,14 +6,17 @@
     - outputs/ は gitignore 対象なので機密情報の混入リスクを切り離す。
     - スキーマ進化への備えとして Pydantic v2 の model_dump_json を使い、
       未知フィールドは Pydantic 既定で無視（旧 JSON も読める）。
+    - LOGI_STORAGE_BACKEND=s3 のときは保存後に S3 にも複製、読出時は S3 から優先
+      フェッチする（Lambda 上では /tmp はリクエスト間で共有されないため）。
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from core.static.sample_company import CompanyProfile
 
-DEFAULT_PROFILES_DIR = Path("outputs/profiles")
+DEFAULT_PROFILES_DIR = Path(os.environ.get("LOGI_OUTPUTS_DIR", "outputs")) / "profiles"
 
 
 def _resolve_base_dir(base_dir: Path | None) -> Path:
@@ -50,6 +53,7 @@ def save_company_profile(
         profile.model_dump_json(indent=2),
         encoding="utf-8",
     )
+    _maybe_publish_to_s3(path)
     return path
 
 
@@ -59,15 +63,39 @@ def load_company_profile_from_json(
 ) -> CompanyProfile | None:
     """ID から保存済み CompanyProfile JSON を読み込む。
 
-    Args:
-        company_id: 企業 ID
-        base_dir: 検索ディレクトリ（None なら DEFAULT_PROFILES_DIR を実行時解決）
-
-    Returns:
-        CompanyProfile（存在しない場合は None・file not found を黙ってフォールバック）
+    LOGI_STORAGE_BACKEND=s3 のときは S3 から先にフェッチし、無ければローカル探索。
     """
+    s3_data = _maybe_fetch_from_s3(company_id)
+    if s3_data is not None:
+        return CompanyProfile.model_validate_json(s3_data)
+
     resolved = _resolve_base_dir(base_dir)
     path = _profile_path(company_id, resolved)
     if not path.is_file():
         return None
     return CompanyProfile.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def _maybe_publish_to_s3(path: Path) -> None:
+    """S3 backend 利用時はローカル書出後に複製。それ以外は no-op。"""
+    if os.environ.get("LOGI_STORAGE_BACKEND", "local").lower() != "s3":
+        return
+    import contextlib
+
+    from core.storage import get_storage
+
+    # 失敗してもローカル保存は成功している。Lambda の場合は呼出元が
+    # CloudWatch Logs で気付ける。ここでは握りつぶして UI を壊さない。
+    with contextlib.suppress(Exception):
+        get_storage().publish(path)
+
+
+def _maybe_fetch_from_s3(company_id: str) -> str | None:
+    """S3 backend 利用時は profiles/<id>.json を S3 から取得。"""
+    if os.environ.get("LOGI_STORAGE_BACKEND", "local").lower() != "s3":
+        return None
+    from core.storage import get_storage
+
+    storage = get_storage()
+    data = storage.read_bytes(f"profiles/{company_id}.json")
+    return data.decode("utf-8") if data is not None else None

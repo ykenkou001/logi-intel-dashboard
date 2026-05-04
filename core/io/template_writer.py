@@ -17,6 +17,7 @@ CLO 担当者が DL → 自社情報を記入 → Excel ローダーで取込、
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from openpyxl import Workbook
@@ -24,7 +25,11 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
 
-DEFAULT_TEMPLATE_PATH = Path("outputs/templates/sample_company_template.xlsx")
+DEFAULT_TEMPLATE_PATH = (
+    Path(os.environ.get("LOGI_OUTPUTS_DIR", "outputs"))
+    / "templates"
+    / "sample_company_template.xlsx"
+)
 
 # 視覚スタイル
 _HEADER_FONT = Font(bold=True, color="FFFFFF")

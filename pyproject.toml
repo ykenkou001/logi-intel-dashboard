@@ -16,6 +16,9 @@ dependencies = [
     "fastapi>=0.136.1",
     "uvicorn[standard]>=0.46.0",
     "python-multipart>=0.0.27",
+    "boto3>=1.43.2",
+    "boto3-stubs[s3,ssm]>=1.43.2",
+    "mangum>=0.21.0",
 ]
 
 [dependency-groups]
