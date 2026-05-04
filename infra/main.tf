@@ -291,9 +291,12 @@ resource "aws_lambda_function_url" "api" {
   authorization_type = "NONE"
   invoke_mode        = "BUFFERED" # 通常レスポンスサイズ制限 6MB（PPT/Excel もこれ以下）
 
+  # AWS Lambda Function URL の cors.allow_methods は GET/POST/PUT/DELETE/HEAD/* のみ許容。
+  # OPTIONS は preflight として Lambda 側で自動応答するため列挙不要。
+  # ここではワイルドカード "*" を使い、現実の制限は CloudFront 側 origin policy で行う。
   cors {
     allow_origins = ["*"]
-    allow_methods = ["GET", "POST", "OPTIONS"]
+    allow_methods = ["*"]
     allow_headers = ["*"]
     max_age       = 86400
   }
