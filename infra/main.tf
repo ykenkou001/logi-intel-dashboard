@@ -274,6 +274,7 @@ resource "aws_lambda_function" "api" {
       LOGI_SECRETS_BACKEND     = "ssm"
       LOGI_SSM_PREFIX          = "/${var.project}/${var.env}"
       LOGI_API_CORS_ORIGINS    = "*"
+      LOGI_CACHE_DB_PATH       = "/tmp/.logi_cache.db"
       PYTHONPATH               = "/var/task"
     }
   }

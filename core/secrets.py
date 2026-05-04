@@ -20,7 +20,6 @@ import os
 from functools import cache
 
 
-@cache
 def get_secret(name: str) -> str | None:
     """シークレット値を取得する（env or SSM）。
 
@@ -33,9 +32,11 @@ def get_secret(name: str) -> str | None:
     backend = os.environ.get("LOGI_SECRETS_BACKEND", "env").lower()
     if backend == "ssm":
         return _get_from_ssm(name)
+    # env バックエンドでは毎回 os.environ を読む（テストの monkeypatch を反映するため）
     return os.environ.get(name)
 
 
+@cache
 def _get_from_ssm(name: str) -> str | None:
     """AWS SSM Parameter Store SecureString から取得。
 

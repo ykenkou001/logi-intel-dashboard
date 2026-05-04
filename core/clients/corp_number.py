@@ -5,11 +5,11 @@
 """
 from __future__ import annotations
 
-import os
 from typing import Any, cast
 
 from core import cache
 from core.clients.base import AsyncHTTPClient, HttpClientError
+from core.secrets import get_secret
 
 _BASE_URL = "https://api.houjin-bangou.nta.go.jp/4/"
 _TTL_SECONDS = 30 * 24 * 60 * 60  # 30 日
@@ -28,7 +28,7 @@ class CorpNumberClient(AsyncHTTPClient):
 
     def __init__(self) -> None:
         super().__init__(_BASE_URL)
-        app_id = os.environ.get("CORP_NUMBER_APP_ID", "")
+        app_id = get_secret("CORP_NUMBER_APP_ID") or ""
         if not app_id:
             raise CorpNumberApiError("環境変数 CORP_NUMBER_APP_ID が設定されていません")
         self._app_id = app_id

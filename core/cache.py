@@ -10,7 +10,8 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any
 
-_DB_PATH = Path(".logi_cache.db")
+# Lambda の /var/task は read-only。LOGI_CACHE_DB_PATH で /tmp 等に上書きできるようにする。
+_DB_PATH = Path(os.environ.get("LOGI_CACHE_DB_PATH", ".logi_cache.db"))
 
 _DDL = """
 CREATE TABLE IF NOT EXISTS api_cache (

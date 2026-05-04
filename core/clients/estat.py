@@ -7,11 +7,11 @@
 """
 from __future__ import annotations
 
-import os
 from typing import Any, cast
 
 from core import cache
 from core.clients.base import AsyncHTTPClient, HttpClientError
+from core.secrets import get_secret
 
 _BASE_URL = "https://api.e-stat.go.jp/rest/3.0/app/json/"
 _TTL_SECONDS = 24 * 60 * 60  # 24 時間
@@ -40,7 +40,7 @@ class EStatClient(AsyncHTTPClient):
 
     def __init__(self) -> None:
         super().__init__(_BASE_URL)
-        app_id = os.environ.get("ESTAT_APP_ID", "")
+        app_id = get_secret("ESTAT_APP_ID") or ""
         if not app_id:
             raise EStatApiError("環境変数 ESTAT_APP_ID が設定されていません")
         self._app_id = app_id
