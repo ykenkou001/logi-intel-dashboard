@@ -235,10 +235,10 @@ def _add_header(slide: Any, title: str, slide_no: int, total_slides: int) -> Non
     _add_text(
         slide,
         f"{slide_no}/{total_slides}",
-        Inches(12.45),
+        Inches(12.13),
         Inches(0.48),
-        Inches(0.45),
-        Inches(0.18),
+        Inches(0.77),
+        Inches(0.22),
         size=9,
         color=_MUTED,
         alignment=PP_ALIGN.RIGHT,
@@ -295,6 +295,56 @@ def _split_label_value(line: str) -> tuple[str, str, str]:
     return "KPI", line.strip(), ""
 
 
+def _split_kpi_value(value: str) -> tuple[str, str]:
+    """KPI カードの value を主値と副値（注釈）に分離する。
+
+    - 全角括弧 "（" 以降は注釈として副値へ。
+    - 主値が長く " / " を含む場合は、最初の区切りで主値・副値に再分割。
+    """
+    # 全角 "（" / 半角 " (" のどちらか早く出現する方で副値を切り出す
+    full_idx = value.find("（")
+    half_idx = value.find(" (")
+    candidates = [i for i in (full_idx, half_idx) if i > 0]
+    if candidates:
+        paren_idx = min(candidates)
+        main = value[:paren_idx].strip()
+        tail = value[paren_idx:].strip()
+    else:
+        main, tail = value.strip(), ""
+    if " / " in main and len(main) > 14:
+        head, mid = main.split(" / ", 1)
+        sub = mid.strip()
+        if tail:
+            sub = f"{sub} {tail}"
+        return head.strip(), sub
+    return main, tail
+
+
+def _kpi_value_size(text: str, *, hero: bool) -> int:
+    """文字数に応じて値テキストのフォントサイズを段階決定する。
+
+    hero: True なら表紙級の大きさ（24-32pt）、False ならコンパクト（11-22pt）。
+    """
+    n = len(text)
+    if hero:
+        if n <= 6:
+            return 28
+        if n <= 10:
+            return 22
+        if n <= 14:
+            return 17
+        if n <= 20:
+            return 14
+        return 11
+    if n <= 8:
+        return 22
+    if n <= 14:
+        return 17
+    if n <= 20:
+        return 13
+    return 11
+
+
 def _add_kpi_card(
     slide: Any,
     left: float,
@@ -312,36 +362,63 @@ def _add_kpi_card(
     text = _ON_PRIMARY if dark else _PRIMARY
     _add_rect(slide, left, top, width, height, fill=fill, line=None if dark else _SURFACE)
     _add_rect(slide, left, top, Inches(0.07), height, fill=accent)
+    inner_w = width - Inches(0.5)
+
+    main_v, sub_v = _split_kpi_value(value)
+    has_unit = bool(unit)
+    has_sub = bool(sub_v)
+
+    # ── label ──（カード上部）
     _add_text(
         slide,
         label,
         left + Inches(0.25),
-        top + Inches(0.26),
-        width - Inches(0.45),
-        Inches(0.25),
+        top + Inches(0.18),
+        inner_w,
+        Inches(0.22),
         size=9,
         color=_MUTED if not dark else _SECONDARY,
         bold=True,
     )
-    value_size = 30 if len(value) <= 10 else 16
+
+    # ── value（主値）── カード中央付近、副値や unit の有無で配置を調整
+    value_size = _kpi_value_size(main_v, hero=not has_sub)
+    value_top = top + Inches(0.46)
+    value_h = height - Inches(0.5) - (Inches(0.32) if has_sub else Inches(0.0))
+    if has_unit:
+        value_h = max(value_h - Inches(0.22), Inches(0.3))
     _add_text(
         slide,
-        value,
+        main_v,
         left + Inches(0.25),
-        top + Inches(0.72),
-        width - Inches(0.48),
-        Inches(0.55),
+        value_top,
+        inner_w,
+        value_h,
         size=value_size,
         color=text,
         bold=True,
     )
+
+    # ── 副値（注釈）── 主値の下に小さく
+    if has_sub:
+        _add_text(
+            slide,
+            sub_v,
+            left + Inches(0.25),
+            top + height - Inches(0.42),
+            inner_w,
+            Inches(0.32),
+            size=9,
+            color=_MUTED if not dark else _SECONDARY,
+        )
+
     if unit:
         _add_text(
             slide,
             unit,
             left + Inches(0.25),
-            top + height - Inches(0.35),
-            width - Inches(0.48),
+            top + height - Inches(0.28),
+            inner_w,
             Inches(0.2),
             size=8,
             color=_MUTED if not dark else _SECONDARY,
