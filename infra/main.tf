@@ -288,18 +288,27 @@ resource "aws_lambda_function" "api" {
 
 resource "aws_lambda_function_url" "api" {
   function_name      = aws_lambda_function.api.function_name
-  authorization_type = "NONE"
+  authorization_type = "AWS_IAM"
   invoke_mode        = "BUFFERED" # 通常レスポンスサイズ制限 6MB（PPT/Excel もこれ以下）
 
-  # AWS Lambda Function URL の cors.allow_methods は GET/POST/PUT/DELETE/HEAD/* のみ許容。
-  # OPTIONS は preflight として Lambda 側で自動応答するため列挙不要。
-  # ここではワイルドカード "*" を使い、現実の制限は CloudFront 側 origin policy で行う。
+  # CloudFront からの request は OAC で sigv4 署名されるため AuthType=AWS_IAM とする。
+  # NONE よりセキュア（Function URL を直接叩いても 403）かつ AWS の "Block public access for
+  # Lambda" 機能と衝突しない。CORS は CloudFront 側で吸収されるため簡素化。
   cors {
     allow_origins = ["*"]
     allow_methods = ["*"]
     allow_headers = ["*"]
     max_age       = 86400
   }
+}
+
+# CloudFront → Lambda Function URL の sigv4 署名を許可
+resource "aws_lambda_permission" "function_url_cloudfront" {
+  statement_id  = "AllowCloudFrontInvokeFunctionUrl"
+  action        = "lambda:InvokeFunctionUrl"
+  function_name = aws_lambda_function.api.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = aws_cloudfront_distribution.main.arn
 }
 
 # ─── CloudFront ───────────────────────────────────────────────────
@@ -309,6 +318,15 @@ resource "aws_cloudfront_origin_access_control" "s3" {
   name                              = "${local.name_prefix}-s3-oac"
   description                       = "OAC for ${aws_s3_bucket.main.id}/web"
   origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+# Lambda Function URL への OAC（CloudFront が sigv4 署名して呼ぶ）
+resource "aws_cloudfront_origin_access_control" "lambda" {
+  name                              = "${local.name_prefix}-lambda-oac"
+  description                       = "OAC for Lambda Function URL"
+  origin_access_control_origin_type = "lambda"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
@@ -328,10 +346,11 @@ resource "aws_cloudfront_distribution" "main" {
     origin_access_control_id = aws_cloudfront_origin_access_control.s3.id
   }
 
-  # Lambda Function URL オリジン
+  # Lambda Function URL オリジン（OAC 経由で sigv4 署名）
   origin {
-    domain_name = replace(replace(aws_lambda_function_url.api.function_url, "https://", ""), "/", "")
-    origin_id   = "lambda-api"
+    domain_name              = replace(replace(aws_lambda_function_url.api.function_url, "https://", ""), "/", "")
+    origin_id                = "lambda-api"
+    origin_access_control_id = aws_cloudfront_origin_access_control.lambda.id
     custom_origin_config {
       http_port              = 80
       https_port             = 443
