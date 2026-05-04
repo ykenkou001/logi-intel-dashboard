@@ -122,20 +122,20 @@ async def list_samples() -> list[dict[str, str]]:
     return [
         {
             "company_id": "sample_mfg_01",
-            "name": "電子部品製造（サンプル）",
+            "name": "電子部品製造（架空）",
             "industry": "manufacturing",
-            "data_source": "estimated",
+            "data_source": "sample",
         },
         {
             "company_id": "sample_wholesale_01",
-            "name": "インテリア卸売（サンプル）",
+            "name": "インテリア卸売（架空）",
             "industry": "wholesale",
-            "data_source": "estimated",
+            "data_source": "sample",
         },
         {
             "company_id": "sample_chain_01",
-            "name": "コンビニ本部（サンプル）",
+            "name": "コンビニ本部（架空）",
             "industry": "chain_franchise",
-            "data_source": "estimated",
+            "data_source": "sample",
         },
     ]

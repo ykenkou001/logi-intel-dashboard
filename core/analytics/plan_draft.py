@@ -327,19 +327,33 @@ def _build_executive_summary_lines(
 
     PPT の `_add_executive_summary_body` は最初の 4 行を KPI カード（経営インパクト）、
     続く 3 行を会社プロフィールとして表示するため、財務インパクト 4 KPI を上位に置く。
+
+    数値の前提:
+    - simulation.total_* は 5 施策の **合算最大値**（重複未控除・上限）。
+    - 経営会議の「実効値」は scenario_sim の保守/標準シナリオを参照すること。
+      ここでは概算の重複控除（0.7倍）+ 保守倍率（0.6）を適用した
+      「保守シナリオ概算」を併記し、CFO 質問への先回りとする。
     """
     obligation = "あり" if eligibility.must_appoint_clo else "なし"
     cat_labels = "、".join(
         _ELIGIBILITY_CATEGORY_LABELS.get(str(c), str(c)) for c in eligibility.categories
     )
+
+    # 合算最大値 → 保守シナリオ概算（重複控除 0.7 × 保守倍率 0.6 = 0.42）
+    # scenario_sim の正確な値は logi_clo_scenario_sim を参照
+    conservative_op_profit = financial.total_operating_profit_increase_jpy * 0.42
+    conservative_co2 = simulation.total_co2_reduction_kg * 0.42
+
     lines = [
-        # 4 KPI カード（経営層が一目で判断する指標）
-        f"営業利益: +{financial.total_operating_profit_increase_jpy / 1e8:.2f}億円/年 "
-        f"(+{financial.operating_profit_margin_lift_pp_total:.2f}pp)",
-        f"CO2削減: 約 {simulation.total_co2_reduction_kg / 1000:,.0f}トン-CO2/年",
+        # 4 KPI カード（経営層が一目で判断する指標・標準シナリオ概算）
+        f"営業利益(標準): +{financial.total_operating_profit_increase_jpy * 0.7 / 1e8:.2f}"
+        f"億円/年 / 保守ケース下限 約 {conservative_op_profit / 1e8:.2f}億円/年"
+        f"（同領域施策重複0.7倍 × 保守倍率0.6）",
+        f"CO2削減(標準): 約 {simulation.total_co2_reduction_kg * 0.7 / 1000:,.0f}トン-CO2/年 "
+        f"/ 保守ケース 約 {conservative_co2 / 1000:,.0f}トン",
         f"炭素価格回避: {financial.total_carbon_avoidance_jpy_low / 1e6:.0f}〜"
         f"{financial.total_carbon_avoidance_jpy_high / 1e6:.0f}百万円/年",
-        f"5年累積NPV: 約 {financial.total_5y_npv_jpy / 1e8:.2f}億円 (割引率3%)",
+        f"5年累積NPV: 約 {financial.total_5y_npv_jpy / 1e8:.2f}億円 (割引率3%・標準シナリオ)",
         # 会社プロフィール 3 行
         f"会社名: {profile.name}（JSIC {profile.jsic_code}）",
         f"特定荷主3区分: {cat_labels} / CLO選任義務 {obligation}",
@@ -350,8 +364,8 @@ def _build_executive_summary_lines(
         "次のアクション: 様式第3別紙（添付Word）に署名・押印し、"
         "2026年10月末までに国交省へ提出",
         f"必要投資 合計: 約 {simulation.total_investment_jpy / 1e4:,.0f}万円 "
-        f"/ コスト削減（= 営業利益増）: 約 "
-        f"{simulation.total_cost_saving_jpy / 1e8:.2f}億円/年",
+        f"/ 合算最大コスト削減: 約 "
+        f"{simulation.total_cost_saving_jpy / 1e8:.2f}億円/年（重複未控除・上限値）",
     ]
     return lines
 
@@ -403,9 +417,15 @@ def _build_markdown_sections(
         ),
     ]
     if submission_checklist is not None:
+        # to_markdown_lines() の先頭は "## 提出準備チェックリスト（実務）" なので、
+        # markdown_writer 側で section heading を付与する経路では二重見出しになる。
+        # 先頭 2 行（## 見出し + 空行）を除去して本文だけ流す。
+        body_lines = submission_checklist.to_markdown_lines()
+        if body_lines and body_lines[0].startswith("## 提出準備チェックリスト"):
+            body_lines = body_lines[2:] if len(body_lines) >= 2 else body_lines[1:]
         sections.append((
             "提出準備チェックリスト（実務）",
-            "\n".join(submission_checklist.to_markdown_lines()),
+            "\n".join(body_lines),
         ))
     return sections
 
@@ -586,6 +606,7 @@ def _build_form3(
         plan_period=plan_period,
         sections=sections,
         is_chain_franchise=profile.is_chain_franchise,
+        data_source=profile.data_source,
     )
     return str(path)
 
@@ -686,7 +707,16 @@ def _propose_staged_timing(index: int, total: int) -> str:
 
 def build_plan_draft_summary(r: PlanDraftResult) -> str:
     """PlanDraftResult から CLO 向け統合サマリーテキストを生成する。"""
-    lines: list[str] = [
+    lines: list[str] = []
+    if r.data_source == "sample":
+        lines += [
+            "⚠️ 【デモ用架空企業】このドラフトは PoC 確認用のサンプル数値です。",
+            "   経営判断・国交省提出には使用できません。",
+            "   実データを取り込むには `logi_clo_generate_template` でテンプレ生成 →",
+            "   記入後 `logi_clo_load_company` で取込してください。",
+            "",
+        ]
+    lines += [
         f"=== CLO 中長期計画書ドラフト統合生成: {r.company_name} ===",
         f"計画期間: {r.plan_period}",
         "",
@@ -738,10 +768,15 @@ def build_plan_draft_summary(r: PlanDraftResult) -> str:
 def _format_data_source_note(data_source: DataSource) -> str:
     """データ出所注釈をサマリー末尾に表示する（推計値 vs 実測値の defensibility 担保）。"""
     if data_source == "actual":
-        return "※ 入力プロフィールは自社実績データ（actual）に基づく。"
+        return "※ 入力プロフィールは自社実測データ（actual）に基づく。"
+    if data_source == "sample":
+        return (
+            "※ ⚠️ 入力プロフィールはデモ用架空企業（sample）。経営判断・国交省提出不可。"
+            "実データ取込は `logi_clo_load_company` を参照。"
+        )
     return (
         "※ 入力プロフィールは業界統計からの推計値（estimated）。"
-        "提出前には自社実測データへの差し替えを推奨（フェーズ4.0 で実データ取込予定）。"
+        "提出前には自社実測データへの差し替えを推奨。"
     )
 
 

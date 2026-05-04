@@ -5,7 +5,13 @@
  * バックエンドのレスポンス変更時はこちらも追従させること。
  */
 
-export type DataSource = "estimated" | "actual";
+/**
+ * データの出所:
+ * - "sample"   : デモ用架空企業のデータ（経営判断には使わない）
+ * - "estimated": ユーザー入力 + 業界統計推計（一部実測なし）
+ * - "actual"   : 自社実測データに基づく
+ */
+export type DataSource = "sample" | "estimated" | "actual";
 
 export interface Citation {
   label: string;

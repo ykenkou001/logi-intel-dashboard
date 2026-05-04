@@ -133,12 +133,23 @@ export default function PlanDraftPage() {
             </ul>
           </details>
 
-          <div className="text-xs text-muted">
-            データ出所:{" "}
-            <span className="font-bold">
-              {result.data_source === "actual" ? "実測データ" : "業界統計推計"}
-            </span>
-          </div>
+          {result.data_source === "sample" ? (
+            <div className="bg-accent/10 border border-accent text-accent rounded p-3 text-xs">
+              <strong>⚠️ デモ用架空企業データ</strong> — 経営判断には使用不可。
+              実データを取り込むには{" "}
+              <a href="/dashboard/company" className="underline">
+                自社プロフィール入力
+              </a>{" "}
+              から Excel テンプレートを記入・アップロードしてください。
+            </div>
+          ) : (
+            <div className="text-xs text-muted">
+              データ出所:{" "}
+              <span className="font-bold">
+                {result.data_source === "actual" ? "自社実測データ" : "業界統計推計"}
+              </span>
+            </div>
+          )}
         </div>
       ) : null}
     </div>

@@ -43,19 +43,27 @@ def test_classify_unknown_returns_none() -> None:
 # ---- _format_data_source_note ----
 
 
-def test_data_source_note_estimated_mentions_phase4() -> None:
-    """推計値の場合はフェーズ4 での実データ取込予定を明示する。"""
+def test_data_source_note_estimated_mentions_replacement() -> None:
+    """推計値の場合は実測値への差し替え推奨を明示する。"""
     note = _format_data_source_note("estimated")
     assert "estimated" in note
     assert "推計値" in note
-    assert "フェーズ4" in note
+    assert "実測" in note
 
 
 def test_data_source_note_actual_indicates_actual() -> None:
     """実測値の場合は actual ラベルが立つ。"""
     note = _format_data_source_note("actual")
     assert "actual" in note
-    assert "自社実績" in note
+    assert "自社実測" in note
+
+
+def test_data_source_note_sample_warns_demo_only() -> None:
+    """sample（架空企業）の場合は経営判断・提出不可の警告が出る。"""
+    note = _format_data_source_note("sample")
+    assert "sample" in note
+    assert "架空" in note
+    assert "提出" in note
 
 
 def test_classify_default_is_non_chain() -> None:

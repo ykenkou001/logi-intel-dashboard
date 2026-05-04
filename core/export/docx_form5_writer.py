@@ -60,6 +60,8 @@ class Form5Sections:
     progress_rows: list[ProgressRow] = field(default_factory=list)
 
     submission_checklist: SubmissionChecklist | None = None
+    data_source: str = "estimated"
+    """"sample" / "estimated" / "actual"。'sample' の場合は冒頭にドラフト警告を出力。"""
 
 
 _CATEGORY_LABELS: dict[str, str] = {
@@ -82,7 +84,14 @@ def write_form5(sections: Form5Sections) -> Path:
         extension="docx",
     )
 
-    doc = Document(str(_OFFICIAL_TEMPLATE)) if _OFFICIAL_TEMPLATE.exists() else Document()
+    use_official_template = _OFFICIAL_TEMPLATE.exists()
+    doc = Document(str(_OFFICIAL_TEMPLATE)) if use_official_template else Document()
+
+    _add_form5_draft_notice(
+        doc,
+        data_source=sections.data_source,
+        use_official_template=use_official_template,
+    )
 
     is_chain = "chain_franchise" in sections.eligibility_categories
     title_text = (
@@ -105,6 +114,33 @@ def write_form5(sections: Form5Sections) -> Path:
 
     doc.save(str(path))
     return path
+
+
+def _add_form5_draft_notice(
+    doc: Any,
+    *,
+    data_source: str,
+    use_official_template: bool,
+) -> None:
+    """様式第5 にドラフト警告を冒頭で出す（sample データ or 公式テンプレ未取得時）。"""
+    notice_lines: list[str] = []
+    if data_source == "sample":
+        notice_lines.append(
+            "⚠️ 本書類はデモ用架空企業データに基づく PoC 用ドラフトです。"
+            "経営判断・国交省提出には使用できません。"
+        )
+    if not use_official_template:
+        notice_lines.append(
+            "※ 国交省公式 Word テンプレート（様式第5）が未取得のため、"
+            "構造のみ準拠した参考ドラフトを生成しています。"
+            "提出時は MLIT ポータルから公式 Word を取得して整形してください。"
+        )
+    if not notice_lines:
+        return
+    para = doc.add_paragraph()
+    run = para.add_run("\n".join(notice_lines))
+    run.bold = True
+    run.font.size = Pt(10)
 
 
 def _write_section_basic_info(doc: Any, s: Form5Sections) -> None:

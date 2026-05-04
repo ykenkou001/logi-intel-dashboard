@@ -42,6 +42,15 @@ async def download(file_path: str) -> FileResponse:
             detail="outputs/ 配下のファイルのみダウンロード可能",
         ) from exc
 
+    # Office アプリのロックファイル（"~$..." / ".~lock..."）は配信しない。
+    # Word/Excel が開かれている間に生成され、成果物としては不要かつ Open XML パーサが
+    # 壊れた MIME を返すため、明示的に 404 にする。
+    if candidate.name.startswith(("~$", ".~lock")):
+        raise HTTPException(
+            status_code=404,
+            detail="Office ロックファイルはダウンロード対象外",
+        )
+
     if not candidate.is_file():
         raise HTTPException(status_code=404, detail=f"ファイルが見つかりません: {file_path}")
 

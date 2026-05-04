@@ -88,12 +88,34 @@ export function ToolResponseDisplay({
         </details>
       ) : null}
 
-      <div className="text-xs text-muted">
-        データ出所:{" "}
-        <span className="font-bold">
-          {response.data_source === "actual" ? "実測データ" : "業界統計推計"}
-        </span>
+      <DataSourceBadge dataSource={response.data_source} />
+    </div>
+  );
+}
+
+function DataSourceBadge({ dataSource }: { dataSource: ToolResponse["data_source"] }) {
+  if (dataSource === "sample") {
+    return (
+      <div className="bg-accent/10 border border-accent text-accent rounded p-3 text-xs">
+        <strong>⚠️ デモ用架空企業データ</strong> — 経営判断には使用不可。
+        実データを取り込むには{" "}
+        <a href="/dashboard/company" className="underline">
+          自社プロフィール入力
+        </a>{" "}
+        から Excel テンプレートを記入・アップロードしてください。
       </div>
+    );
+  }
+  if (dataSource === "actual") {
+    return (
+      <div className="text-xs text-muted">
+        データ出所: <span className="font-bold text-primary">自社実測データ</span>
+      </div>
+    );
+  }
+  return (
+    <div className="text-xs text-muted">
+      データ出所: <span className="font-bold">業界統計推計</span>
     </div>
   );
 }

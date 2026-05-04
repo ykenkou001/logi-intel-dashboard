@@ -134,6 +134,7 @@ async def generate_periodic_report(
         handling_time_rows=handling_rows,
         progress_rows=progress_rows,
         submission_checklist=checklist,
+        data_source=profile.data_source,
     )
 
     docx_path = write_form5(sections)
@@ -247,7 +248,14 @@ def _build_citations(plan: PlanDraftResult) -> list[Citation]:
 
 def build_periodic_report_summary(r: PeriodicReportResult) -> str:
     """PeriodicReportResult から CLO 向けサマリーテキストを生成する。"""
-    lines: list[str] = [
+    lines: list[str] = []
+    if r.data_source == "sample":
+        lines += [
+            "⚠️ 【デモ用架空企業】このドラフトは PoC 確認用のサンプル数値です。",
+            "   経営判断・国交省提出には使用できません。",
+            "",
+        ]
+    lines += [
         f"=== 定期報告書（様式第5）ドラフト: {r.company_name} ===",
         f"報告対象期間: {r.report_period}",
         f"区分: {' / '.join(r.eligibility_categories) or '該当なし'}",
@@ -324,6 +332,11 @@ def _format_data_source_note(data_source: DataSource) -> str:
     """データ出所注釈をサマリー末尾に表示する。"""
     if data_source == "actual":
         return "※ 入力プロフィールは自社実績データ（actual）に基づく。"
+    if data_source == "sample":
+        return (
+            "※ ⚠️ 入力プロフィールはデモ用架空企業（sample）。"
+            "経営判断・国交省提出には使用不可。"
+        )
     return (
         "※ 入力プロフィールは業界統計からの推計値（estimated）。"
         "提出前には自社実測データへの差し替えを推奨。"

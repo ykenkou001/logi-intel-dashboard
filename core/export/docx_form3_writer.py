@@ -54,6 +54,7 @@ def write_form3(
     plan_period: str,
     sections: list[PlanSection],
     is_chain_franchise: bool = False,
+    data_source: str = "estimated",
 ) -> Path:
     """様式第3別紙（中長期計画書）の Word を生成する。
 
@@ -66,6 +67,7 @@ def write_form3(
         plan_period: 計画期間
         sections: 必須3項目のセクションリスト
         is_chain_franchise: 連鎖化事業者か（True なら様式第3「第5条関係」として扱う）
+        data_source: "sample" / "estimated" / "actual"。'sample' の場合はトップに警告枠を出力
 
     Returns:
         生成ファイルのパス
@@ -77,7 +79,11 @@ def write_form3(
         extension="docx",
     )
 
-    doc = Document(str(_OFFICIAL_TEMPLATE)) if _OFFICIAL_TEMPLATE.exists() else Document()
+    use_official_template = _OFFICIAL_TEMPLATE.exists()
+    doc = Document(str(_OFFICIAL_TEMPLATE)) if use_official_template else Document()
+
+    # ドラフト注記（公式テンプレ未取得時 or sample データ時に必ず先頭に出す）
+    _add_draft_notice(doc, data_source=data_source, use_official_template=use_official_template)
 
     # タイトル
     title_text = (
@@ -131,3 +137,43 @@ def write_form3(
 
     doc.save(str(path))
     return path
+
+
+def _add_draft_notice(
+    doc: Document,
+    *,
+    data_source: str,
+    use_official_template: bool,
+) -> None:
+    """ドラフト注記をドキュメントの先頭に挿入する。
+
+    出すべき条件:
+    - 公式 Word テンプレ `core/templates/clo_plan_form3.docx` が未配置
+    - 入力データが sample（架空企業）
+
+    どちらかに該当する場合、提出可否を誤認させないため "ドラフト" バナーを出す。
+    """
+    notice_lines: list[str] = []
+    if data_source == "sample":
+        notice_lines.append(
+            "⚠️ 本書類はデモ用架空企業データに基づく PoC 用ドラフトです。"
+            "経営判断・国交省提出には使用できません。"
+        )
+    if not use_official_template:
+        notice_lines.append(
+            "※ 国交省公式 Word テンプレート（様式第3別紙）が未取得のため、"
+            "構造のみ準拠した参考ドラフトを生成しています。"
+            "提出時は MLIT ポータルから公式 Word を取得して整形してください。"
+        )
+    if data_source == "estimated":
+        notice_lines.append(
+            "※ 入力プロフィールは業界統計推計を含むため、"
+            "提出前に自社実測データで上書きしてください。"
+        )
+    if not notice_lines:
+        return
+
+    para = doc.add_paragraph()
+    run = para.add_run("\n".join(notice_lines))
+    run.bold = True
+    run.font.size = Pt(10)

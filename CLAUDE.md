@@ -102,8 +102,9 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 - ✅ 自社データ取込（Codex 4 フル版）— Excel/CSV → CompanyProfile + JSON 永続化 + サンプル3社 ID 解決の統合
 - ✅ FastAPI REST 層 — 21 エンドポイント公開（CLO 12 / macro 1 / company 3 / files 1 / meta 4）。MCP と同じ ToolResponse 構造で JSON 返却・tests/api/ 27 件全 pass
 - ✅ Next.js 15 ダッシュボード（web/）— App Router + TypeScript + Tailwind + Recharts。型付き API クライアント・全 8 画面実装（トップ・マクロ概況・ベンチマーク・ドライバー需給・プレイブック・施策評価 Top 3・シナリオシミュレーション・自社プロフィール入力・計画書ドラフト）。`npm run build` 成功（12 ページ静的生成、First Load JS 102-106KB）
-- ✅ AWS 移行 コード準備 — Dockerfile + docker-compose + 8 Step 移行計画書（docs/aws_migration_plan.md）
-- ⏳ AWS 実環境展開（健一の承認後）— Terraform IaC・ECS Fargate・ElastiCache・Secrets Manager・S3
+- ✅ AWS 移行計画書（PoC 最安構成 $1〜$5/月）— Lambda Web Adapter + Lambda Function URL + CloudFront + S3 + SSM Parameter Store。詳細 → [docs/aws_migration_plan.md](docs/aws_migration_plan.md)
+- ⏳ AWS 移行コード改修中 — outputs / company_store の S3 切替・Next.js 静的化・Lambda エントリ
+- ⏳ AWS 実環境展開（健一個人アカウント・AdministratorAccess）
 
 **新規 MCP ツール（フェーズ4.0 で追加）**:
 - `logi_clo_generate_template`: 自社プロフィール入力テンプレ Excel を生成

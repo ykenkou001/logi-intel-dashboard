@@ -24,7 +24,7 @@ def _assert_tool_response_shape(body: dict[str, object]) -> None:
     assert "files" in body and isinstance(body["files"], dict)
     assert "citations" in body and isinstance(body["citations"], list)
     assert "freshness_warnings" in body and isinstance(body["freshness_warnings"], list)
-    assert body["data_source"] in ("estimated", "actual")
+    assert body["data_source"] in ("sample", "estimated", "actual")
 
 
 def test_eligibility_returns_structured_response() -> None:
@@ -98,7 +98,7 @@ def test_measure_eval_for_sample_returns_top3() -> None:
     assert resp.status_code == 200
     body = resp.json()
     _assert_tool_response_shape(body)
-    assert body["data_source"] == "estimated"
+    assert body["data_source"] == "sample"
 
 
 def test_measure_eval_unknown_company_returns_404() -> None:

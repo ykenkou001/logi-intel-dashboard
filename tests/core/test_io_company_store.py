@@ -124,6 +124,6 @@ def test_get_sample_falls_back_to_built_in(
 
     resolved = get_sample(SAMPLE_MANUFACTURING.company_id)
     assert resolved is not None
-    # サンプル本来の値が返る
+    # サンプル本来の値が返る（架空企業のため data_source="sample"）
     assert resolved.name == SAMPLE_MANUFACTURING.name
-    assert resolved.data_source == "estimated"
+    assert resolved.data_source == "sample"

@@ -583,27 +583,28 @@ class ScenarioSimResult:
 
 > 残作業（フェーズ4.5 で対応）: plan_draft の docx 文章テンプレート化（公式記載見本集 MD 10 ファイルの取込）/ KPI 計測フレーム / CLO スタイル別重み付け
 
-### AWS 移行（コード準備フェーズ ✅ 着手済 2026-05-03）
+### AWS 移行（PoC 最安構成・着手中 2026-05-04）
 
-**準備済み**:
-- [x] `Dockerfile`（マルチステージ・非 root・healthcheck 統合）
-- [x] `.dockerignore`
-- [x] `docker-compose.yml`（API + Redis ローカル統合検証用）
-- [x] `docs/aws_migration_plan.md`（8 Step の移行手順書・「やらないこと」リスト・推定運用コスト含む）
+> 旧 ECS Fargate + ALB + ElastiCache 案は廃案。PoC のため Lambda + S3 + CloudFront の月額 $1〜$5 構成に切替。
+> Dockerfile / docker-compose.yml / .dockerignore は撤去済み。詳細 → [docs/aws_migration_plan.md](aws_migration_plan.md)
 
-**実環境への展開（健一の承認後）**:
-- [ ] MCP サーバーを stdio モード → HTTP/SSE モードに切り替え（FastMCP 設定変更）
-- [ ] `core/cache.py` を SQLite → Redis（ElastiCache）に差し替え（Backend 抽象化が前提）
-- [ ] API キーを AWS Secrets Manager に移行
-- [ ] 自社プロフィール JSON を S3 化
-- [ ] Terraform で IaC 整備（VPC / ECS / ALB / ElastiCache / S3 / Secrets Manager / Cognito）
-- [ ] ECS Fargate にデプロイ
-- [ ] Next.js を CloudFront + S3 静的エクスポート
+**コード改修（着手予定）**:
+- [ ] `core/export/response.py` の outputs を S3 切替対応（LOGI_OUTPUTS_BACKEND={local|s3}）
+- [ ] `core/io/company_store.py` の自社プロフィール JSON を S3 切替対応
+- [ ] `api/routers/files.py` をプレサインド URL リダイレクトに
+- [ ] Next.js を `output: "export"` 化
+- [ ] `lambda/run.sh` + Lambda Web Adapter エントリ
+- [ ] `infra/main.tf`（S3 / Lambda / CloudFront / SSM）
+
+**デプロイ実行（健一個人 AWS アカウント・AdministratorAccess）**:
+- [ ] SSM Parameter Store にシークレット投入（ESTAT_APP_ID 等）
+- [ ] Terraform で IaC apply
+- [ ] Lambda zip デプロイ + Next.js 静的を S3 に同期
+- [ ] CloudFront URL の動作確認（/health + /api/v1/clo/plan-draft）
+
+**MCP モード切替（後続・必要時）**:
+- [ ] MCP サーバーを HTTP/SSE モードに切替（FastMCP 設定変更）
 - [ ] Claude Desktop 設定をローカル起動から AWS エンドポイントに変更
-- [ ] VPN 内からの接続確認
-
-詳細手順 → [docs/aws_migration_plan.md](aws_migration_plan.md)
-詳細設計 → [docs/architecture.md](architecture.md)（AWS 移行計画セクション）
 
 ### 自社データ取込（本格実装）
 - [ ] Pydantic `CompanyDataset` モデル（拠点・ルート・KPI 履歴）

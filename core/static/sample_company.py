@@ -22,7 +22,12 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 SiteType = Literal["factory", "dc", "store", "office", "warehouse"]
-DataSource = Literal["estimated", "actual"]
+DataSource = Literal["sample", "estimated", "actual"]
+"""データの出所:
+- "sample"   : デモ用架空企業のデータ（経営判断には使わない）
+- "estimated": ユーザー入力 + 業界統計推計（一部実測なし）
+- "actual"   : 自社実測データに基づく
+"""
 
 
 class CompanySite(BaseModel):
@@ -110,9 +115,9 @@ class CompanyProfile(BaseModel):
     data_source: DataSource = Field(
         "estimated",
         description=(
-            "プロフィール数値の出所。'estimated' は業界統計からの推計値（サンプル3社・"
-            "フェーズ4 までの暫定）、'actual' は自社実績データ（CSV/Excel 取込）。"
-            "経営会議での defensibility のため、出力サマリーで明示する。"
+            "プロフィール数値の出所。'sample' はデモ用架空企業（PoC のみ）、"
+            "'estimated' はユーザー入力 + 業界統計推計、'actual' は自社実測データ。"
+            "経営会議での defensibility のため、出力サマリー先頭で明示する。"
         ),
     )
 
@@ -179,7 +184,7 @@ SAMPLE_MANUFACTURING = CompanyProfile(
     clo_name="専務執行役員 田中 雄一",
     plan_period_start_fy=2026,
     plan_period_end_fy=2030,
-    data_source="estimated",
+    data_source="sample",
     load_factor_actual_pct=None,
     annual_fuel_liters=None,
     annual_co2_emissions_kg=None,
@@ -258,7 +263,7 @@ SAMPLE_WHOLESALE = CompanyProfile(
     clo_name="専務執行役員 佐藤 一郎",
     plan_period_start_fy=2026,
     plan_period_end_fy=2030,
-    data_source="estimated",
+    data_source="sample",
     load_factor_actual_pct=None,
     annual_fuel_liters=None,
     annual_co2_emissions_kg=None,
@@ -330,7 +335,7 @@ SAMPLE_CHAIN = CompanyProfile(
     clo_name="専務執行役員 佐藤 一郎",
     plan_period_start_fy=2026,
     plan_period_end_fy=2030,
-    data_source="estimated",
+    data_source="sample",
     load_factor_actual_pct=None,
     annual_fuel_liters=None,
     annual_co2_emissions_kg=None,

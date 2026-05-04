@@ -128,9 +128,9 @@ async def test_summary_includes_compliance_and_checklist() -> None:
 
 @pytest.mark.asyncio
 async def test_data_source_propagates_from_profile() -> None:
-    """data_source は CompanyProfile から伝搬される（サンプルは estimated）。"""
+    """data_source は CompanyProfile から伝搬される（サンプル3社は 'sample'）。"""
     result = await generate_periodic_report("sample_mfg_01")
-    assert result.data_source == "estimated"
+    assert result.data_source == "sample"
 
 
 @pytest.mark.asyncio

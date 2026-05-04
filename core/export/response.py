@@ -21,7 +21,12 @@ from core.export.citation import Citation
 
 OUTPUTS_DIR = Path("outputs")
 
-DataSource = Literal["estimated", "actual"]
+DataSource = Literal["sample", "estimated", "actual"]
+"""データの出所:
+- "sample"   : デモ用架空企業のデータ（経営判断には使わない）
+- "estimated": ユーザー入力 + 業界統計推計（一部実測なし）
+- "actual"   : 自社実測データに基づく
+"""
 
 
 @dataclass

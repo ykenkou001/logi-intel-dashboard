@@ -165,13 +165,13 @@ def test_kpi_history_entry_basic() -> None:
 
 
 def test_optional_actual_fields_default_none() -> None:
-    """サンプル3社は実測値オプションフィールドが None（推計値だから）。"""
+    """サンプル3社は実測値オプションフィールドが None かつ data_source='sample'。"""
     for sample in (SAMPLE_MANUFACTURING, SAMPLE_WHOLESALE, SAMPLE_CHAIN):
         assert sample.load_factor_actual_pct is None
         assert sample.annual_fuel_liters is None
         assert sample.annual_co2_emissions_kg is None
-        # data_source は "estimated"
-        assert sample.data_source == "estimated"
+        # data_source は架空企業データのため "sample"（経営判断不可の旨を明示）
+        assert sample.data_source == "sample"
 
 
 def test_company_profile_with_actual_fields() -> None:

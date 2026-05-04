@@ -36,7 +36,12 @@ class ToolResponseModel(BaseModel):
         default_factory=list,
         description="静的データの鮮度警告メッセージ",
     )
-    data_source: Literal["estimated", "actual"] = Field(
+    data_source: Literal["sample", "estimated", "actual"] = Field(
         default="estimated",
-        description="入力データの出所。'estimated' は業界統計推計、'actual' は自社実績データ",
+        description=(
+            "入力データの出所。"
+            "'sample' はデモ用架空企業（PoC のみ）、"
+            "'estimated' はユーザー入力 + 業界統計推計、"
+            "'actual' は自社実測データ。"
+        ),
     )
