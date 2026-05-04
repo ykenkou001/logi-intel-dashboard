@@ -49,19 +49,32 @@ export interface SampleCompany {
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
+function buildUrl(
+  path: string,
+  searchParams?: Record<string, string | number | boolean | undefined>,
+): string {
+  // API_BASE が "" のとき new URL("/path") は invalid URL となるため、
+  // 文字列結合 + URLSearchParams で組み立てる（同一 origin / 絶対 URL 両対応）。
+  let query = "";
+  if (searchParams) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(searchParams)) {
+      if (value !== undefined) {
+        params.append(key, String(value));
+      }
+    }
+    const s = params.toString();
+    if (s) query = `?${s}`;
+  }
+  return `${API_BASE}${path}${query}`;
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit & { searchParams?: Record<string, string | number | boolean | undefined> },
 ): Promise<T> {
-  const url = new URL(`${API_BASE}${path}`);
-  if (init?.searchParams) {
-    for (const [key, value] of Object.entries(init.searchParams)) {
-      if (value !== undefined) {
-        url.searchParams.set(key, String(value));
-      }
-    }
-  }
-  const response = await fetch(url.toString(), {
+  const url = buildUrl(path, init?.searchParams);
+  const response = await fetch(url, {
     method: init?.method ?? "GET",
     headers: {
       "Content-Type": "application/json",
@@ -131,13 +144,16 @@ export async function runScenarioSim(
   companyId: string,
   selectedMeasureIds?: string[],
 ): Promise<ToolResponse> {
-  const url = new URL(`${API_BASE}/api/v1/clo/scenario-sim/${companyId}`);
+  // 配列クエリパラメータは buildUrl に渡しにくいので個別組立
+  const params = new URLSearchParams();
   if (selectedMeasureIds && selectedMeasureIds.length > 0) {
     for (const id of selectedMeasureIds) {
-      url.searchParams.append("selected_measure_ids", id);
+      params.append("selected_measure_ids", id);
     }
   }
-  const response = await fetch(url.toString(), {
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const url = `${API_BASE}/api/v1/clo/scenario-sim/${companyId}${query}`;
+  const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     cache: "no-store",
