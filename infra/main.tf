@@ -357,6 +357,35 @@ resource "aws_cloudfront_origin_access_control" "s3" {
 # Lambda OAC は使わない（API Gateway HTTP API 経由に変更したため）。
 # state からの削除を terraform に検知させるためにブロックそのものを削除。
 
+# CloudFront Function: Next.js 静的エクスポート向け URL 書換
+# /dashboard/macro/  → /dashboard/macro/index.html
+# /dashboard/macro   → /dashboard/macro/index.html
+# S3 はディレクトリ概念を持たないため、index.html を明示的に補完しないと
+# AccessDenied が返る。
+resource "aws_cloudfront_function" "rewrite_index" {
+  name    = "${local.name_prefix}-rewrite-index"
+  runtime = "cloudfront-js-2.0"
+  comment = "Rewrite directory paths to index.html for Next.js static export"
+  publish = true
+  code    = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      var uri = request.uri;
+
+      // 末尾スラッシュ: /path/ → /path/index.html
+      if (uri.endsWith('/')) {
+        request.uri = uri + 'index.html';
+      }
+      // 拡張子なし末尾スラッシュなし: /path → /path/index.html
+      else if (!uri.includes('.')) {
+        request.uri = uri + '/index.html';
+      }
+
+      return request;
+    }
+  EOT
+}
+
 resource "aws_cloudfront_distribution" "main" {
   enabled             = true
   is_ipv6_enabled     = true
@@ -391,8 +420,13 @@ resource "aws_cloudfront_distribution" "main" {
     cached_methods         = ["GET", "HEAD"]
     compress               = true
 
-    cache_policy_id          = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized
+    cache_policy_id            = "658327ea-f89d-4fab-a63d-7e88639e58f6" # CachingOptimized
     response_headers_policy_id = "67f7725c-6f97-4210-82d7-5512b31e9d03" # SecurityHeadersPolicy
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.rewrite_index.arn
+    }
   }
 
   # /api/* と /health は Lambda へ
