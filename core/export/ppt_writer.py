@@ -144,11 +144,12 @@ def _add_text(
     bold: bool = False,
     italic: bool = False,
     alignment: PP_ALIGN | None = None,
+    wrap: bool = True,
 ) -> Any:
     box = slide.shapes.add_textbox(left, top, width, height)
     tf = box.text_frame
     tf.clear()
-    tf.word_wrap = True
+    tf.word_wrap = wrap
     p = tf.paragraphs[0]
     p.text = text
     _style_textbox(
@@ -235,13 +236,14 @@ def _add_header(slide: Any, title: str, slide_no: int, total_slides: int) -> Non
     _add_text(
         slide,
         f"{slide_no}/{total_slides}",
-        Inches(12.13),
+        Inches(11.43),
         Inches(0.48),
-        Inches(0.77),
-        Inches(0.22),
+        Inches(1.4),
+        Inches(0.24),
         size=9,
         color=_MUTED,
         alignment=PP_ALIGN.RIGHT,
+        wrap=False,
     )
 
 
@@ -897,16 +899,16 @@ def _add_data_table_body(slide: Any, lines: list[str]) -> None:
         _add_kpi_card(
             slide,
             Inches(0.52 + 4.08 * i),
-            Inches(2.16),
+            Inches(2.10),
             Inches(3.85),
-            Inches(1.0),
+            Inches(1.40),
             label=label,
             value=value,
             unit=unit,
             accent=(_POSITIVE, _ACCENT, _PRIMARY)[i],
         )
 
-    _add_rect(slide, Inches(0.52), Inches(3.55), Inches(12.3), Inches(0.45), fill=_PRIMARY)
+    _add_rect(slide, Inches(0.52), Inches(3.78), Inches(12.3), Inches(0.42), fill=_PRIMARY)
     headers = ["#", "施策", "CO2削減", "コスト削減", "投資", "回収"]
     xs = [0.62, 1.18, 6.45, 8.55, 10.25, 12.05]
     for x, header in zip(xs, headers, strict=True):
@@ -914,9 +916,9 @@ def _add_data_table_body(slide: Any, lines: list[str]) -> None:
             slide,
             header,
             Inches(x),
-            Inches(3.7),
+            Inches(3.91),
             Inches(0.9),
-            Inches(0.12),
+            Inches(0.16),
             size=8,
             color=_ACCENT,
             bold=True,
@@ -927,7 +929,7 @@ def _add_data_table_body(slide: Any, lines: list[str]) -> None:
         "共同配送 1,368 3.0億円 500 0.0年",
     ]
     for i, line in enumerate(table_lines[:5]):
-        y = Inches(4.0 + 0.5 * i)
+        y = Inches(4.20 + 0.5 * i)
         if i % 2 == 1:
             _add_rect(slide, Inches(0.52), y, Inches(12.3), Inches(0.45), fill=_SURFACE)
         _add_text(
