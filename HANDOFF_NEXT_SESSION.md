@@ -1,5 +1,40 @@
 # 次セッションへの引継ぎ（2026-05-05 時点）
 
+## ⚠️ 0. 最初に確認 — apply 待ちの差分があるか
+
+直前セッション末で **CloudFront Function（directory URL → index.html 書換）** を追加したが、
+健一の側で `terraform apply` が実行されたかどうか確認すること。
+
+```powershell
+cd c:\Users\ykenk\repos\logi-intel-dashboard\infra
+terraform plan -var="env=dev"
+# "No changes" ならapply済。差分が出たら未apply。
+```
+
+未 apply の場合は次を実行：
+```powershell
+terraform apply plan.tfplan
+# 5〜10 分（CloudFront 配信反映）
+```
+
+apply 後の動作確認:
+```powershell
+curl -s -o NUL -w "HTTP=%%{http_code}`n" "https://d1zei8qivkf3cr.cloudfront.net/dashboard/macro/"
+# HTTP=200 が期待値（apply 前は AccessDenied XML が返る）
+```
+
+### 直前セッションで発見・対応した 2 件のバグ（記録）
+
+1. **`Failed to construct 'URL': Invalid URL`** （フロントエンド）
+   - 原因: `new URL("/api/v1/...")` は base なし相対パスを受け付けない。`NEXT_PUBLIC_API_BASE_URL=""` の本番ビルドで全 fetch 失敗
+   - 対応: `web/lib/api.ts` の `request()` を文字列結合 + URLSearchParams に変更（コミット `854efdf`）。デプロイ済（S3 同期 + CloudFront 無効化済）
+
+2. **`/dashboard/<page>/` で AccessDenied XML**（インフラ）
+   - 原因: S3 はディレクトリ概念がないため `web/dashboard/macro/` の GetObject が失敗。実体は `web/dashboard/macro/index.html`
+   - 対応: CloudFront Function `rewrite-index` を追加（コミット `e6d3574`）。**未 apply の可能性あり** — 上記手順で確認
+
+---
+
 ## 1. 現在地
 
 **フェーズ 4.0 完了** — AWS PoC デプロイ稼働中。社内レビューに使える状態。
