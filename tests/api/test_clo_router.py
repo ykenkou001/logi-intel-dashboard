@@ -39,6 +39,60 @@ def test_eligibility_returns_structured_response() -> None:
     _assert_tool_response_shape(resp.json())
 
 
+def test_wait_heatmap_returns_metadata_with_cells() -> None:
+    """フェーズ4.1 a.1: 拠点別待機時間ヒートマップ。"""
+    resp = client.get(
+        "/api/v1/clo/wait-heatmap",
+        params={"company_id": "sample_retail_01"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    _assert_tool_response_shape(body)
+    # metadata に cells / site_names / time_slots が含まれる
+    assert "metadata" in body
+    md = body["metadata"]
+    assert isinstance(md, dict)
+    assert "cells" in md and len(md["cells"]) == 12  # 3 拠点 × 4 時間帯
+    assert "site_names" in md and len(md["site_names"]) == 3
+    assert "time_slots" in md and md["time_slots"] == ["morning", "midday", "evening", "night"]
+    assert md["threshold_minutes"] == 120
+    assert md["avg_target_minutes"] == 30
+    # 関東地域DC・morning は yellow（42分・30分超）
+    cell = next(
+        c for c in md["cells"]
+        if c["site_name"] == "関東地域DC" and c["time_slot"] == "morning"
+    )
+    assert cell["severity"] == "yellow"
+    assert cell["avg_minutes"] == 42.0
+
+
+def test_wait_heatmap_unknown_company_returns_404() -> None:
+    resp = client.get(
+        "/api/v1/clo/wait-heatmap",
+        params={"company_id": "nonexistent_company_xyz"},
+    )
+    assert resp.status_code == 404
+
+
+def test_executive_brief_generates_three_slide_pptx() -> None:
+    """フェーズ4.1 a.3: 3 スライド経営会議要約 PPT を REST で生成。"""
+    resp = client.get("/api/v1/clo/executive-brief/sample_mfg_01")
+    assert resp.status_code == 200
+    body = resp.json()
+    _assert_tool_response_shape(body)
+    # files に pptx パスが含まれる
+    assert "pptx" in body["files"]
+    assert body["files"]["pptx"].endswith(".pptx") or "/" in body["files"]["pptx"]
+    # summary に「やる」「やらない」セクション
+    assert "やる" in body["summary"]
+    assert "やらない" in body["summary"]
+
+
+def test_executive_brief_unknown_company_returns_404() -> None:
+    resp = client.get("/api/v1/clo/executive-brief/nonexistent_xyz")
+    assert resp.status_code == 404
+
+
 def test_target_proposal_returns_structured_response() -> None:
     resp = client.get(
         "/api/v1/clo/target-proposal",

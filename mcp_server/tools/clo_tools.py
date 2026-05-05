@@ -60,10 +60,15 @@ from core.analytics.target_proposal import (
     build_target_proposal_summary,
     propose_targets,
 )
+from core.analytics.wait_time_heatmap import (
+    HeatmapResult,
+    build_wait_time_heatmap,
+)
 from core.export.citation import (
     Citation,
     logistics_efficiency_law_citation,
 )
+from core.export.ppt_writer import write_clo_executive_brief
 from core.export.response import ToolResponse
 from core.io.company_loader import (
     load_company_profile_from_csv,
@@ -132,6 +137,224 @@ def register_tools(mcp: FastMCP) -> None:
             summary=summary,
             citations=result.citations,
             freshness_warnings=result.freshness_warnings,
+        )
+        return response.to_dict()
+
+    @mcp.tool()
+    async def logi_clo_executive_brief(company_id: str) -> dict[str, object]:
+        """経営会議直前 3 分要約 PPT（3 スライド版）を生成します。
+
+        フェーズ4.1 a.3。100 ページの本格計画書（plan_draft）とは別経路で、
+        朝のコックピットや経営会議直前に CLO が手元で生成する軽量版。
+
+        スライド構成:
+            1. 表紙
+            2. 経営サマリー（KPI 4 カード + プロフィール 3 行）
+            3. やる／やらない 結論（Top 3 採用施策 + Top 3 除外施策 + 次回意思決定期日）
+
+        本ツールは内部で measure_eval（4 軸スコアリング）と feasibility_check
+        （実行可否判定）を呼び出し、その結果を 3 スライドに圧縮します。
+
+        Args:
+            company_id: サンプル/取込済 企業 ID。
+
+        Returns:
+            ToolResponse 構造（files["pptx"] に生成パス、summary に Top3/Bottom3 概要）
+        """
+        profile = get_sample(company_id)
+        if profile is None:
+            return ToolResponse(
+                summary=(
+                    f"企業 '{company_id}' が見つかりません。利用可能: "
+                    "sample_mfg_01 / sample_wholesale_01 / "
+                    "sample_retail_01 / sample_chain_01"
+                ),
+            ).to_dict()
+
+        eval_result = evaluate_measures(profile=profile)
+        feas_result = check_feasibility(profile=profile)
+        main_prefecture = profile.sites[0].prefecture if profile.sites else "東京都"
+        sim_result = simulate_measures(
+            jsic_code=profile.jsic_code,
+            prefecture=main_prefecture,
+            revenue_jpy=profile.annual_revenue_jpy,
+            annual_freight_tons=profile.annual_freight_tons_total,
+        )
+        fin_result = translate_to_pnl_impact(profile, sim_result)
+
+        # KPI 4 行（金額換算）+ プロフィール 3 行
+        op_profit_oku = (fin_result.total_operating_profit_increase_jpy * 0.7) / 1e8
+        co2_t = (sim_result.total_co2_reduction_kg * 0.7) / 1000
+        npv_oku = fin_result.total_5y_npv_jpy / 1e8
+        carbon_low_m = fin_result.total_carbon_avoidance_jpy_low / 1e6
+        carbon_high_m = fin_result.total_carbon_avoidance_jpy_high / 1e6
+        executive_summary = [
+            f"営業利益(標準): +{op_profit_oku:.2f}億円/年",
+            f"CO2削減(標準): 約 {co2_t:,.0f}トン-CO2/年",
+            f"炭素価格回避: {carbon_low_m:.0f}〜{carbon_high_m:.0f}百万円/年",
+            f"5年累積NPV: 約 {npv_oku:.2f}億円 (割引率3%)",
+            f"会社名: {profile.name}（JSIC {profile.jsic_code}）",
+            f"CLO: {profile.clo_name} / 計画期間 "
+            f"FY{profile.plan_period_start_fy}〜FY{profile.plan_period_end_fy}",
+            f"年間売上 {profile.annual_revenue_jpy / 1e8:.0f}億円 / "
+            f"取扱量 {profile.annual_freight_tons_total:,.0f}トン / "
+            f"data_source={profile.data_source}",
+        ]
+
+        # 「やる」3 件: measure_eval Top 3
+        actions_to_pursue: list[str] = []
+        for s in eval_result.top_recommendations[:3]:
+            cost_oku = (s.estimated_annual_cost_saving_jpy or 0) / 1e8
+            actions_to_pursue.append(
+                f"{s.measure.name}（年 +{cost_oku:.2f}億円・スコア{s.total_score:.0f}）"
+            )
+
+        # 「やらない」3 件: feasibility=red を優先、次に bottom_candidates
+        red_verdicts = [
+            v for v in feas_result.measure_verdicts if v.level == "red"
+        ][:3]
+        actions_to_skip: list[str] = [
+            f"{v.measure.name}（{v.primary_reason}）" for v in red_verdicts
+        ]
+        # red が 3 件未満なら bottom_candidates で埋める
+        if len(actions_to_skip) < 3:
+            for s in eval_result.bottom_candidates[: 3 - len(actions_to_skip)]:
+                actions_to_skip.append(
+                    f"{s.measure.name}（{s.comparison_note or '優先度低'}）"
+                )
+
+        # 次回意思決定期日（簡易: 計画期間の半年後を仮置き）
+        # 実運用ではコックピット側から渡す予定
+        next_decision_due = "次回 取締役会（経営層と確認）"
+
+        # 出典は measure_eval / feasibility 統合
+        citations: list[Citation] = []
+        seen_urls: set[str] = set()
+        for c in eval_result.citations + feas_result.citations:
+            if c.url not in seen_urls:
+                citations.append(c)
+                seen_urls.add(c.url)
+
+        plan_period = (
+            f"FY{profile.plan_period_start_fy}〜FY{profile.plan_period_end_fy}"
+        )
+        path = write_clo_executive_brief(
+            company_name=profile.name,
+            company_id=profile.company_id,
+            plan_period=plan_period,
+            executive_summary=executive_summary,
+            actions_to_pursue=actions_to_pursue,
+            actions_to_skip=actions_to_skip,
+            next_decision_due=next_decision_due,
+            citations=citations,
+        )
+
+        skip_lines = (
+            [f"  🚫 {a}" for a in actions_to_skip]
+            if actions_to_skip
+            else ["  （除外候補なし）"]
+        )
+        summary_lines = [
+            f"📄 経営会議向け 3 分要約 PPT を生成: {path.name}",
+            "",
+            "【経営サマリー（2 枚目）】",
+            *executive_summary[:4],
+            "",
+            "【やる（3 枚目左）】",
+            *[f"  ✅ {a}" for a in actions_to_pursue],
+            "",
+            "【やらない（3 枚目右）】",
+            *skip_lines,
+            "",
+            f"📅 次回意思決定期日: {next_decision_due}",
+        ]
+
+        warnings = list(set(eval_result.freshness_warnings + feas_result.freshness_warnings))
+        warnings.extend(all_warnings())
+        # 重複除去（順序保持）
+        warnings = list(dict.fromkeys(warnings))
+
+        response = ToolResponse(
+            summary="\n".join(summary_lines),
+            citations=citations,
+            freshness_warnings=warnings,
+            data_source=profile.data_source,
+            files={"pptx": str(path)},
+        )
+        return response.to_dict()
+
+    @mcp.tool()
+    async def logi_clo_wait_heatmap(company_id: str) -> dict[str, object]:
+        """拠点 × 時間帯（朝/昼/夕/夜）の荷待ち時間ヒートマップを生成します。
+
+        フェーズ4.1 a.1。CLO が「どの拠点が朝混むか」を 5 秒で把握し、
+        是正アクション（バース予約・時間帯分散・トラック予約システム導入）の
+        対象拠点を特定するための可視化ツール。
+
+        集計仕様:
+            - 縦軸: CompanyProfile.sites の拠点（site_name 指定の wait_time_rows のみ）
+            - 横軸: morning(6-10) / midday(10-15) / evening(15-19) / night(19-翌6)
+            - severity: green ≤30 分（目標）/ yellow ≤90 分 / red >90 分 / none 未計測
+            - 計測便数 100 未満は confidence_low フラグ（統計的有意性に注意）
+
+        Args:
+            company_id: サンプル企業ID（"sample_retail_01" などヒートマップ対応）。
+                site_name 未指定の wait_time_rows のみを持つ会社では cells が空になる
+
+        Returns:
+            ToolResponse 構造:
+            - summary: 経営層向け 1 行要約（最悪セルの拠点・時間帯・平均分・件数）
+            - citations: 改善基準告示・WaitTimeStandard の根拠
+            - freshness_warnings: 静的データの鮮度警告
+        """
+        profile = get_sample(company_id)
+        if profile is None:
+            return ToolResponse(
+                summary=(
+                    f"企業 '{company_id}' が見つかりません。利用可能: "
+                    "sample_mfg_01 / sample_wholesale_01 / "
+                    "sample_retail_01 / sample_chain_01"
+                ),
+            ).to_dict()
+
+        result: HeatmapResult = build_wait_time_heatmap(profile)
+        # detail テキストを summary に追加
+        detail_lines = [result.summary, ""]
+        detail_lines.append(
+            f"📊 全体平均 {result.overall_avg_minutes:.0f} 分・最大 "
+            f"{result.overall_max_minutes:.0f} 分（基準 {result.threshold_minutes} 分／"
+            f"目標 {result.avg_target_minutes} 分以下）"
+            if result.overall_avg_minutes is not None
+            else "📊 拠点別計測データがありません"
+        )
+        if result.cells:
+            detail_lines.append("")
+            detail_lines.append("拠点 × 時間帯 平均待機時間（分）:")
+            time_label_short = {
+                "morning": "朝", "midday": "昼", "evening": "夕",
+                "night": "夜", "all_day": "全日",
+            }
+            # 拠点ごとに 1 行
+            for site in result.site_names:
+                cells_for_site = [c for c in result.cells if c.site_name == site]
+                row_parts: list[str] = [f"  {site}:"]
+                for slot in result.time_slots:
+                    cell = next((c for c in cells_for_site if c.time_slot == slot), None)
+                    if cell is None or cell.avg_minutes is None:
+                        row_parts.append(f"{time_label_short.get(slot, slot)}=未計測")
+                        continue
+                    icon = {"green": "🟢", "yellow": "🟡", "red": "🔴", "none": "⚪"}[cell.severity]
+                    row_parts.append(
+                        f"{time_label_short.get(slot, slot)}={icon}{cell.avg_minutes:.0f}"
+                    )
+                detail_lines.append(" ".join(row_parts))
+        summary_text = "\n".join(detail_lines)
+
+        response = ToolResponse(
+            summary=summary_text,
+            citations=result.citations,
+            freshness_warnings=result.freshness_warnings,
+            data_source=profile.data_source,
         )
         return response.to_dict()
 

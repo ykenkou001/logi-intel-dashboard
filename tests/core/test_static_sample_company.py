@@ -8,6 +8,7 @@ from core.static.sample_company import (
     ALL_SAMPLES,
     SAMPLE_CHAIN,
     SAMPLE_MANUFACTURING,
+    SAMPLE_RETAIL,
     SAMPLE_WHOLESALE,
     CompanyProfile,
     CompanySite,
@@ -18,12 +19,13 @@ from core.static.sample_company import (
 )
 
 
-def test_three_samples_registered() -> None:
-    """サンプル3社が登録されている。"""
-    assert len(ALL_SAMPLES) == 3
+def test_four_samples_registered() -> None:
+    """サンプル4業種（製造/卸/小売/連鎖化）が揃っている。"""
+    assert len(ALL_SAMPLES) == 4
     assert SAMPLE_MANUFACTURING.company_id in ALL_SAMPLES
     assert SAMPLE_WHOLESALE.company_id in ALL_SAMPLES
     assert SAMPLE_CHAIN.company_id in ALL_SAMPLES
+    assert SAMPLE_RETAIL.company_id in ALL_SAMPLES
 
 
 def test_get_sample_existing() -> None:
@@ -94,11 +96,55 @@ def test_company_site_basic_fields() -> None:
 
 def test_sample_sites_freight_sums_match_total_loosely() -> None:
     """サンプルの拠点合計と total が概ね合致（±10% 程度の差は許容）。"""
-    for sample in (SAMPLE_MANUFACTURING, SAMPLE_WHOLESALE, SAMPLE_CHAIN):
+    for sample in (SAMPLE_MANUFACTURING, SAMPLE_WHOLESALE, SAMPLE_CHAIN, SAMPLE_RETAIL):
         sites_sum = sum(s.annual_freight_tons for s in sample.sites)
         # 必ずしも厳密一致ではないが、桁が合っているか確認
         assert sites_sum > 0
         assert sample.annual_freight_tons_total > 0
+
+
+def test_retail_sample_is_food_supermarket() -> None:
+    """小売サンプルは食料品スーパー（JSIC 5811）で連鎖化フラグなし。"""
+    assert SAMPLE_RETAIL.jsic_code == "5811"
+    assert SAMPLE_RETAIL.is_chain_franchise is False
+    assert "スーパー" in SAMPLE_RETAIL.main_business
+
+
+def test_retail_sample_meets_first_class_threshold() -> None:
+    """小売サンプルは 9 万トン超（特定第一種荷主境界クリア）。"""
+    assert SAMPLE_RETAIL.annual_freight_tons_total >= 90_000
+
+
+def test_retail_sample_has_kpi_history() -> None:
+    """小売サンプルは KPI 履歴 6 件（積載率3期 + 荷待ち時間3期）を持つ。"""
+    assert len(SAMPLE_RETAIL.kpi_history) >= 6
+    metrics = {entry.metric for entry in SAMPLE_RETAIL.kpi_history}
+    assert "load_factor_pct" in metrics
+    assert "wait_time_avg_minutes" in metrics
+
+
+def test_retail_sample_has_actual_load_factor() -> None:
+    """小売サンプルは積載率実測値を持つ（業界平均 38% を上回る 42%）。"""
+    assert SAMPLE_RETAIL.load_factor_actual_pct == 42.0
+
+
+def test_retail_sample_handling_includes_temperature_zones() -> None:
+    """小売サンプルの荷役は温度帯別（チルド/常温/生鮮）を含む。"""
+    labels = {row.bucket_label for row in SAMPLE_RETAIL.handling_time_rows}
+    assert any("チルド" in label for label in labels)
+    assert any("常温" in label for label in labels)
+    assert any("生鮮" in label for label in labels)
+
+
+def test_all_four_industries_distinct() -> None:
+    """4 業種の JSIC コードが重複なく異なる業種カテゴリに属する。"""
+    jsic_codes = {p.jsic_code for p in ALL_SAMPLES.values()}
+    assert len(jsic_codes) == 4  # 重複なし
+    # 業種カテゴリの分散も確認
+    from core.static.jsic import category_of
+    categories = {category_of(p.jsic_code) for p in ALL_SAMPLES.values()}
+    # manufacturing / wholesale / retail / chain_franchise の 4 種が揃う
+    assert categories == {"manufacturing", "wholesale", "retail", "chain_franchise"}
 
 
 # --- フェーズ4.0 拡張フィールドのテスト ---
@@ -165,13 +211,15 @@ def test_kpi_history_entry_basic() -> None:
 
 
 def test_optional_actual_fields_default_none() -> None:
-    """サンプル3社は実測値オプションフィールドが None かつ data_source='sample'。"""
+    """サンプル4社は data_source='sample'。実測値フィールドは小売のみ load_factor を持つ。"""
     for sample in (SAMPLE_MANUFACTURING, SAMPLE_WHOLESALE, SAMPLE_CHAIN):
         assert sample.load_factor_actual_pct is None
         assert sample.annual_fuel_liters is None
         assert sample.annual_co2_emissions_kg is None
-        # data_source は架空企業データのため "sample"（経営判断不可の旨を明示）
         assert sample.data_source == "sample"
+    # 小売は積載率の実測値を持つ（業界平均比較のため）
+    assert SAMPLE_RETAIL.load_factor_actual_pct is not None
+    assert SAMPLE_RETAIL.data_source == "sample"
 
 
 def test_company_profile_with_actual_fields() -> None:

@@ -29,7 +29,9 @@ from core.analytics.plan_draft import build_plan_draft_summary, generate_plan_dr
 from core.analytics.scenario_sim import build_scenario_summary, simulate_scenarios
 from core.analytics.simulator import build_simulation_summary, simulate_measures
 from core.analytics.target_proposal import build_target_proposal_summary, propose_targets
+from core.analytics.wait_time_heatmap import HeatmapResult, build_wait_time_heatmap
 from core.export.citation import Citation, logistics_efficiency_law_citation
+from core.export.ppt_writer import write_clo_executive_brief
 from core.export.response import ToolResponse
 from core.legal.eligibility import evaluate_eligibility
 from core.playbook.filters import PlaybookFilter, build_search_summary, filter_playbook
@@ -130,6 +132,157 @@ async def driver_gap(
         freshness_warnings=result.freshness_warnings,
     )
     return _to_model(response)
+
+
+# ─── フェーズ4.1 a.3: 経営会議 3 スライド要約 ─────────────────────
+@router.get("/executive-brief/{company_id}", response_model=ToolResponseModel)
+async def executive_brief(company_id: str) -> ToolResponseModel:
+    """経営会議直前 3 分要約 PPT（3 スライド版）を生成して返す。
+
+    内部で measure_eval + feasibility_check + financial_translate を呼び、
+    やる 3 件 / やらない 3 件 / 経営サマリーを 3 スライド PPT に圧縮する。
+    """
+    profile = _resolve_profile_or_404(company_id)
+    eval_result = evaluate_measures(profile=profile)
+    feas_result = check_feasibility(profile=profile)
+    main_prefecture = profile.sites[0].prefecture if profile.sites else "東京都"
+    sim_result = simulate_measures(
+        jsic_code=profile.jsic_code,
+        prefecture=main_prefecture,
+        revenue_jpy=profile.annual_revenue_jpy,
+        annual_freight_tons=profile.annual_freight_tons_total,
+    )
+    fin_result = translate_to_pnl_impact(profile, sim_result)
+
+    op_profit_oku = (fin_result.total_operating_profit_increase_jpy * 0.7) / 1e8
+    co2_t = (sim_result.total_co2_reduction_kg * 0.7) / 1000
+    npv_oku = fin_result.total_5y_npv_jpy / 1e8
+    carbon_low_m = fin_result.total_carbon_avoidance_jpy_low / 1e6
+    carbon_high_m = fin_result.total_carbon_avoidance_jpy_high / 1e6
+    executive_summary = [
+        f"営業利益(標準): +{op_profit_oku:.2f}億円/年",
+        f"CO2削減(標準): 約 {co2_t:,.0f}トン-CO2/年",
+        f"炭素価格回避: {carbon_low_m:.0f}〜{carbon_high_m:.0f}百万円/年",
+        f"5年累積NPV: 約 {npv_oku:.2f}億円 (割引率3%)",
+        f"会社名: {profile.name}（JSIC {profile.jsic_code}）",
+        f"CLO: {profile.clo_name} / 計画期間 "
+        f"FY{profile.plan_period_start_fy}〜FY{profile.plan_period_end_fy}",
+        f"年間売上 {profile.annual_revenue_jpy / 1e8:.0f}億円 / "
+        f"取扱量 {profile.annual_freight_tons_total:,.0f}トン",
+    ]
+
+    actions_to_pursue: list[str] = []
+    for s in eval_result.top_recommendations[:3]:
+        cost_oku = (s.estimated_annual_cost_saving_jpy or 0) / 1e8
+        actions_to_pursue.append(
+            f"{s.measure.name}（年 +{cost_oku:.2f}億円・スコア{s.total_score:.0f}）"
+        )
+
+    red_verdicts = [v for v in feas_result.measure_verdicts if v.level == "red"][:3]
+    actions_to_skip: list[str] = [
+        f"{v.measure.name}（{v.primary_reason}）" for v in red_verdicts
+    ]
+    if len(actions_to_skip) < 3:
+        for s in eval_result.bottom_candidates[: 3 - len(actions_to_skip)]:
+            actions_to_skip.append(
+                f"{s.measure.name}（{s.comparison_note or '優先度低'}）"
+            )
+
+    citations: list[Citation] = []
+    seen_urls: set[str] = set()
+    for c in eval_result.citations + feas_result.citations:
+        if c.url not in seen_urls:
+            citations.append(c)
+            seen_urls.add(c.url)
+
+    plan_period = f"FY{profile.plan_period_start_fy}〜FY{profile.plan_period_end_fy}"
+    path = write_clo_executive_brief(
+        company_name=profile.name,
+        company_id=profile.company_id,
+        plan_period=plan_period,
+        executive_summary=executive_summary,
+        actions_to_pursue=actions_to_pursue,
+        actions_to_skip=actions_to_skip,
+        next_decision_due="次回 取締役会（経営層と確認）",
+        citations=citations,
+    )
+
+    summary_lines = [
+        f"📄 経営会議向け 3 分要約 PPT を生成: {path.name}",
+        "",
+        "【経営サマリー】",
+        *executive_summary[:4],
+        "",
+        "【やる】",
+        *[f"  ✅ {a}" for a in actions_to_pursue],
+        "",
+        "【やらない】",
+        *([f"  🚫 {a}" for a in actions_to_skip] if actions_to_skip
+          else ["  （除外候補なし）"]),
+    ]
+
+    warnings = list(dict.fromkeys(
+        [*eval_result.freshness_warnings, *feas_result.freshness_warnings,
+         *all_warnings()]
+    ))
+
+    response = ToolResponse(
+        summary="\n".join(summary_lines),
+        citations=citations,
+        freshness_warnings=warnings,
+        data_source=profile.data_source,
+        files={"pptx": str(path)},
+    )
+    _publish_files(response)
+    return _to_model(response)
+
+
+# ─── フェーズ4.1 a.1: 拠点別待機時間ヒートマップ ─────────────────────
+@router.get("/wait-heatmap", response_model=ToolResponseModel)
+async def wait_heatmap(
+    company_id: Annotated[str, Query(description="サンプル/取込済 企業ID")],
+) -> ToolResponseModel:
+    """拠点 × 時間帯（朝/昼/夕/夜）の荷待ち時間ヒートマップを生成する。
+
+    cells / site_names / time_slots / overall_* / threshold_* / avg_target_* を
+    ToolResponseModel.metadata 経由で渡し、Web フロント（wait-heatmap/page.tsx）が
+    可視化する。summary はテキスト要約として軸 A 表示にも使う。
+    """
+    profile = _resolve_profile_or_404(company_id)
+    result: HeatmapResult = build_wait_time_heatmap(profile)
+
+    response = ToolResponse(
+        summary=result.summary,
+        citations=result.citations,
+        freshness_warnings=result.freshness_warnings,
+        data_source=profile.data_source,
+    )
+    model = _to_model(response)
+    # metadata に詳細データを乗せて Web フロントで可視化する
+    model.metadata = {
+        "company_id": result.company_id,
+        "company_name": result.company_name,
+        "site_names": result.site_names,
+        "time_slots": result.time_slots,
+        "cells": [
+            {
+                "site_name": c.site_name,
+                "time_slot": c.time_slot,
+                "avg_minutes": c.avg_minutes,
+                "max_minutes": c.max_minutes,
+                "measured_count": c.measured_count,
+                "over_2h_count": c.over_2h_count,
+                "severity": c.severity,
+                "confidence_low": c.confidence_low,
+            }
+            for c in result.cells
+        ],
+        "overall_avg_minutes": result.overall_avg_minutes,
+        "overall_max_minutes": result.overall_max_minutes,
+        "threshold_minutes": result.threshold_minutes,
+        "avg_target_minutes": result.avg_target_minutes,
+    }
+    return model
 
 
 # ─── Step 3: 適用判定 ─────────────────────────────────────────────────
