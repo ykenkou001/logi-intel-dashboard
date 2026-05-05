@@ -566,7 +566,10 @@ _WHOLESALE_PACKAGE = IndustryPackage(
             used_by_kpi_ids=["inventory_turnover_improvement_pct"],
         ),
     ],
-    plan_template_paths={},  # 既存テンプレートが揃ったら埋める
+    plan_template_paths={
+        "starter": "core/templates/clo_plan_examples/wholesale_starter.md",
+        "advanced": "core/templates/clo_plan_examples/wholesale_advanced.md",
+    },
     benchmark_refs=[
         "industry_benchmarks.LOGISTICS_COST_RATIO['wholesale']",
     ],
@@ -719,7 +722,10 @@ _RETAIL_PACKAGE = IndustryPackage(
             used_by_kpi_ids=["delivery_trip_reduction_pct"],
         ),
     ],
-    plan_template_paths={},
+    plan_template_paths={
+        "starter": "core/templates/clo_plan_examples/retail_starter.md",
+        "advanced": "core/templates/clo_plan_examples/retail_advanced.md",
+    },
     benchmark_refs=[
         "industry_benchmarks.LOGISTICS_COST_RATIO['retail']",
     ],
@@ -867,7 +873,10 @@ _CHAIN_FRANCHISE_PACKAGE = IndustryPackage(
             used_by_kpi_ids=["logistics_cost_revenue_ratio_pct"],
         ),
     ],
-    plan_template_paths={},
+    plan_template_paths={
+        "starter": "core/templates/clo_plan_examples/chain_starter.md",
+        "advanced": "core/templates/clo_plan_examples/chain_advanced.md",
+    },
     benchmark_refs=[
         "industry_benchmarks.LOGISTICS_COST_RATIO['chain_franchise']",
     ],

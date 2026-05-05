@@ -197,7 +197,12 @@ ALL_MEASURES: list[PlaybookMeasure] = [
         ),
         measure_type="joint_delivery",
         form3_section="load",
-        applicable_industries=["manufacturing", "wholesale", "retail"],
+        # 連鎖化事業者（コンビニ本部・FC 本部）の共同配送は JOINT-CONVENIENCE
+        # 等の認定事例があり、industry_packages.chain_franchise でも標準採用済。
+        # c.4 で逆検証テスト（ALL_MEASURES 側からの整合確認）を追加した際に検出。
+        applicable_industries=[
+            "manufacturing", "wholesale", "retail", "chain_franchise",
+        ],
         min_revenue_jpy=20_000_000_000,  # 200 億円
         min_freight_tons=50_000.0,
         required_resources=["joint_partner_network", "warehouse_management"],
@@ -302,7 +307,11 @@ ALL_MEASURES: list[PlaybookMeasure] = [
         ),
         measure_type="berth_booking",
         form3_section="wait",
-        applicable_industries=["manufacturing", "wholesale", "retail"],
+        # 連鎖化事業者（コンビニ本部・FC 本部）の店舗納品時間帯分散は典型施策。
+        # c.4 で逆検証テスト（industry_packages 側からの整合確認）を追加した際に検出。
+        applicable_industries=[
+            "manufacturing", "wholesale", "retail", "chain_franchise",
+        ],
         min_revenue_jpy=1_000_000_000,
         min_freight_tons=5_000.0,
         required_resources=["warehouse_management"],
