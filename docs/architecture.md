@@ -2,27 +2,42 @@
 
 **責任範囲**: システム全体の設計方針、採用技術、ファイル配置のルール。「なぜこの構成か」の根拠を含む。
 
+> ⚠️ 本アプリの存在意義は **CLO 支援への徹底コミット**（[CLAUDE.md §1.5](../CLAUDE.md)）。MCP サーバー / REST API / Web は手段であり、本体は `core/` と `core/export/`（成果物生成）にある。
+
 ---
 
-## システム構成（3層）
+## システム構成（core + 多出口）
 
 ```
-                                 ┌─→ [FastAPI REST] → [Next.js ダッシュボード] (フェーズ4以降)
-                                 │
-[各オープンデータ API] → [core モジュール]
-                                 │
-                                 └─→ [FastMCP サーバー] → [Claude Desktop / Code]
+                                              ┌─→ [FastMCP サーバー] → Claude Desktop/Code
+                                              │     （社内パワーユーザー・営業向け）
+[各オープンデータ API] → [core モジュール] ───┤
+       ↑                       │              ├─→ [FastAPI REST] → [Next.js ダッシュボード]
+       │                       │              │     （CLO担当者・経営層向け、フェーズ4）
+[静的データ                    ↓              │
+ (CO2係数・告示等)]    [core/export/]         └─→ [ファイル出力]
+                          ↓                         ・PPT（最優先）
+                       成果物生成                   ・PDF
+                          ↓                         ・Excel
+                  [outputs/ ディレクトリ]            ・Word（様式第3別紙）
+                          ↓                         ・Markdown
+                  [Web ダウンロード or 直接配布]
 ```
 
 ### 各層の責務
 
 | 層 | パス | 責務 |
 |----|------|------|
-| core モジュール | `core/` | API クライアント、キャッシュ、データ正規化、複合分析ロジック。外部依存なしで単体テスト可能 |
-| MCP サーバー層 | `mcp_server/` | core を呼び出す薄いラッパー。Claude が叩くツール定義のみ |
-| REST API 層 | `api/` | core を呼び出す薄いラッパー。Web フロントが叩く（フェーズ4） |
+| core モジュール | `core/` | API クライアント、キャッシュ、データ正規化、複合分析ロジック、**法令ロジック**、**成果物生成**。外部依存なしで単体テスト可能 |
+| 静的データ層 | `core/static/` | CO2 排出原単位・改善基準告示・標準的運賃等、API 不要のデータ。鮮度メタデータで更新リマインド |
+| 出口層（成果物） | `core/export/` | PPT / PDF / Excel / Word / Markdown 出力。**ここが CLO に届く価値の最終地点** |
+| MCP サーバー層 | `mcp_server/` | core を呼び出す薄いラッパー。Claude が叩くツール定義のみ。**戻り値はファイルパスを含む** |
+| REST API 層 | `api/` | core を呼び出す薄いラッパー。Web フロントが叩く（フェーズ4）。成果物ファイルをダウンロード配信。**フェーズ4.0 で実装完了（21 エンドポイント・FastAPI）** |
 
-**重要**: ビジネスロジックは必ず core に置く。MCP・REST 層には書かない。
+**重要原則**:
+- ビジネスロジックは必ず `core/` に置く。MCP・REST 層には書かない
+- **MCP ツールは「Claude の会話画面に文字列を返す」だけで終わらせない**。必ず `core/export/` を呼び、ファイルパスを成果物として返す
+- 全成果物に出典 URL を付与（`core/export/citation.py` 経由）
 
 ---
 
@@ -37,10 +52,14 @@
 | データ検証 | Pydantic v2 | |
 | キャッシュ DB | SQLite | API レスポンスキャッシュ用 |
 | 分析 DB | DuckDB | 集計クエリ用、SQLite から読み込み可 |
+| **PPT 出力** | **python-pptx** | **CLO 計画書プレゼン資料生成（最優先）** |
+| **Excel 出力** | **openpyxl** | **数値表・出典シート** |
+| **Word 出力** | **python-docx** | **様式第3別紙（e-Gov 提出用）への流し込み** |
+| **PDF 出力** | **WeasyPrint or LibreOffice CLI** | **PPT/Word からの変換** |
 | Lint / Format | Ruff | flake8 / black は使わない |
 | 型チェック | mypy (strict) | |
 | テスト | pytest, pytest-asyncio | |
-| フロント (フェーズ4) | Next.js 15, Recharts, deck.gl | |
+| フロント (フェーズ4) | Next.js 15, Recharts, deck.gl | 成果物ダウンロード UI 含む |
 
 ### 依存関係追加時のルール
 
@@ -78,12 +97,42 @@ logi-intel-dashboard/
 │   ├── models/                    # Pydantic モデル
 │   │   ├── __init__.py
 │   │   ├── estat.py
+│   │   ├── company_profile.py     # CLO ツールの自社情報入力モデル
 │   │   └── ...
-│   └── analytics/                 # 複合分析ロジック
-│       ├── __init__.py
-│       ├── benchmark.py           # 業界ベンチマーク
-│       ├── driver_gap.py          # ドライバー需給ギャップ
-│       └── clo_planning.py        # CLO 中長期計画支援
+│   ├── static/                    # 静的データ（API 不要・コード同梱）
+│   │   ├── __init__.py
+│   │   ├── _freshness.py          # 鮮度メタデータ + 更新リマインダ
+│   │   ├── co2_factors.py         # 環境省 CO2 排出原単位
+│   │   ├── improvement_standards.py  # 改善基準告示（拘束時間等）
+│   │   ├── standard_freight.py    # 標準的運賃 2024
+│   │   ├── efficiency_law_certified.py  # 物流効率化法 認定事業
+│   │   └── industry_freight_coef.py  # 業種別物流原単位
+│   ├── legal/                     # 法令ロジック
+│   │   ├── __init__.py
+│   │   ├── eligibility.py         # 9万トン基準の特定荷主判定
+│   │   └── improvement_check.py   # 改善基準告示準拠チェック
+│   ├── analytics/                 # 複合分析ロジック
+│   │   ├── __init__.py
+│   │   ├── benchmark.py           # 業界ベンチマーク
+│   │   ├── driver_gap.py          # ドライバー需給ギャップ
+│   │   ├── modal_shift.py         # モーダルシフト試算
+│   │   ├── load_factor.py         # 積載率改善 → CO2 削減
+│   │   ├── target_proposal.py     # 数値目標提案
+│   │   └── clo_planning.py        # CLO 中長期計画支援
+│   ├── export/                    # ★成果物生成（CLO に届く出口）★
+│   │   ├── __init__.py
+│   │   ├── citation.py            # 出典 URL の統一管理
+│   │   ├── ppt_writer.py          # PPT 出力（最優先）
+│   │   ├── pdf_writer.py          # PDF 出力
+│   │   ├── excel_writer.py        # Excel 出力
+│   │   ├── docx_form3_writer.py   # 様式第3別紙への流し込み
+│   │   └── markdown_writer.py     # Markdown 出力
+│   └── templates/                 # 成果物テンプレート
+│       ├── clo_plan_form3.docx    # 国交省様式第3別紙（公式）
+│       └── clo_plan_examples/     # 公式記載事例（業種別 MD 化）
+│   # PPT デザインは Logi-Intel CLO Report（コード生成型・マスタファイル不使用）
+│   # → docs/ppt_design.md / DESIGN.md
+│   # ※ micware ブランドへの差し替えは将来検討（公式ガイドライン入手後）
 ├── mcp_server/                    # MCP サーバー層
 │   ├── __init__.py
 │   ├── server.py                  # FastMCP エントリポイント
@@ -93,9 +142,25 @@ logi-intel-dashboard/
 │   │   └── ...                    # ※ resas_tools.py は作成しない（API 終了）
 │   └── prompts/                   # MCP プロンプト
 │       └── clo_plan_draft.py
-├── api/                           # REST API 層（フェーズ4）
-│   └── main.py
-├── web/                           # フロント（フェーズ4）
+├── api/                           # REST API 層（フェーズ4.0 ✅ 実装済）
+│   ├── __init__.py
+│   ├── main.py                    # FastAPI エントリ + ヘルスチェック + CORS
+│   ├── routers/
+│   │   ├── __init__.py
+│   │   ├── clo.py                 # /api/v1/clo/* (12 エンドポイント)
+│   │   ├── macro.py               # /api/v1/macro/overview
+│   │   ├── company.py             # /api/v1/company/{template,load,samples}
+│   │   └── files.py               # /api/v1/files/{path} ダウンロード
+│   └── schemas/
+│       ├── __init__.py
+│       └── responses.py           # ToolResponseModel / CitationModel (Pydantic)
+├── web/                           # フロント（フェーズ4 Next.js）
+├── outputs/                       # 成果物の出力先（gitignore 対象）
+│   ├── ppt/
+│   ├── pdf/
+│   ├── excel/
+│   ├── docx/
+│   └── markdown/
 ├── tests/
 │   ├── core/
 │   ├── mcp_server/
@@ -148,6 +213,127 @@ CREATE INDEX idx_fetched_at ON api_cache(fetched_at);
 
 ---
 
+## ローカル開発と本番の切り分け
+
+| 観点 | ローカル開発 | 本番（AWS PoC） |
+|------|------------|----------------|
+| FastAPI 起動 | `pwsh scripts/dev_api.ps1` で `uvicorn --reload`（port 8000） | Lambda + API Gateway HTTP API |
+| Web 配信 | `pwsh scripts/dev_web.ps1` で `next dev`（port 3000） | S3 静的エクスポート + CloudFront |
+| API_BASE_URL | `dev_web.ps1` が `http://localhost:8000` を環境変数で注入 | `""`（同一 origin / CloudFront 経由） |
+| ストレージ | ローカル `outputs/` ディレクトリ | S3 `outputs/` prefix |
+| シークレット | `.env` | SSM Parameter Store SecureString |
+| キャッシュ | `./.logi_cache.db`（SQLite） | `/tmp/.logi_cache.db`（Lambda 揮発） |
+
+### ローカル開発時の注意点（必読）
+
+**`uvicorn` や `npm run dev` を直接叩いてはいけない。** 必ず以下を使う:
+
+```powershell
+pwsh scripts/dev_api.ps1            # FastAPI :8000（既存 uvicorn を kill + --reload）
+pwsh scripts/dev_web.ps1            # Next.js :3000（既存 next dev を kill + API_BASE 固定）
+```
+
+#### 経緯（2026-05-05 の事故）
+
+「本番 Lambda に修正をデプロイしたのに、ブラウザのフロントが古い localhost:8000 を
+叩き続けて修正反映が確認できない」事故が発生。原因は次の 2 点:
+
+1. **`--reload` なしの古い uvicorn が `core/` をメモリにロードしたまま生存**
+   多重起動で port 8000 / 8765 を同時 listen していた。
+2. **`web/lib/api.ts` のデフォルト API_BASE が `http://localhost:8000`**
+   `NEXT_PUBLIC_API_BASE_URL` 未設定の本番ビルドでも、ブラウザが意図せずローカルを叩く構造だった。
+
+#### 恒久対策（実施済）
+
+- `web/lib/api.ts` のデフォルト API_BASE を `""`（同一 origin）に変更
+- `scripts/dev_api.ps1` / `scripts/dev_web.ps1` に **既存プロセスの自動 kill** を組み込み
+- 詳細経緯は [CLAUDE.md §6.5](../CLAUDE.md) 参照
+
+#### 自己診断手順
+
+「コード直したのに本番フロントの動作が変わらない」と感じたら:
+
+1. ブラウザ DevTools の Network タブで API 先が `localhost` か CloudFront か確認
+2. `Get-Process uvicorn,node` で残存プロセスを点検
+3. 古いプロセスを Stop → `dev_api.ps1` で再起動
+
+---
+
+## CI / CD（GitHub Actions）
+
+main ブランチへの push 時に AWS PoC へ自動デプロイする。フェーズ4.0 完了後に追加。
+
+### ワークフロー構成
+
+| ファイル | トリガー | 内容 | 所要 |
+|---------|---------|------|------|
+| `.github/workflows/ci.yml` | PR / main push | ruff + pytest + Next.js lint / type-check / build | 3〜5 分 |
+| `.github/workflows/deploy-api.yml` | main push（Python 関連変更時） | Lambda zip ビルド + 関数更新 + ヘルスチェック | 4〜6 分 |
+| `.github/workflows/deploy-web.yml` | main push（`web/` 変更時） | `npm run build` + S3 sync + CloudFront invalidate | 5〜10 分 |
+
+### paths フィルタの設計意図
+
+無関係な変更（例: README だけの修正）でデプロイが走るのを防ぎ、GitHub Actions
+無料枠（月 2,000 分）を圧迫しない。
+
+```yaml
+# deploy-api.yml の paths
+- 'core/**'
+- 'api/**'
+- 'lambda/**'
+- 'mcp_server/**'
+- 'pyproject.toml'
+- 'uv.lock'
+```
+
+### Terraform を CI から外す理由
+
+- インフラ変更は反映に 5〜15 分かかり、CloudFront の伝搬待ちもあるため即座にロールバックできない
+- `terraform plan` の差分を人間が目視確認した上で apply する運用が安全
+- PoC 規模（月 $1〜$3）で、インフラ変更の頻度は低い（フェーズ単位で 1 回）
+
+### 認証: GitHub OIDC
+
+長期 access key を発行せず、GitHub Actions が AWS STS で短期 credentials を取得する。
+
+```hcl
+# infra/main.tf
+resource "aws_iam_openid_connect_provider" "github" {
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+  ...
+}
+
+# main ブランチからの実行のみ許可
+condition {
+  test     = "StringLike"
+  variable = "token.actions.githubusercontent.com:sub"
+  values   = ["repo:ykenkou001/logi-intel-dashboard:ref:refs/heads/main"]
+}
+```
+
+ロール `logi-intel-dev-github-actions` の権限は最小化:
+- Lambda: `UpdateFunctionCode` / `GetFunction*`（指定の 1 関数のみ）
+- S3: `GetObject` / `PutObject` / `DeleteObject`（`web/` prefix のみ）
+- CloudFront: `CreateInvalidation` / `GetInvalidation`（指定の 1 distribution のみ）
+
+`terraform apply` 系・他バケット・他 Lambda へのアクセスは一切付与しない。
+
+### 初回セットアップ
+
+1. `terraform apply` で OIDC プロバイダ + IAM ロールを作成
+2. Terraform output `github_actions_role_arn` を取得
+3. GitHub Repository Settings → Secrets → `AWS_GITHUB_ACTIONS_ROLE_ARN` に登録
+4. Branch protection で `CI / Python` `CI / Web` をマージ必須に
+
+### デプロイの観測
+
+- `lambda wait function-updated` で Lambda 更新完了まで待機
+- `cloudfront wait invalidation-completed` で CloudFront 反映を待つ
+- 最後に `curl /health` / トップページ疎通で smoke test
+
+---
+
 ## AWS 移行計画（フェーズ4）
 
 現在はローカル稼働（Claude Desktop が stdio で子プロセスとして起動）。
@@ -174,3 +360,63 @@ CREATE INDEX idx_fetched_at ON api_cache(fetched_at);
 
 - `core/` 層はローカル・AWS どちらでも動くように、外部ストレージへの依存をキャッシュ層に閉じ込める
 - HTTP モードでは認証（API キー or Cognito）を MCP サーバー層に追加する必要がある
+
+---
+
+## 成果物配信戦略（CLO に届く最終地点）
+
+本アプリの設計上の最終アウトプットは「分析結果の文字列」ではなく「**経営会議で配れるファイル**」。配信経路は2段構成。
+
+### フェーズ 2.5〜3（ローカル）: ファイルパス返却方式
+
+```
+Claude Desktop
+     ↓ logi_clo_plan_draft(company_profile)
+mcp_server/tools/clo_tools.py
+     ↓ core/analytics/clo_planning.py で分析
+     ↓ core/export/ppt_writer.py で生成
+     ↓
+outputs/ppt/clo_plan_<company>_<timestamp>.pptx
+     ↓
+ファイルパスを Claude に返す → ユーザーが直接開く / 共有
+```
+
+MCP ツールの戻り値:
+```python
+{
+    "summary": "...",                                # 概要テキスト
+    "files": {
+        "ppt": "outputs/ppt/clo_plan_xxx.pptx",
+        "pdf": "outputs/pdf/clo_plan_xxx.pdf",
+        "excel": "outputs/excel/clo_plan_xxx.xlsx",
+        "docx_form3": "outputs/docx/form3_xxx.docx"  # 国交省様式第3別紙
+    },
+    "citations": [...]                               # 出典 URL リスト
+}
+```
+
+### フェーズ 4（AWS + Web）: HTTPS ダウンロード方式
+
+```
+Next.js ダッシュボード
+     ↓ 入力フォーム（自社情報 → CompanyProfile）
+     ↓ POST /api/v1/clo/plan/draft
+FastAPI
+     ↓ core/analytics → core/export
+     ↓
+S3 に成果物アップロード
+     ↓
+プレサインド URL を返却
+     ↓
+ブラウザから PPT/PDF/Excel/DOCX をダウンロード
+```
+
+**非エンジニアの CLO 担当者が、エンジニアの介在なしに成果物を入手できることがゴール**。
+
+### 出力フォーマットの優先順位（健一さんとの合意事項）
+
+1. **PPT**（最優先）— 経営会議の必須フォーマット
+2. **PDF** — 顧客提案・印刷配布
+3. **Excel** — 数値表・社内 BI 取込
+4. **Word（様式第3別紙）** — e-Gov 提出用
+5. **Markdown** — Claude → 人間レビュー用

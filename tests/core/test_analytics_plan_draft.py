@@ -1,0 +1,71 @@
+"""core/analytics/plan_draft.py の単体テスト（純関数のみ）。
+
+generate_plan_draft 本体は e-Stat API を叩くため、ここでは純粋なヘルパー関数
+（テーマ分類等）の単体テストに絞る。
+"""
+from __future__ import annotations
+
+from core.analytics.plan_draft import _classify_form3_theme, _format_data_source_note
+
+# ---- _classify_form3_theme ----
+
+
+def test_classify_load_factor_to_load() -> None:
+    assert _classify_form3_theme("積載率向上（38% → 50%）") == "load"
+
+
+def test_classify_modal_shift_to_load() -> None:
+    assert _classify_form3_theme("モーダルシフト（トラック→鉄道貨物）") == "load"
+
+
+def test_classify_joint_delivery_to_load() -> None:
+    assert _classify_form3_theme("共同配送") == "load"
+
+
+def test_classify_berth_to_wait() -> None:
+    assert _classify_form3_theme("バース予約システム") == "wait"
+
+
+def test_classify_relay_to_loading_non_chain() -> None:
+    """非連鎖化事業者は中継輸送 → 荷役等（loading）に分類。"""
+    assert _classify_form3_theme("中継輸送", is_chain_franchise=False) == "loading"
+
+
+def test_classify_relay_to_wait_when_chain_franchise() -> None:
+    """連鎖化事業者は荷役等セクションが無いため中継輸送 → 荷待ち（wait）に流用。"""
+    assert _classify_form3_theme("中継輸送", is_chain_franchise=True) == "wait"
+
+
+def test_classify_unknown_returns_none() -> None:
+    assert _classify_form3_theme("未知の施策") is None
+
+
+# ---- _format_data_source_note ----
+
+
+def test_data_source_note_estimated_mentions_replacement() -> None:
+    """推計値の場合は実測値への差し替え推奨を明示する。"""
+    note = _format_data_source_note("estimated")
+    assert "estimated" in note
+    assert "推計値" in note
+    assert "実測" in note
+
+
+def test_data_source_note_actual_indicates_actual() -> None:
+    """実測値の場合は actual ラベルが立つ。"""
+    note = _format_data_source_note("actual")
+    assert "actual" in note
+    assert "自社実測" in note
+
+
+def test_data_source_note_sample_warns_demo_only() -> None:
+    """sample（架空企業）の場合は経営判断・提出不可の警告が出る。"""
+    note = _format_data_source_note("sample")
+    assert "sample" in note
+    assert "架空" in note
+    assert "提出" in note
+
+
+def test_classify_default_is_non_chain() -> None:
+    """is_chain_franchise 引数の既定値は False（非連鎖化）。"""
+    assert _classify_form3_theme("中継輸送") == "loading"

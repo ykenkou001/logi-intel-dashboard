@@ -10,6 +10,15 @@ dependencies = [
     "fastmcp>=2.0",
     "python-dotenv>=1.0",
     "beautifulsoup4>=4.12",
+    "python-pptx>=1.0",
+    "openpyxl>=3.1",
+    "python-docx>=1.1",
+    "fastapi>=0.136.1",
+    "uvicorn[standard]>=0.46.0",
+    "python-multipart>=0.0.27",
+    "boto3>=1.43.2",
+    "boto3-stubs[s3,ssm]>=1.43.2",
+    "mangum>=0.21.0",
 ]
 
 [dependency-groups]
@@ -19,6 +28,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-cov>=5.0",
+    "httpx>=0.28.1",
 ]
 
 [tool.ruff]
@@ -33,6 +43,10 @@ ignore = ["RUF001", "RUF002", "RUF003"]
 [tool.mypy]
 strict = true
 python_version = "3.12"
+
+[[tool.mypy.overrides]]
+module = ["openpyxl.*", "pptx.*", "docx.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

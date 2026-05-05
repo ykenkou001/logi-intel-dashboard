@@ -1,6 +1,7 @@
 """gogo.gs 全国平均燃料価格スクレイパー。"""
 from __future__ import annotations
 
+import datetime as _dt
 import re
 from typing import Any, cast
 
@@ -12,7 +13,11 @@ from core.clients.base import AsyncHTTPClient, HttpClientError
 _BASE_URL = "https://gogo.gs/"
 _SOURCE_NAME = "gogo.gs（全国平均・ユーザー申告集計）"
 _CACHE_KEY = "energy:fuel_prices:gogogs:v1"
-_TTL_SECONDS = 24 * 60 * 60
+# TTL 6h: gogo.gs の前日値更新（早朝〜午前）に同日中に追従するため
+_TTL_SECONDS = 6 * 60 * 60
+# キャッシュデータの date がこれより古ければ強制再取得
+# 2 日 = 「前日 or 前々日まで」を保証
+_MAX_DATA_AGE_DAYS = 2
 
 
 class EnergyApiError(Exception):
@@ -26,9 +31,19 @@ class GoGoGsClient(AsyncHTTPClient):
         super().__init__(_BASE_URL, max_retries=2, timeout=10.0)
 
     async def get_fuel_prices(self) -> dict[str, Any]:
-        """全国平均燃料価格（円/L）を取得する。キャッシュあれば返す。"""
+        """全国平均燃料価格（円/L）を取得する。キャッシュあれば返す。
+
+        鮮度ポリシー:
+            - TTL 6h（gogo.gs の前日値更新に同日中に追従）
+            - さらにキャッシュ済データの `date` が今日から 2 日以内であることも要件
+              （TTL 内でも `date` が古すぎれば破棄して再取得）
+
+        副作用として、取得した日付・価格を `fuel_price_history` テーブルに
+        自動追記する。同一日付・ソースの重複は INSERT OR IGNORE。
+        """
         cached = cache.get(_CACHE_KEY)
-        if cached is not None:
+        if cached is not None and _is_data_fresh_enough(cast(dict[str, Any], cached)):
+            self._record_history(cast(dict[str, Any], cached))
             return cast(dict[str, Any], cached)
 
         try:
@@ -38,11 +53,43 @@ class GoGoGsClient(AsyncHTTPClient):
 
         result = _parse_gogogs_prices(html)
         cache.store(_CACHE_KEY, result, _TTL_SECONDS)
+        self._record_history(result)
         return result
+
+    @staticmethod
+    def _record_history(prices: dict[str, Any]) -> None:
+        """履歴テーブルに 1 行追記する（重複 INSERT OR IGNORE）。"""
+        date_str = str(prices.get("date") or "")
+        if not date_str:
+            return  # 日付が抽出できなかった場合は履歴化しない
+        cache.insert_fuel_price_record(
+            date_str=date_str,
+            source="gogo.gs",
+            regular=prices.get("regular"),
+            diesel=prices.get("diesel"),
+            kerosene=prices.get("kerosene"),
+        )
 
 
 # 後方互換エイリアス（energy_tools.py / macro_tools.py のインポートを変えない）
 EnergyClient = GoGoGsClient
+
+
+def _is_data_fresh_enough(prices: dict[str, Any]) -> bool:
+    """キャッシュデータの `date` が今日から `_MAX_DATA_AGE_DAYS` 日以内かを判定する。
+
+    True なら採用、False なら破棄して再取得。
+    日付が抽出できないキャッシュは確実に再取得（False）。
+    """
+    date_str = str(prices.get("date") or "")
+    if not date_str:
+        return False
+    try:
+        data_date = _dt.date.fromisoformat(date_str)
+    except ValueError:
+        return False
+    age_days = (_dt.date.today() - data_date).days
+    return 0 <= age_days <= _MAX_DATA_AGE_DAYS
 
 
 def _parse_gogogs_prices(html: str) -> dict[str, Any]:

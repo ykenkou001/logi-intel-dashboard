@@ -1,0 +1,90 @@
+# main への push 時に Lambda（FastAPI）を自動デプロイ
+# core/ api/ lambda/ pyproject.toml uv.lock のいずれかが変更された時のみ走る
+name: Deploy API to Lambda
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'core/**'
+      - 'api/**'
+      - 'lambda/**'
+      - 'mcp_server/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/deploy-api.yml'
+
+# OIDC 認証で AWS にアクセスするために必須
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-1
+  LAMBDA_FUNCTION_NAME: logi-intel-dev-api
+  HEALTH_URL: https://d1zei8qivkf3cr.cloudfront.net/health
+
+jobs:
+  deploy:
+    name: Build & Deploy Lambda
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AWS OIDC で credentials 取得
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: uv インストール
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Python 3.12 セットアップ
+        run: uv python install 3.12
+
+      - name: 依存関係を Lambda 用に export
+        run: uv export --no-hashes --no-dev --no-emit-project --output-file lambda/requirements.txt
+
+      - name: Lambda zip ビルド（Linux x86_64 wheel）
+        run: |
+          rm -rf lambda/build
+          mkdir -p lambda/build
+          uv run pip install -r lambda/requirements.txt \
+            --target lambda/build \
+            --platform manylinux2014_x86_64 \
+            --python-version 3.12 \
+            --only-binary=:all:
+          cp -r core api mcp_server lambda/build/
+          cd lambda/build && zip -qr ../function.zip . && cd ../..
+          ls -lh lambda/function.zip
+
+      - name: Lambda 関数を更新
+        run: |
+          aws lambda update-function-code \
+            --function-name "$LAMBDA_FUNCTION_NAME" \
+            --zip-file fileb://lambda/function.zip \
+            --region "$AWS_REGION" \
+            --output table
+          aws lambda wait function-updated \
+            --function-name "$LAMBDA_FUNCTION_NAME" \
+            --region "$AWS_REGION"
+
+      - name: ヘルスチェック
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -fsS "$HEALTH_URL" -o /dev/null; then
+              echo "Health OK"
+              exit 0
+            fi
+            echo "retry $i ..."
+            sleep 5
+          done
+          echo "Health check failed"
+          exit 1

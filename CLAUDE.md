@@ -21,6 +21,58 @@
 
 ---
 
+## 1.5 ミッション宣言（必読・最優先）
+
+**このプロジェクトの存在意義は「CLO（物流統括管理者）の中長期計画策定と運用を、本気で・徹底的に支援すること」である。**
+
+### アプリの軸: 意思決定支援に特化（Option C）
+
+CLO の最大の悩みは「**何をやれば一番効くか**」。データ提供や計画書代行は手段にすぎない。
+本アプリの差別化は **施策の選択と評価（Decision Support）** に絞る。
+
+```
+コンサル ──→ 高い・遅い・属人的
+既存物流DXツール ──→ 運用特化、計画策定は弱い
+本アプリ ──→ CLO の意思決定パートナーとして机に常駐
+```
+
+### 必達 7 本柱
+
+| # | 柱 | フェーズ |
+|---|------|--------|
+| 1 | **Decision Support**（施策の選択と評価） | 3.5（核心） |
+| 2 | **Compliance Assurance**（法令準拠保証） | 2.5 / 3.5 |
+| 3 | **Continuous Operation**（継続運用サイクル） | 4.5 |
+| 4 | **Stakeholder Integration**（取引先連携） | スコープ外 |
+| 5 | **Executive Communication**（経営層への翻訳） | 3.0 / 3.5 |
+| 6 | **Knowledge Base**（事例・知見蓄積） | 3.5 |
+| 7 | **Defensibility**（説明責任の担保） | 2.5 / 3.5 |
+
+MCP サーバー / REST API / Web ダッシュボードはすべて手段であり、目的ではない。
+あらゆる実装判断は「**それは CLO の中長期計画提出（2026年10月末）と継続運用に直接効くか？**」を基準に決定する。
+
+### 徹底するコミットメント
+
+1. **法定様式に沿うこと** — 国交省・経産省が公開する「様式第3別紙 中長期計画書」テンプレートに準拠した出力を生成できること
+2. **法的根拠を明示すること** — 提供する全数値に出典 URL（e-Stat 統計表 ID、告示番号、省令番号等）を付与すること
+3. **経営会議で使える成果物を出すこと** — 会話画面で完結させない。**PPT（最優先）/ PDF / Excel / Markdown** をファイルとして出力できること
+4. **業界平均との比較を必ず提供すること** — 「自社の数字単独」ではなく「業界平均比 ▲X%」「全国順位 X 位」の形で出すこと
+5. **改善基準告示・物流効率化法に整合すること** — 提案する数値目標は告示で定められた数値（拘束時間 13h/日、年 960h 等）に整合していること
+6. **判断に迷ったら CLO 側に立つこと** — 実装が楽な方ではなく、CLO 担当者が経営会議で説明責任を果たせる方を選ぶ
+
+### 「やらないこと」リスト（誘惑への防波堤）
+
+- ❌ MCP ツールを増やすこと自体を目標にしない（CLO に効かないツールは作らない）
+- ❌ Claude の会話画面で「すごい数字が出た」で完結させない（必ず成果物ファイルまで出す）
+- ❌ 「動いた」を完了とせず「CLO 計画書ドラフトに使える形で出た」を完了とする
+- ❌ データソースを増やすこと自体を目標にしない（CLO 業務に紐付かないデータは取らない）
+- ❌ **「データを提供するだけ」で止めない**（必ず「どの施策を選ぶべきか」まで踏み込む）
+- ⏳ **取引先（運送事業者）連携機能・配車最適化 AI 統合は将来検討**（フェーズ4.5 以降。当面は荷主側 CLO 支援に集中）
+
+詳細 → [docs/clo_domain.md](docs/clo_domain.md)
+
+---
+
 ## 2. ドキュメント索引
 
 | ドキュメント | 内容 |
@@ -31,6 +83,9 @@
 | [docs/api_endpoints.md](docs/api_endpoints.md) | 利用 API 一覧・認証・TTL・制約 |
 | [docs/mcp_tools.md](docs/mcp_tools.md) | MCP ツール命名規則・実装方針 |
 | [docs/clo_domain.md](docs/clo_domain.md) | CLO 業務ドメイン知識・法的定義 |
+| [docs/data_input_guide.md](docs/data_input_guide.md) | 自社データ入力ガイド（Excel/CSV テンプレ記入と取込手順） |
+| [docs/ppt_design.md](docs/ppt_design.md) | PPT デザイン方針（Logi-Intel CLO Report）・スライドファミリー定義 |
+| [docs/aws_migration_plan.md](docs/aws_migration_plan.md) | AWS 移行計画（フェーズ4.0 後半・8 Step 手順書） |
 | [docs/oss_reference.md](docs/oss_reference.md) | 参考 OSS の方針・Attribution |
 | [docs/testing.md](docs/testing.md) | テストレベル・モック方針・カバレッジ目標 |
 | [docs/git_workflow.md](docs/git_workflow.md) | ブランチ戦略・コミットメッセージ規則 |
@@ -41,17 +96,36 @@
 
 ## 3. 現在のフェーズ
 
-**フェーズ 2: データソース拡張** ← 今ここ
+**フェーズ 4.0 ✅ 完了（2026-05-05）— AWS PoC デプロイ済**
 
-詳細は [docs/roadmap.md](docs/roadmap.md) 参照
+**社内レビュー URL**: https://d1zei8qivkf3cr.cloudfront.net/
 
-詳細 → [docs/roadmap.md](docs/roadmap.md)
+**フェーズ 4.0 サブステップ**:
+- ✅ 自社データ取込（Codex 4 フル版）— Excel/CSV → CompanyProfile + JSON 永続化 + サンプル3社 ID 解決の統合
+- ✅ FastAPI REST 層 — 21 エンドポイント公開（CLO 12 / macro 1 / company 3 / files 1 / meta 4）。MCP と同じ ToolResponse 構造・tests/api/ 27 件全 pass
+- ✅ Next.js 15 ダッシュボード（web/）— App Router + TypeScript + Tailwind。全 8 画面実装。`npm run build` 12 ページ静的生成
+- ✅ AWS PoC デプロイ — API Gateway HTTP API + Lambda (Mangum/Python 3.12) + CloudFront + S3 + SSM Parameter Store。Terraform IaC `infra/main.tf`。月額 $1〜$3 想定
+- ✅ ストレージ層抽象化（`core/storage.py`）+ シークレット層抽象化（`core/secrets.py`）— ローカル開発互換性を保ったまま AWS 切替
+
+**残課題（次セッションで対応）**:
+- ⏳ e-Stat API キーが Lambda 上で正しく読めるか実動作確認（macro / benchmark / driver-gap）
+- ⏳ サンプル sample_chain_01 / sample_wholesale_01 で plan-draft 動作確認
+- ⏳ Codex 指摘の **PPT 視覚化強化**（施策ポートフォリオ図・効果ウォーターフォール・KPI ロードマップ）
+
+**新規 MCP ツール（フェーズ4.0 で追加）**:
+- `logi_clo_generate_template`: 自社プロフィール入力テンプレ Excel を生成
+- `logi_clo_load_company`: 記入済み Excel/CSV から CompanyProfile を構築・JSON 永続化
+
+詳細 → [docs/roadmap.md](docs/roadmap.md) §フェーズ4.0 / [docs/data_input_guide.md](docs/data_input_guide.md)
 
 ---
 
 ## 4. 重要原則（必ず守ること）
 
+- **CLO 業務に効かない実装はしない** — 1.5 のミッション宣言を最優先
 - **ビジネスロジックは必ず `core/` に置く** — MCP・REST 層には書かない
+- **成果物は必ずファイル出力できるようにする** — PPT / PDF / Excel / Markdown
+- **全数値に出典を付与する** — `core/export/citation.py` を経由
 - **過剰アクセス禁止** — キャッシュ必須、リトライにバックオフ必須
 - **API キーをログに出力しない** — `core/clients/base.py` でマスク処理
 - **ロジックを先に読む** — 推測で実装しない
@@ -79,7 +153,81 @@
 
 ---
 
-## 7. Subagent 活用方針
+## 6.5 ローカル開発サーバー起動ルール（必須）
+
+ローカル FastAPI / Next.js を立てる際は **必ず `scripts/dev_api.ps1` / `scripts/dev_web.ps1` を使うこと**。
+`uvicorn ...` を直接叩いたり `npm run dev` を素で起動してはいけない。
+
+### 経緯（2026-05-05 の不具合）
+旧 uvicorn が `core/` をメモリにロードしたまま動き続け、本番に修正をデプロイしても
+ブラウザフロントが localhost を叩き続けて修正反映が確認できない事故が発生した。
+
+原因:
+1. uvicorn を `--reload` なしで起動した古いプロセスが多重に残存
+2. `web/lib/api.ts` のデフォルト API_BASE が `http://localhost:8000` で、`NEXT_PUBLIC_API_BASE_URL`
+   未設定の本番ビルドでもローカルを叩く構造だった
+
+恒久対策（実施済）:
+- `scripts/dev_api.ps1` に **既存 uvicorn の自動 kill + `--reload` 起動** を組み込み
+- `scripts/dev_web.ps1` に **既存 next dev の自動 kill + API_BASE 環境変数固定** を組み込み
+- `web/lib/api.ts` のデフォルト API_BASE を `""`（同一 origin）に変更
+
+### 起動コマンド
+```powershell
+pwsh scripts/dev_api.ps1            # FastAPI (port 8000, --reload)
+pwsh scripts/dev_web.ps1            # Next.js (port 3000, API_BASE=localhost:8000)
+```
+
+### 不具合の症状（同種の事故が再発した時の見分け方）
+- 「コードを直してデプロイしたのに本番のフロントから動作が変わらない」
+- ブラウザ DevTools の Network タブで API リクエスト先が `localhost` になっている
+- → `Get-Process uvicorn,node` で残存プロセスを確認 → `dev_api.ps1` で再起動
+
+---
+
+## 7. フェーズ3 Step 単位の検証ルール（必須）
+
+各 Step の実装完了後、**必ず以下の検証を行ってから次の Step に進むこと**。
+「コードが書けた」を完了とせず「Claude Desktop で動いた」を完了とする。
+
+### 検証手順
+1. `uv run ruff check` + `uv run mypy` で静的チェックをパスさせる
+2. `uv run pytest --tb=short -q` で既存テスト全件パスを確認する
+3. **Claude Desktop を再起動**（MCP サーバーを再読み込みさせる）
+4. Claude Desktop で当該 Step のツールを実際に呼び出し、**出力値の妥当性まで確認する**
+   - エラーなく ToolResponse 構造（summary/citations/freshness_warnings）が返るか
+   - **数値が現実的な範囲か**（桁が合っているか・単位が正しいか）
+   - **業界知識に照らして整合的か**（例: 全国ドライバー数が数百万のオーダーか・全国事業所数が業種規模に妥当か）
+   - **出典 URL を1〜2件踏んで一次情報と数値が合っているか**（経営会議で「出典は？」即答用）
+   - **計算ロジックの矛盾がないか**（例: 全国シェア合計が100%に収まるか・マイナス値が出ていないか）
+   - 鮮度警告が想定通り表示されるか
+5. 「動いた」だけで完了とせず、**「経営会議で説明できる数字か」を判定基準にする**
+6. 問題があれば修正 → 2 に戻る。問題なければ roadmap.md を ✅ に更新して次の Step へ
+
+### 妥当性チェックの基本姿勢
+- 数値が出たら、**まず常識と照らす**（例: 東京都のドライバー数が1万人未満や1000万人なら異常）
+- 業界統計の公表値（国交省「物流2024年問題」資料、JILS物流コスト調査等）と桁を比較する
+- ユーザー（健一）に報告する際は **「確認した妥当性のチェック項目」も列挙する**（数値だけ貼らない）
+
+### Step ごとの最低限のテスト呼び出し例
+| Step | ツール | 確認用呼び出し |
+|------|--------|--------------|
+| 1 | `logi_clo_benchmark_position` | `jsic_code="5411", prefecture="東京都", revenue_jpy=5_000_000_000` |
+| 2 | `logi_clo_driver_gap` | `prefecture="東京都"` |
+| 3 | `logi_clo_eligibility` | `jsic_code="5411", revenue_jpy=5_000_000_000` |
+| 4 | `logi_clo_target_proposal` | `jsic_code="5411", prefecture="東京都", revenue_jpy=5_000_000_000` |
+| 7 | `logi_clo_plan_draft` | サンプル会社プロフィールで一括生成（エグゼクサマリーに財務インパクト含む） |
+| 3.5/6 | `logi_clo_submission_validate` | サンプル ID で計画書を生成→検査（PASS/準拠率/エラー警告） |
+| 3.5/4 | `logi_clo_financial_translate` | サンプル ID で施策別 P&L 翻訳（営業利益+X億・炭素回避レンジ・5年NPV） |
+| 3.5/1 | `logi_clo_playbook_search` | 業種・規模・難易度で標準10施策を絞込（投資レンジ・補助金・失敗パターン提示） |
+| 3.5/2 | `logi_clo_measure_eval` | 自社プロフィール × 10施策 → 4軸スコアリング → Top 3 推薦 + 選定根拠 |
+| 3.5/5 | `logi_clo_feasibility_check` | 施策の実行可否を 緑/黄/赤 で判定 + 積載率 KPI 到達可能性 |
+| 3.5/3 | `logi_clo_scenario_sim` | サンプル ID で baseline + 7 ストレス × 3 区分（保守/標準/上振れ）試算（燃料+20% 黒字維持判定） |
+| 3.5/7 | `logi_clo_periodic_report_draft` | サンプル ID で様式第5 Word を生成（Ⅰ〜Ⅵ セクション + 提出実務チェックリスト + 改善基準告示遵守判定） |
+
+---
+
+## 8. Subagent 活用方針
 
 複雑なタスクは subagent に分割して委譲する。
 
@@ -94,4 +242,4 @@
 
 ---
 
-最終更新: 2026-05-01（RESAS 終了反映・AWS 移行計画追加）
+最終更新: 2026-05-05（フェーズ4.0 完了：AWS PoC デプロイ完了。社内レビュー URL `https://d1zei8qivkf3cr.cloudfront.net/` で 8 画面 + plan-draft / 成果物 DL まで稼働確認済。tests 422 件全 pass / ruff clean。月額試算 $1〜$3。次セッションは (1) e-Stat API 実動作確認 (2) sample_chain_01 / sample_wholesale_01 での plan-draft 動作確認 (3) Codex 指摘の PPT 視覚化強化 — 詳細は HANDOFF_NEXT_SESSION.md 参照）
