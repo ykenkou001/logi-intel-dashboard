@@ -4,7 +4,7 @@
 
 Claude Desktop/Code から MCP ツールとして呼び出せるほか、FastAPI REST API と Next.js ダッシュボードから、PPT / Word / Excel / Markdown の成果物を生成・ダウンロードできる。
 
-**現在のフェーズ**: フェーズ 4.5 — 継続運用機能（CLO デイリーコックピット）を実装中
+**現在のフェーズ**: フェーズ 5.0 — 業種別 CLO 標準パッケージ + F2 標準化スコア / J2 罠スコア（c.1-c.6 完了 / c.7 MCP/REST 公開フェーズ着手前）。フェーズ 4.5（J3 デイリーコックピット）は完了済
 
 **開発進捗**: [docs/roadmap.md](docs/roadmap.md)
 

@@ -13,38 +13,47 @@
 フェーズ 2.5 CLO 武装データ層 + 出口整備                          ✅ 完了
 フェーズ 3.0 計画書ドラフト基盤                                   ✅ 完了 (2026-05-02)
 フェーズ 3.5 ★意思決定支援強化（差別化の心臓部）★              ✅ 完了 (2026-05-03)
-フェーズ 4.0 Web ダッシュボード + AWS 移行 + 自社データ取込    ← 進行中
-             └ 自社データ取込（Codex 4 フル版）                  ✅ 完了 (2026-05-03)
-             └ FastAPI REST 層                                   ✅ 完了 (2026-05-03)
-             └ Next.js 初期化 + AWS 移行                          ⏳ 未着手
-フェーズ 4.5 継続運用機能（定期報告書・進捗・法改正アラート）
-フェーズ 5   公開・記事化
+フェーズ 4.0 Web ダッシュボード + AWS 移行 + 自社データ取込      ✅ 完了 (2026-05-05)
+フェーズ 4.1 段階 a 小改修（基盤整備 a.1〜a.5）                   ✅ 完了 (2026-05-05)
+フェーズ 4.5 段階 b J3 デイリーコックピット + B 用途別テンプレ    ✅ 完了 (2026-05-06)
+フェーズ 5.0 段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア   ← 進行中（c.7 着手前）
+             └ c.1-c.3 IndustryPackage 基盤 + Override 4 分類     ✅ 完了 (2026-05-06)
+             └ c.4 既存資産接続検証                              ✅ 完了 (2026-05-06)
+             └ c.5/c.6 F2 標準化スコア + J2 罠スコア              ✅ 完了 (2026-05-06)
+             └ c.7 MCP/REST 3 ツール公開                         ⏳ 次セッション着手
+             └ c.8 連鎖化特有処理 / c.9 統合テスト + Web 2 画面  ⏳ 未着手
+フェーズ 5.5 公開・記事化（旧フェーズ5）                          ⏳ 未着手
 ```
+
+> 段階 a/b/c の詳細設計は `~/.claude/plans/b-c-flickering-pixel.md`（健一の global plans）参照。
+> Codex の二者議論で確定した 7 件の修正点を反映済。
 
 ---
 
-## 現在のフェーズ: フェーズ 4.0 進行中 — 自社データ取込（Codex 4 フル版）✅ 完了（2026-05-03）
+## 現在のフェーズ: フェーズ 5.0 進行中 — c.1-c.6 完了 / c.7 MCP/REST 公開フェーズ着手前
 
-> **次セッションへの引継**: フェーズ4.0 残り作業 — FastAPI REST 層 + Next.js 初期化 + AWS 移行（SQLite→Redis、API キー→Secrets Manager、ECS/Lambda デプロイ）。
->
-> **自社データ取込 完了状態**:
-> - ✅ CompanyProfile スキーマ拡張（積載率実績・荷待ち時間・荷役等時間・燃料消費・KPI 履歴）
-> - ✅ Excel テンプレ生成 + 取込（CSV 補助経路あり）
-> - ✅ JSON 永続化 + サンプル3社 ID 解決の統合
-> - ✅ MCP ツール 2 個追加（`logi_clo_generate_template` / `logi_clo_load_company`）
-> - ✅ docs/data_input_guide.md 整備
-> - 詳細 → [docs/data_input_guide.md](data_input_guide.md)
->
-> **改善タスク短期 4 件 完了状態（2026-05-03）**:
-> - ✅ 短期 1（業界平均比 1000% 超信頼性警告）— f096cf7
-> - ✅ 短期 2（業界感覚レンジコード化 + data_source フラグ）— 59b1388
-> - ✅ 短期 3（judgment trail + 実行カード簡易版）— c9a2ca7
-> - ✅ 短期 4（法令区分の文言整合性監査）— 5b609f1
->
-> **Codex 外部レビュー反映状態**:
-> - ✅ Codex 2 軽量取込 → 短期3（実行カード簡易版）/ ✅ Codex 4 軽量取込 → 短期2（data_source）/ ✅ Codex 5 → 短期4（法令区分監査）
-> - ⏳ Codex 1（提出実務チェックリスト）→ Step 7 で対応 / ⏳ Codex 3（保守/標準/上振れ）→ Step 3 で対応
-> - 残り: Codex 2 フル版 → フェーズ4.5 / Codex 4 フル版 → フェーズ4.0
+> **状況（2026-05-06 時点）**: 段階 c の中核（IndustryPackage 基盤 + F2 標準化スコア + J2 罠スコア）まで main 取込済。次は c.7 で `logi_clo_*` ツール 3 件 + REST 3 エンドポイント公開。引継ぎ詳細は [HANDOFF_NEXT_SESSION.md](../HANDOFF_NEXT_SESSION.md) 参照。
+
+### 完了 PR（フェーズ4.5+5.0 関連）
+
+| PR | 内容 | 主要新規ファイル |
+|---|---|---|
+| #6 | フェーズ4.1 段階 a（a.1-a.5） | `core/analytics/wait_time_heatmap.py` / `core/static/standard_freight.py` / NotebookLM 7 社事例 / sample_retail_01 / 3 スライド経営会議要約 PPT |
+| #7 | b.2-b.6 デイリーコックピット中核 + Codex 協業ルール（CLAUDE.md §9） | `core/analytics/operation_cockpit.py`（990 行）/ MCP `logi_clo_today_decisions` / REST `/today-decisions/{id}` `/decisions/{id}` |
+| #8 | b.7 コックピット Web 画面 | `web/app/dashboard/cockpit/page.tsx`（380 行）+ `web/lib/api.ts` 拡張 |
+| #9 | b.9 シナリオテスト + 12 fixtures | `tests/core/test_analytics_operation_cockpit_scenarios.py`（120 アサーション）+ `tests/fixtures/cockpit_summaries/*.txt` × 12 |
+| #10 | フェーズ4.5 B 用途別テンプレ（daily/monthly/annual） | `core/io/template_writer.py` 拡張 + `logi_clo_generate_template` purpose 引数 |
+| #11 | c.1-c.3 業種別 CLO 標準パッケージ基盤（Codex KPI レビュー反映済） | `core/playbook/industry_packages.py`（770 行）+ `core/io/override_store.py` |
+| #12 | HANDOFF を c.4-c.6 向けに刷新 | `HANDOFF_NEXT_SESSION.md` |
+| #13 | c.4 既存資産接続検証 + c.5/c.6 F2 標準化スコア + J2 罠スコア | `core/analytics/standardization_score.py` + `core/analytics/waste_trap.py` + テスト 73 件追加（pytest 783 件全 pass） |
+
+### Codex 協業実績（CLAUDE.md §9 適用例）
+
+- **段階 b/c 詳細実装計画の二者議論**（2026-05-05）: Codex 勧告 7 件を `plans/b-c-flickering-pixel.md` に反映
+- **c.1 業種別 KPI 数値妥当性レビュー**（2026-05-06）: 着手前に Codex に独立レビュー依頼 → 3 件 critical 修正を全反映
+  - 積載率: 旧案 manufacturing 55% / wholesale 52% を取下げ → 国の 2028 年度全体目標 **44%** に統一
+  - 在庫回転数 / 共配率 / 配送便数削減等は `target_value=None`（標準値の根拠が国・JILS 未確認）
+  - Codex 単独提案 2 件追加: 「荷待ち+荷役等 ≤60 分/回」「物流コスト売上高比率 baseline」
 
 ---
 
@@ -631,24 +640,127 @@ class ScenarioSimResult:
 
 ---
 
-## フェーズ 4.5: 継続運用機能
+## フェーズ 4.1: 段階 a 小改修（基盤整備）✅ 完了（2026-05-05）
 
-**ゴール**: 計画策定 → 実行 → 報告 → 改定の年次サイクルをアプリ内で回せる。
+**ゴール**: 段階 b（J3 デイリーコックピット）の前提となる静的データ・サンプル・出力テンプレを揃える。
+詳細設計 → `~/.claude/plans/b-c-flickering-pixel.md` §段階 a。
 
-- [ ] **定期報告書ドラフト生成**（様式第5）— 製造業以外も対応
-- [ ] **KPI トラッキング dashboard** — 計画 vs 実績の可視化
-- [ ] **進捗 alert** — 目標未達リスクの早期警告
-- [ ] **法改正監視** — 改善基準告示・物流効率化法 政省令の改訂を検出してアラート
-- [ ] **計画改定サポート** — 過去計画と新環境の差分分析
+- [x] **a.1 拠点別待機時間ヒートマップ** — `core/analytics/wait_time_heatmap.py`（拠点 × 時間帯 4 区分）/ `web/app/dashboard/wait-heatmap/page.tsx` / MCP `logi_clo_wait_heatmap` / REST `/wait-heatmap`
+- [x] **a.2 NotebookLM 7 社事例の構造化取込（Codex 担当）** — `core/static/efficiency_law_certified.py` の `CertifiedCase` を before/after・投資レンジ・回収月数で拡張、経産省 CLO 取組事例集 7 社を追加
+- [x] **a.3 経営会議向け 3 スライド要約 PPT** — `core/export/ppt_writer.write_clo_executive_brief()` / MCP `logi_clo_executive_brief` / REST `/executive-brief/{id}`
+- [x] **a.4 標準的運賃 2024 改定版 + WaitTimeStandard** — `core/static/standard_freight.py` / `core/static/improvement_standards.WaitTimeStandard`（threshold=120 / avg_target=30）
+- [x] **a.5 sample_retail_01 fixture** — 4 業種テストの基盤（地域 DC × 大型店 × 中型店の 3 構成 + 拠点別待機時間 fixtures）
 
-### フェーズ 4.5 完了条件
+### フェーズ 4.1 完了条件 ✅ すべて達成
 
-- 計画提出 → 1 年後に「実績入力 → 達成率分析 → 報告書ドラフト生成」が完結する
-- 法改正があったら Claude が起動時に通知する
+- [x] sample_retail_01 で 3 拠点 × 4 時間帯 = 12 セルのヒートマップが生成される
+- [x] 段階 b で参照する `WaitTimeStandard` / `STANDARD_FREIGHT_RATES` / `CertifiedCase` 拡張がすべて確定
+- [x] 既存テスト 422 件 → 475 件全 pass
 
 ---
 
-## フェーズ 5: 公開・記事化
+## フェーズ 4.5: 段階 b J3 デイリーコックピット + B 用途別テンプレ ✅ 完了（2026-05-06）
+
+**ゴール**: CLO が朝 1 回開けば「未達 KPI ／ 放置リスク ／ 今週決める施策」が 3 件だけ並ぶ意思決定支援ビューを完成させる（J3）。+ 自社データ入力テンプレを用途別（日次/月次/年次）に分割（B 軸）。
+
+詳細設計 → `~/.claude/plans/b-c-flickering-pixel.md` §段階 b。
+
+### 段階 b: J3 デイリーコックピット（PR #7 / #8 / #9）
+
+- [x] **b.2 データモデル**（Pydantic v2）— `CockpitItem` / `ObjectionItem` / `OperationKpiSnapshot` / `DecisionRecord` / `CockpitResult`
+- [x] **b.3 統合エンジン**（`build_daily_cockpit`）— improvement_check + feasibility_check + measure_eval を 3 軸（compliance / kpi_reach / measure_pick）にマッピング
+- [x] **b.4 既存判定関数の統合** — ComplianceReport.items[].status → urgency/impact 派生 / FeasibilityResult.kpi_reachability → 候補化 / MeasureScore Top3 → 軸 C
+- [x] **b.5 「3 判断」抽出アルゴリズム** — urgency × impact × confidence の加重合計（0.4/0.4/0.2）+ 軸 A 必須化（重大違反 OR 提出期限 30 日以内）+ 軸 C 上限 2 + 重複排除 + state card 4 分類補填
+- [x] **b.6 MCP/REST ツール** — `logi_clo_today_decisions` / GET `/today-decisions/{id}` / POST `/decisions/{id}`（I2 ログ append-only）
+- [x] **b.7 Web 画面** — `web/app/dashboard/cockpit/page.tsx`（overall_health バナー + 3 軸カード + J4 薄版折りたたみ + 採用/保留/却下ボタン）
+- [x] **b.8 永続化層** — `outputs/cockpit_snapshots/<id>/<yyyymmdd>.json` + `outputs/decisions/<id>.jsonl`
+- [x] **b.9 シナリオテスト** — 4 サンプル × 3 シナリオ（baseline / violation_added / measurements_cleared）= 12 ケーススナップショット + 120 アサーション
+
+### J4 薄版（b に組込・本格 J4 は段階 c で別実装）
+
+- [x] 各 attention_needed `CockpitItem` に `anticipated_objections: list[ObjectionItem]` 3 件付き（CFO / 現場 / Partner|Board ロール × cost/legal/supply/brand_risk 軸）
+- [x] Codex 勧告: 「3 件だけ」が「昨日と同じ」化リスク → 前回差分・未決 aging・次レビュー期日を主表示
+
+### B 軸: 用途別テンプレ（PR #10）
+
+- [x] `template_purpose: Literal["daily","monthly","annual"]` を `write_company_template` / `logi_clo_generate_template` / `/api/v1/company/template` / Web UI へ通す
+- [x] daily   = 日次運用入力用（profile / sites + 簡易 wait_time）
+- [x] monthly = 月次集計用（profile / sites + wait_time + handling_time + kpi_history）
+- [x] annual  = 計画策定用（現行 6 シート完全互換、デフォルト）
+
+### フェーズ 4.5 完了条件 ✅ すべて達成
+
+- [x] `logi_clo_today_decisions("sample_*")` で 3 件の意思決定カードが返る（4 サンプルで動作確認済）
+- [x] Web `/dashboard/cockpit` で overall_health バナー + 3 軸カード + 採用/保留/却下ボタンが動作
+- [x] 12 ケーススナップショット fixture が CI で守られる（pytest 624+ 件全 pass）
+- [x] 用途別テンプレ DL が Web から動作（3 用途とも Excel 生成可能）
+
+### 旧フェーズ4.5（継続運用機能）の扱い
+
+旧計画「定期報告書 + KPI トラッキング + 法改正監視」は J3 コックピットへ統合 or 段階 c 以降に再配置。
+
+- 定期報告書ドラフト生成（製造業以外） → 段階 c.7 連鎖化特有処理 で対応予定
+- KPI トラッキング dashboard → J3 コックピット `delta_from_yesterday` で部分達成
+- 進捗 alert → コックピット H1 アラート（将来実装）
+- 法改正監視 → スコープ外（フェーズ 5.5 検討）
+- 計画改定サポート → コックピットの DecisionRecord ログから差分生成（将来実装）
+
+---
+
+## フェーズ 5.0: 段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア（進行中・c.7 着手前）
+
+**ゴール**: 「コンサル代行」の代替として、業種別の標準パッケージ（KPI / 施策 / 会議体 / レポート / データ項目）を SaaS 商品化。個社差分を Override 4 分類で別管理し、F2 標準化スコアと J2 罠スコアで継続改善を支援する。
+
+詳細設計 → `~/.claude/plans/b-c-flickering-pixel.md` §段階 c。
+
+### c.1-c.3: 業種別パッケージ基盤 ✅ 完了（PR #11・2026-05-06）
+
+- [x] **c.1 4業種 × 5要素マトリクス** — manufacturing / wholesale / retail / chain_franchise × KPI / 施策 / 会議体 / レポート / データ項目 = 20 セル充填
+- [x] **c.2 データモデル** — `StandardKpiDef` / `StandardMeetingDef` / `StandardReportDef` / `StandardDataItemDef` / `IndustryPackage` / `OverrideEntry` / `CompanyPackageOverride` + Override 4 分類（unmanaged_deviation / approved_better_practice / required_localization / temporary_exception）
+- [x] **c.3 公開関数** — `get_package` / `list_packages` / `resolve_company_package`（base + override 合成・期限制御付）+ `core/io/override_store.py`（save/load Override JSON）
+- [x] テスト 48 件 + 7 件 = 55 件全 pass / `core/playbook/industry_packages.py` 約 770 行
+
+**Codex 業種別 KPI レビュー反映**:
+- 積載率全業種: 旧案 manufacturing 55% / wholesale 52% を取下げ → **国の 2028 年度全体目標 44%** に統一
+- 在庫回転数 / 共配率 / 配送便数削減 / SKU 当たり物流コスト等は `target_value=None`（推測排除）
+- Codex 単独提案 2 件: 「荷待ち+荷役等 ≤60 分/回」（物流効率化法ポータル判断基準）/ 「物流コスト売上高比率 baseline」（JILS 2021）
+
+### c.4 既存資産接続検証 ✅ 完了（PR #13・2026-05-06）
+
+- [x] `measure_ids` ↔ `ALL_MEASURES.applicable_industries` 整合性検証（chain_franchise が loading セクション施策を除外していること等）
+- [x] `LOGISTICS_COST_RATIO[industry]` × `IndustryPackage.kpis.logistics_cost_revenue_ratio_pct.baseline_value` 接続
+- [x] `tests/core/test_playbook_industry_packages.py` 拡張（17 件追加）
+
+### c.5 / c.6 F2 標準化スコア + J2 罠スコア ✅ 完了（PR #13・2026-05-06）
+
+- [x] **c.6 F2 標準化スコア** — `core/analytics/standardization_score.py`（unmanaged_deviation のみ減点で単調性確保 / approved_better_practice は減点なし bonus 候補 / 必須 KPI 全実装で +10 / approved_better_practice ≥2 で +5）/ テスト 22 件
+- [x] **c.6 J2 罠スコア** — `core/analytics/waste_trap.py` + 6 軸セーフガード（立ち上げ期間 / データ欠損 / サンプル数 / 季節性 / 外部要因 / 投資回収前）で誤検知抑止 / 9 種 root cause 分類 / テスト 34 件
+- [x] pytest 783 件全 pass / ruff クリーン / 新規テスト 73 件追加（c.4: 17 / F2: 22 / J2: 34）
+
+#### 持ち越し課題（c.7 後の改善 PR で対応予定）
+
+1. **J2 罠スコアの decision_log 連動** — 現状は `plan` 入力に閉じている。`outputs/decisions/<id>.jsonl` 連動で「pending のまま X ヶ月」検出を強化
+2. **actual_effect_jpy の逆算** — `kpi_history` の改善幅（積載率 ▲pp / 物流コスト/売上比率 ▲%）から自動算出
+3. **F2 bonus 拡張** — 「必須 KPI 全実装 + 月次会議定着」判定ロジックの追加（現状は実装ベース判定のみ）
+
+### c.7-c.9 ⏳ 未着手
+
+- [ ] **c.7 MCP/REST 3 ツール公開**（次セッション） — `logi_clo_industry_package_get` / `logi_clo_standardization_score` / `logi_clo_waste_trap_detect` + 対応 REST エンドポイント
+- [ ] **c.8 連鎖化事業者特有処理** — `chain_franchise` パッケージ強制（`metric_id` プレフィックス `handling_*` 禁止 / `form3_section == "loading"` 除外 / `legal_basis="第65条"` 明記）
+- [ ] **c.9 統合テスト + Web 画面 2 件** — `web/app/dashboard/industry-package/page.tsx`（4 業種タブ + 5 要素表）/ `web/app/dashboard/standardization/page.tsx`（自社 F2 + 差分テーブル）
+
+### フェーズ 5.0 完了条件
+
+- [x] `compute_standardization_score(profile, override)` で coverage_pct + score (0-100) が返り、approved_better_practice の追加では減点されない（単調性確保）— PR #13
+- [x] `detect_waste_traps` の 6 軸セーフガードで `months_since_start=0` 時に trap_severity="low" 固定 — PR #13
+- [x] 4 業種すべてで `get_package(category)` が StandardKpiDef リストを返す — PR #11
+- [x] 連鎖化サンプルで荷役等セクション施策が混入しないことが CI で守られる — PR #11 + PR #13 で強化
+- [ ] **c.7 MCP/REST 公開**: 上記 core/ 関数を `logi_clo_*` ツール経由で呼べる状態（次セッション着手）
+- [ ] Web 2 画面が `npm run build` 成功・実機動作確認済（c.9）
+
+---
+
+## フェーズ 5.5: 公開・記事化 ⏳ 未着手
 
 - [ ] README 整備
 - [ ] Zenn 記事執筆
@@ -664,15 +776,17 @@ class ScenarioSimResult:
                                                       ↓
 フェーズ2.5 (武装データ層+出口) ──→ フェーズ3 (CLO計画書ドラフト)
                                                       ↓
-フェーズ3.5 (意思決定支援強化+様式第5) ──→ フェーズ4 (Web+AWS+自社データ)
+フェーズ3.5 (意思決定支援強化+様式第5) ──→ フェーズ4.0 (Web+AWS+自社データ)
                                                       ↓
-                            フェーズ4.5 (継続運用) ──→ フェーズ5 (公開)
+                          フェーズ4.1 (段階 a 基盤整備) ──→ フェーズ4.5 (段階 b J3 コックピット + B 用途別テンプレ)
+                                                      ↓
+                        フェーズ5.0 (段階 c 業種別 SaaS パッケージ + F2/J2) ──→ フェーズ5.5 (公開)
 ```
 
 **法的マイルストーン**:
-- 2026-04: CLO 選任義務化施行
-- 2026-10末: **初回中長期計画提出** ← フェーズ3完了が間に合うべき
-- 毎年7月末: **定期報告書提出** ← フェーズ3.5 が間に合うべき
+- 2026-04: CLO 選任義務化施行 ✅ 経過
+- 2026-10末: **初回中長期計画提出** ← フェーズ3 で計画書ドラフト完成、フェーズ4.5 で日次運用支援、フェーズ5.0 で業種別パッケージ
+- 毎年7月末: **定期報告書提出** ← フェーズ3.5 Step 7 で対応済
 
 ---
 
