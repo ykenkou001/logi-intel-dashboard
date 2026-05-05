@@ -1,5 +1,11 @@
 # main への push 時に Lambda（FastAPI）を自動デプロイ
-# core/ api/ lambda/ pyproject.toml uv.lock のいずれかが変更された時のみ走る
+# core/ api/ lambda/ pyproject.toml uv.lock のいずれかが変更された時のみ走る。
+# mcp_server/** は Lambda zip に含めないため paths からは外す（CI / ローカルでのみ使用）。
+#
+# 経緯（2026-05-05）:
+#   PR #1 merge 後の初回デプロイで update-function-code --zip-file が ~70MB 上限に
+#   引っかかり RequestEntityTooLargeException で失敗。S3 経由デプロイに切替（最大 250MB）。
+#   同時に zip サイズ削減（mcp_server 除外 / boto3 ランタイム同梱依存 / __pycache__ 削除等）。
 name: Deploy API to Lambda
 
 on:
@@ -9,7 +15,6 @@ on:
       - 'core/**'
       - 'api/**'
       - 'lambda/**'
-      - 'mcp_server/**'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/deploy-api.yml'
@@ -27,6 +32,8 @@ env:
   AWS_REGION: ap-northeast-1
   LAMBDA_FUNCTION_NAME: logi-intel-dev-api
   HEALTH_URL: https://d1zei8qivkf3cr.cloudfront.net/health
+  DEPLOY_BUCKET: logi-intel-dev-7m2lqc
+  DEPLOY_PREFIX: lambda-deploy
 
 jobs:
   deploy:
@@ -50,9 +57,18 @@ jobs:
         run: uv python install 3.12
 
       - name: 依存関係を Lambda 用に export
-        run: uv export --no-hashes --no-dev --no-emit-project --output-file lambda/requirements.txt
+        # boto3 / botocore は Lambda Python ランタイム同梱のため除外（zip サイズ削減）。
+        # boto3-stubs は型情報のみで実行時不要のため除外。
+        run: |
+          uv export --no-hashes --no-dev --no-emit-project --output-file lambda/requirements.full.txt
+          grep -Eiv '^(boto3|botocore|boto3-stubs|botocore-stubs|s3transfer|jmespath)([=<>!~ ]|$)' \
+            lambda/requirements.full.txt > lambda/requirements.txt
+          echo "--- requirements.txt ---"
+          cat lambda/requirements.txt
 
       - name: Lambda zip ビルド（Linux x86_64 wheel）
+        # --no-compile で .pyc を生成しない（実行時に Lambda が必要に応じて生成する）。
+        # mcp_server/ は Lambda 上で参照されないため除外（コメント上の名前参照のみ）。
         run: |
           rm -rf lambda/build
           mkdir -p lambda/build
@@ -60,16 +76,49 @@ jobs:
             --target lambda/build \
             --platform manylinux2014_x86_64 \
             --python-version 3.12 \
-            --only-binary=:all:
-          cp -r core api mcp_server lambda/build/
-          cd lambda/build && zip -qr ../function.zip . && cd ../..
-          ls -lh lambda/function.zip
+            --only-binary=:all: \
+            --no-compile
+          cp -r core api lambda/build/
 
-      - name: Lambda 関数を更新
+      - name: 不要ファイル削除（zip サイズ削減）
+        run: |
+          cd lambda/build
+          # バイトコードキャッシュ（--no-compile でも一部発生するため念のため）
+          find . -type d -name "__pycache__" -prune -exec rm -rf {} +
+          find . -type f -name "*.pyc" -delete
+          find . -type f -name "*.pyo" -delete
+          # dist-info の冗長ファイル（インストール時のメタは RECORD/INSTALLER 程度で十分）
+          find . -type d -name "*.dist-info" | while read d; do
+            rm -f "$d/RECORD" "$d/REQUESTED" "$d/INSTALLER" "$d/WHEEL"
+          done
+          # テスト・サンプル・ドキュメント（実行時不要）
+          find . -type d \( -name "tests" -o -name "test" -o -name "examples" -o -name "docs" \) -prune -exec rm -rf {} + || true
+          find . -type f \( -name "*.md" -o -name "*.rst" -o -name "*.txt" \) -path "*/dist-info/*" -prune -o -print > /dev/null
+          # 上位 20 サイズを記録（CI ログで内訳確認用）
+          echo "--- top 20 sizes (lambda/build) ---"
+          du -sh */ 2>/dev/null | sort -h | tail -20 || true
+
+      - name: zip 圧縮
+        run: |
+          cd lambda/build && zip -qr9 ../function.zip . && cd ../..
+          ls -lh lambda/function.zip
+          echo "ZIP_BYTES=$(stat -c%s lambda/function.zip)" >> "$GITHUB_ENV"
+
+      - name: Lambda zip を S3 にアップロード
+        # API 直アップロード（70MB 上限）を回避し、S3 経由（250MB 上限）でデプロイ。
+        run: |
+          KEY="${DEPLOY_PREFIX}/function-${GITHUB_SHA}.zip"
+          aws s3 cp lambda/function.zip "s3://${DEPLOY_BUCKET}/${KEY}" \
+            --region "$AWS_REGION" \
+            --no-progress
+          echo "S3_KEY=${KEY}" >> "$GITHUB_ENV"
+
+      - name: Lambda 関数を更新（S3 経由）
         run: |
           aws lambda update-function-code \
             --function-name "$LAMBDA_FUNCTION_NAME" \
-            --zip-file fileb://lambda/function.zip \
+            --s3-bucket "$DEPLOY_BUCKET" \
+            --s3-key "$S3_KEY" \
             --region "$AWS_REGION" \
             --output table
           aws lambda wait function-updated \

@@ -1,11 +1,122 @@
 # 次セッションへの引継ぎ（2026-05-05 時点）
 
-## 🎯 次セッションの主目的（今回の最新指示）
+## ⚠️ 並行作業の注意（最初に必ず確認）
 
-**Word / Excel 生成物の品質改善を Codex で対応する。**
+健一は **Claude / Codex を別セッションで並行起動** して別領域を担当させる運用。
 
-健一からの最新方針:
+| 領域 | 担当 | 触ってよいファイル |
+|------|------|-------------------|
+| **Word / Excel 生成物の品質改善** | **Codex（並行作業中・触るな）** | `core/export/docx_form3_writer.py`, `core/export/excel_writer.py`, `tests/core/test_export_writers.py` |
+| **CI/CD パイプライン修正（Lambda zip 問題）** | **Claude（このセッションの主目的）** | `infra/main.tf`, `.github/workflows/*.yml`, `pyproject.toml` の依存棚卸し |
 
+**衝突注意の共有領域**: `pyproject.toml` の `[project.dependencies]` は Codex が docx/excel ライブラリ追加で触る可能性あり。変更時は健一に確認する。
+
+詳細 → メモリ `feedback_codex_parallel_collaboration.md`
+
+---
+
+## 🎯 CI/CD C 案 — 実装完了（コミット待ち・apply 待ち）
+
+**CI/CD パイプラインの Lambda zip サイズ問題を C 案（A+B 両方）で解決する。**
+コード変更は本セッションで完了。**残るは健一による `terraform apply` と PR/merge による反映**。
+
+### 経緯（再掲）
+
+- フェーズ4.0 集大成 PR #1 を 2026-05-05 に main へマージ済（merge commit `5fda8b2`）
+- マージで起動した GitHub Actions `Deploy API to Lambda` が「Lambda 関数を更新」ステップで失敗:
+
+```
+RequestEntityTooLargeException:
+  Request must be smaller than 70167211 bytes (≈ 66.9 MB)
+  for the UpdateFunctionCode operation
+```
+
+- 原因: `aws lambda update-function-code --zip-file` の API 直接アップロードは ~70MB 上限。CI の Linux 環境で生成された wheel（lxml / pillow 等の manylinux 版）が、ローカル Windows ビルド（44MB）より大きく 70MB を超えた
+- **デプロイは現状失敗中。Lambda 上のコードは PR #1 マージ前のまま停滞している**（健一によるレイアウト修正・KPI カード修正等は本番反映していない）
+
+### 採用方針: C 案（A+B 両方入れる）
+
+- A: S3 経由デプロイで 70MB → 250MB の上限へ拡張
+- B: zip 自体を削減（boto3 系除外 / mcp_server 除外 / `--no-compile` / 不要ファイル削除）
+
+### 本セッションで実施した変更
+
+| ファイル | 変更内容 |
+|---|---|
+| `infra/main.tf` | `aws_s3_bucket_lifecycle_configuration.main` に `lambda-deploy/` を 7 日で expire するルールを追加 |
+| `infra/main.tf` | `data "aws_iam_policy_document" "github_actions_deploy"` に `s3:PutObject/GetObject` for `lambda-deploy/*` と `s3:ListBucket` への prefix 拡張を追加 |
+| `.github/workflows/deploy-api.yml` | デプロイ経路を `--zip-file fileb://` → S3 経由（`aws s3 cp` → `update-function-code --s3-bucket --s3-key`）に切替 |
+| `.github/workflows/deploy-api.yml` | zip 削減: boto3 系を export からフィルタ（Lambda ランタイム同梱）/ `mcp_server/**` を paths と zip から除外 / `pip install --no-compile` / `__pycache__` `*.pyc` `*.pyo` 削除 / `*.dist-info` 軽量化 |
+| `lambda/README.md` | S3 経由デプロイ・mcp_server 除外・boto3 系除外の運用に合わせて改訂（緊急時の手動デプロイ手順含む） |
+
+ローカル検証済み:
+- `terraform -chdir=infra fmt -check -diff` → clean
+- `terraform -chdir=infra validate` → Success
+- workflow YAML 構文 OK
+- ローカル build dir 内訳: botocore 18.3 MB + boto3 0.9 MB が除外対象 → CI 側で更に大きいのでこれだけで十分なマージン確保見込み
+
+### 健一が実行する残タスク（順番厳守）
+
+#### 1. terraform apply（IAM とライフサイクルだけが対象）
+
+```powershell
+cd c:\Users\ykenk\repos\logi-intel-dashboard\infra
+terraform plan -var "env=dev" -out plan.tfplan
+# 期待される変更: aws_iam_role_policy.github_actions_deploy 更新 + aws_s3_bucket_lifecycle_configuration.main 更新（rule 追加）
+terraform apply plan.tfplan
+```
+
+**先に apply してから workflow 変更を main マージすること**（IAM が無いと S3 アップロード失敗）。
+
+#### 2. feature ブランチを PR → main マージ
+
+現在のブランチ `docs/handoff-cicd-zip-fix` に変更がコミットされている想定。
+
+```powershell
+git status
+git add infra/main.tf .github/workflows/deploy-api.yml lambda/README.md HANDOFF_NEXT_SESSION.md
+git commit -m "ci: Lambda デプロイを S3 経由に切替 + zip 削減（boto3 ランタイム同梱除外・mcp_server 除外）"
+git push
+gh pr create --title "ci: Lambda デプロイを S3 経由に切替 + zip 削減" --body "..."
+```
+
+#### 3. マージ後に Actions タブで Green 確認
+
+- https://github.com/ykenkou001/logi-intel-dashboard/actions
+- `Deploy API to Lambda` が Green
+- `curl https://d1zei8qivkf3cr.cloudfront.net/health` → `{"status":"ok"}`
+- `aws lambda get-function --function-name logi-intel-dev-api --query "Configuration.LastModified"` で更新時刻が直近に動いているか
+- CI ログの `du -sh */` 出力で zip 内訳サイズも記録される（boto3 系が消えていることを確認）
+
+#### 4. 失敗時の切り戻し
+
+万一 S3 経由でも失敗するなら:
+- CI ログで boto3 系がフィルタされたか（`grep` 結果）確認
+- pillow / lxml が新たに膨らんでいないか（`du -sh */` で内訳）
+- 最悪 `--zip-file fileb://` に戻すには `lambda/function.zip` を直接渡す旧バージョンへ revert する
+
+### 健一さん側の残タスク（CI 関連）
+
+| タスク | 状況 |
+|---|---|
+| GitHub Secrets `AWS_GITHUB_ACTIONS_ROLE_ARN` 登録 | **登録済** |
+| Branch protection の Status checks 必須化 | main 上で CI が初回 green になり次第、Settings → Branches → main rule → Status checks に `CI / Python` `CI / Web` を追加 |
+
+### やらないこと（このセッション完了済の確認）
+
+- ✅ **`core/export/docx_form3_writer.py` `core/export/excel_writer.py` `tests/core/test_export_writers.py` は触っていない**（Codex 並行作業領域）
+- ✅ **`pyproject.toml` の `[project.dependencies]` も触っていない**（boto3 系除外は workflow 側のフィルタで実現）
+- ✅ AWS インフラ変更は CI/CD 用 IAM 拡張と S3 ライフサイクル追加のみ（CloudFront / API Gateway / Lambda 本体には変更なし）
+
+---
+
+## 後続タスク（CI/CD 完了 + Codex 作業完了の後）
+
+### Word / Excel 生成物の品質改善（Codex 担当）
+
+健一からの方針:
+
+- **このセクションは Codex が並行作業中。Claude は触らない**
 - 本番は AWS で構築済みなので、**ローカル開発 API_BASE まわりの修正は今回やらなくてよい**
 - 前回レビューで見つかった改善点のうち、**生成物の Word / Excel を優先して改善する**
 - セッションを変えて作業するため、この引継ぎを読んでから着手する
