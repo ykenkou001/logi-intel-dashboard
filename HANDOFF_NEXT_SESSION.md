@@ -1,5 +1,148 @@
 # 次セッションへの引継ぎ（2026-05-05 時点）
 
+## 🎯 次セッションの主目的（今回の最新指示）
+
+**Word / Excel 生成物の品質改善を Codex で対応する。**
+
+健一からの最新方針:
+
+- 本番は AWS で構築済みなので、**ローカル開発 API_BASE まわりの修正は今回やらなくてよい**
+- 前回レビューで見つかった改善点のうち、**生成物の Word / Excel を優先して改善する**
+- セッションを変えて作業するため、この引継ぎを読んでから着手する
+
+### 前回レビューで確認した生成物の状態
+
+2026-05-05 のレビュー時点で、`logi_clo_plan_draft` / Web の計画書生成から出る最新成果物を構造検査した。
+
+#### PPT
+
+最新生成 PPT は **13 slides / native charts 3 / tables 0 / pictures 0**。
+
+- `core/export/ppt_writer.py` に `ChartSpec` が入り、施策ポートフォリオ / コスト削減ウォーターフォール / KPI 5 ヶ年ロードマップの 3 チャートが生成される状態
+- PPT は今回の主対象ではない。大きな破綻がなければ触らない
+
+関連ファイル:
+
+- `core/export/ppt_writer.py`
+- `core/analytics/plan_draft.py`
+
+#### Word（要改善）
+
+最新生成 DOCX は **paragraphs 9 / tables 4**。構造は出るが、提出物としてはまだ薄い。
+
+現状:
+
+- `core/export/docx_form3_writer.py`
+- 公式テンプレート `core/templates/clo_plan_form3.docx` が存在すれば流し込み、なければ python-docx で簡易構造を生成
+- 公式テンプレ未取得時は先頭にドラフト注意書きを出す
+- ただし Web 側では Word カードに「様式第3別紙・e-Gov 提出用」と表示しており、実態（公式テンプレ未取得時は参考ドラフト）より強い
+
+優先改善:
+
+1. **DOCX の見た目を提出前レビュー用として整える**
+   - タイトル、注意書き、事業者情報、各セクション表のスタイルを改善
+   - 表のヘッダ塗り、列幅、余白、フォントサイズ、段落間隔を調整
+   - 「PoC 用ドラフト」「公式テンプレ未取得」注意が目立つようにする
+
+2. **提出用と誤認させない表現に揃える**
+   - 公式テンプレ未取得時は Web のダウンロードカード文言を「様式第3別紙ドラフト」などに弱める
+   - ただしユーザーは「ローカル開発修正は不要」と言っているだけで、生成物を正しく表す UI 文言の小修正は Word 改善に付随するなら可
+
+3. **DOCX レンダリング QA**
+   - `documents` skill を使う
+   - `render_docx.py --renderer artifact-tool` でページ PNG を出して目視確認
+   - 生成物を ship する前に、表の文字切れ・重なり・余白不足を確認する
+
+#### Excel（要改善）
+
+最新生成 XLSX は **sheets `Data`, `出典` / Excel tables 0 / charts 0 / freeze pane None**。
+
+現状:
+
+- `core/export/excel_writer.py`
+- openpyxl で単純に表と出典シートを書いている
+- 経営会議の付録や社内レビュー用ブックとしては、まだ「整形済み CSV」に近い
+
+優先改善:
+
+1. **Excel を分析ブックらしくする**
+   - `Data` シートに freeze pane、auto filter、Excel Table を追加
+   - 数値列に適切な表示形式、折り返し、列幅、行高を設定
+   - 主要KPIサマリーを上部または別 `Summary` シートに作る
+
+2. **チャートを最低1つ追加**
+   - 施策別コスト削減、CO2削減、投資額のいずれかを棒グラフ化
+   - できれば `Summary` シートに KPI ブロック + 施策別チャート
+   - 出典シートは監査用として残す
+
+3. **出典シートの可読性改善**
+   - freeze pane、filter、URL列折り返し、列幅調整
+   - `statsDataId/告示番号` が空でも見やすいようにする
+
+4. **XLSX QA**
+   - `spreadsheets` skill を使う
+   - 生成後に workbook 構造を検査し、少なくとも tables/charts/freeze panes が入ったことを確認
+   - 可能ならレンダーして視覚確認
+
+### 想定する実装ファイル
+
+主対象:
+
+- `core/export/docx_form3_writer.py`
+- `core/export/excel_writer.py`
+- `tests/core/test_export_writers.py`
+
+必要なら付随:
+
+- `web/app/dashboard/plan-draft/page.tsx`（Word カード文言のみ）
+- `web/components/ToolResponseDisplay.tsx`（汎用ファイル文言のみ）
+- `docs/roadmap.md` / `HANDOFF_NEXT_SESSION.md`（作業後の記録）
+
+### 次セッションの推奨開始手順
+
+```powershell
+cd c:\Users\ykenk\repos\logi-intel-dashboard
+git status
+git log --oneline -8
+uv sync
+uv run pytest tests\core\test_export_writers.py -q
+```
+
+その後、現在の生成物を再生成してベースラインを取る:
+
+```powershell
+uv run python scripts\generate_sample_ppt_design.py
+```
+
+または API / analytics 経由で `sample_mfg_01` の plan draft を生成し、最新の `outputs/docx` / `outputs/excel` を確認する。
+
+### 完了条件
+
+- Word:
+  - DOCX のページレンダーで、注意書き・事業者情報・各セクション表が読みやすい
+  - 公式テンプレ未取得時に「提出用完成版」と誤認しない
+  - 既存テストが通る
+
+- Excel:
+  - `Data` または `Summary` に Excel Table / freeze pane / chart が入る
+  - `出典` シートが監査用に読みやすい
+  - 生成された workbook を構造検査して tables/charts/freeze panes を確認
+  - 既存テストが通る
+
+- 検証:
+  - `uv run pytest tests\core\test_export_writers.py -q`
+  - 可能なら関連する export/plan draft テストも追加実行
+  - Word は render PNG で目視確認
+  - Excel は workbook inspect/render で確認
+
+### やらないこと
+
+- 今回はローカル dev の API_BASE 問題を修正しない
+- AWS インフラや CloudFront 設定は触らない
+- PPT は明確な破綻がなければ触らない
+
+---
+
 ## ⚠️ 0. 最初に確認 — apply 待ちの差分があるか
 
 直前セッション末で **CloudFront Function（directory URL → index.html 書換）** を追加したが、
