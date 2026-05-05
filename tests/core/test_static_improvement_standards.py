@@ -7,6 +7,7 @@ from __future__ import annotations
 from core.static.improvement_standards import (
     FRESHNESS,
     TRUCK_DRIVER_STANDARD,
+    WAIT_TIME_STANDARD,
     driver_capacity_reduction_factor,
 )
 
@@ -68,3 +69,28 @@ def test_freshness_as_needed_so_not_stale_immediately() -> None:
     """as_needed カデンスなので頻繁に stale 判定にならない。"""
     # 2022年告示なので 3 年程度経っても stale ではない（as_needed = 約 27 年）
     assert FRESHNESS.is_stale is False
+
+
+def test_wait_time_standard_threshold_is_120_minutes() -> None:
+    """荷待ち時間の基準閾値は 2 時間 = 120 分。"""
+    assert WAIT_TIME_STANDARD.threshold_minutes == 120
+
+
+def test_wait_time_standard_avg_target_is_30_minutes() -> None:
+    """平均荷待ち時間の運用目標は 30 分以下。"""
+    assert WAIT_TIME_STANDARD.avg_target_minutes == 30
+
+
+def test_wait_time_standard_over_threshold_max_pct_is_5() -> None:
+    """2 時間超過率の運用目標は 5% 以下。"""
+    assert WAIT_TIME_STANDARD.over_threshold_max_pct == 5.0
+
+
+def test_wait_time_standard_minimum_runs_for_significance() -> None:
+    """統計的有意性のための最低計測便数 100 便。"""
+    assert WAIT_TIME_STANDARD.measurement_minimum_runs == 100
+
+
+def test_wait_time_avg_target_below_threshold() -> None:
+    """平均目標値（30 分）は閾値（120 分）より小さい（論理整合性）。"""
+    assert WAIT_TIME_STANDARD.avg_target_minutes < WAIT_TIME_STANDARD.threshold_minutes

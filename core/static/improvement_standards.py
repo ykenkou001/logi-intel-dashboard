@@ -22,6 +22,29 @@ from core.static._freshness import Freshness, register
 
 
 @dataclass(frozen=True)
+class WaitTimeStandard:
+    """荷待ち時間の運用目標値（改善基準告示の定量化補助）。
+
+    告示原文に直接書かれている数値（2 時間超で「健康障害を生ずるおそれ」相当）に加え、
+    国交省ガイドライン・JILS 物流コスト調査の業界ベンチマークから設定した運用目標。
+    `wait_time_heatmap` の severity 判定および J3 デイリーコックピットの違反検知で使用する。
+
+    出典:
+        - 改善基準告示（2024 年 4 月施行版）
+        - 国交省「物流効率化に向けた荷主・物流事業者の取組事例集」
+        - JILS 2021 年度物流コスト調査報告書
+    """
+
+    threshold_minutes: int = 120          # 2 時間基準（改善基準告示で「過度な拘束」相当）
+    over_threshold_max_pct: float = 5.0   # 2 時間超過率の運用目標（5% 以下）
+    avg_target_minutes: int = 30          # 平均荷待ち時間の運用目標（30 分以下）
+    measurement_minimum_runs: int = 100   # 統計的有意性のための最低計測便数
+
+
+WAIT_TIME_STANDARD = WaitTimeStandard()
+
+
+@dataclass(frozen=True)
 class TruckDriverStandard:
     """トラック運転者の改善基準告示（2024 年 4 月施行版）。
 
