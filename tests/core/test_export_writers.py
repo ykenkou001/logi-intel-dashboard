@@ -74,7 +74,8 @@ def test_write_data_table_excel() -> None:
     ws_summary = wb["Summary"]
     assert ws_summary.freeze_panes == "A8"
     assert len(ws_summary._charts) >= 1
-    assert ws_summary.cell(row=5, column=1).value == 2
+    assert ws_summary.cell(row=4, column=1).value == "年間コスト削減"
+    assert ws_summary.cell(row=7, column=1).value == "優先施策サマリー"
 
     ws = wb["Data"]
     # タイトル行・ヘッダ行・データ2行
@@ -88,6 +89,52 @@ def test_write_data_table_excel() -> None:
     assert ws_cit.cell(row=3, column=1).value == "経済センサス2021"
     assert ws_cit.freeze_panes == "A3"
     assert "CitationTable" in ws_cit.tables
+
+
+def test_write_clo_plan_excel_summary_is_human_readable() -> None:
+    from openpyxl import load_workbook
+
+    path = excel_writer.write_data_table(
+        title="テクノパーツ製造株式会社 CLO 中長期計画書 数値目標・施策効果一覧",
+        company_id="testco",
+        headers=["指標／施策", "区分", "現状（業界平均）", "目標／効果", "出典"],
+        rows=[
+            ["積載率", "数値目標", "38.0%", "50.0%", "国交省"],
+            [
+                "積載率向上",
+                "施策効果（推計）",
+                "投資 約300万円",
+                "CO2 約1,200.0トン/年削減・コスト 約36,000万円/年削減",
+                "国交省",
+            ],
+            [
+                "共同配送",
+                "施策効果（推計）",
+                "投資 約500万円",
+                "CO2 約900.0トン/年削減・コスト 約30,000万円/年削減",
+                "認定事例",
+            ],
+        ],
+        citations=[
+            estat_citation("経済センサス2021", "0004005642"),
+        ],
+        purpose="clo_plan",
+    )
+    wb = load_workbook(path)
+    ws_summary = wb["Summary"]
+
+    assert ws_summary.cell(row=5, column=1).value == "6.6億円"
+    assert ws_summary.cell(row=8, column=1).value == "優先"
+    assert ws_summary.cell(row=9, column=2).value == "積載率向上"
+    assert ws_summary.cell(row=9, column=3).value == 36000
+    assert ws_summary.cell(row=9, column=5).value == "<0.1年"
+    assert ws_summary.cell(row=13, column=1).value == "目標達成計画"
+    assert ws_summary.cell(row=15, column=1).value == "積載率"
+    assert "積載率向上" in ws_summary.cell(row=15, column=4).value
+    assert ws_summary.cell(row=15, column=6).value == "積載率、空車率、共同配送便数"
+    assert "SummaryMeasureTable" in ws_summary.tables
+    assert "TargetPlanTable" in ws_summary.tables
+    assert len(ws_summary._charts) >= 1
 
 
 # ---- ppt_writer ----
