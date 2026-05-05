@@ -259,6 +259,81 @@ pwsh scripts/dev_web.ps1            # Next.js :3000（既存 next dev を kill +
 
 ---
 
+## CI / CD（GitHub Actions）
+
+main ブランチへの push 時に AWS PoC へ自動デプロイする。フェーズ4.0 完了後に追加。
+
+### ワークフロー構成
+
+| ファイル | トリガー | 内容 | 所要 |
+|---------|---------|------|------|
+| `.github/workflows/ci.yml` | PR / main push | ruff + pytest + Next.js lint / type-check / build | 3〜5 分 |
+| `.github/workflows/deploy-api.yml` | main push（Python 関連変更時） | Lambda zip ビルド + 関数更新 + ヘルスチェック | 4〜6 分 |
+| `.github/workflows/deploy-web.yml` | main push（`web/` 変更時） | `npm run build` + S3 sync + CloudFront invalidate | 5〜10 分 |
+
+### paths フィルタの設計意図
+
+無関係な変更（例: README だけの修正）でデプロイが走るのを防ぎ、GitHub Actions
+無料枠（月 2,000 分）を圧迫しない。
+
+```yaml
+# deploy-api.yml の paths
+- 'core/**'
+- 'api/**'
+- 'lambda/**'
+- 'mcp_server/**'
+- 'pyproject.toml'
+- 'uv.lock'
+```
+
+### Terraform を CI から外す理由
+
+- インフラ変更は反映に 5〜15 分かかり、CloudFront の伝搬待ちもあるため即座にロールバックできない
+- `terraform plan` の差分を人間が目視確認した上で apply する運用が安全
+- PoC 規模（月 $1〜$3）で、インフラ変更の頻度は低い（フェーズ単位で 1 回）
+
+### 認証: GitHub OIDC
+
+長期 access key を発行せず、GitHub Actions が AWS STS で短期 credentials を取得する。
+
+```hcl
+# infra/main.tf
+resource "aws_iam_openid_connect_provider" "github" {
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+  ...
+}
+
+# main ブランチからの実行のみ許可
+condition {
+  test     = "StringLike"
+  variable = "token.actions.githubusercontent.com:sub"
+  values   = ["repo:ykenkou001/logi-intel-dashboard:ref:refs/heads/main"]
+}
+```
+
+ロール `logi-intel-dev-github-actions` の権限は最小化:
+- Lambda: `UpdateFunctionCode` / `GetFunction*`（指定の 1 関数のみ）
+- S3: `GetObject` / `PutObject` / `DeleteObject`（`web/` prefix のみ）
+- CloudFront: `CreateInvalidation` / `GetInvalidation`（指定の 1 distribution のみ）
+
+`terraform apply` 系・他バケット・他 Lambda へのアクセスは一切付与しない。
+
+### 初回セットアップ
+
+1. `terraform apply` で OIDC プロバイダ + IAM ロールを作成
+2. Terraform output `github_actions_role_arn` を取得
+3. GitHub Repository Settings → Secrets → `AWS_GITHUB_ACTIONS_ROLE_ARN` に登録
+4. Branch protection で `CI / Python` `CI / Web` をマージ必須に
+
+### デプロイの観測
+
+- `lambda wait function-updated` で Lambda 更新完了まで待機
+- `cloudfront wait invalidation-completed` で CloudFront 反映を待つ
+- 最後に `curl /health` / トップページ疎通で smoke test
+
+---
+
 ## AWS 移行計画（フェーズ4）
 
 現在はローカル稼働（Claude Desktop が stdio で子プロセスとして起動）。

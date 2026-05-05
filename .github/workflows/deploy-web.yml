@@ -1,0 +1,78 @@
+# main への push 時に Next.js を S3 + CloudFront に自動デプロイ
+# web/ のいずれかが変更された時のみ走る
+name: Deploy Web to S3 + CloudFront
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-web.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-1
+  S3_WEB_PREFIX: s3://logi-intel-dev-7m2lqc/web/
+  CLOUDFRONT_DISTRIBUTION_ID: E3F7LKFZVFU04Q
+  TOP_URL: https://d1zei8qivkf3cr.cloudfront.net/
+
+jobs:
+  deploy:
+    name: Build & Deploy Next.js
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: AWS OIDC で credentials 取得
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Node.js 22 セットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 依存関係インストール
+        run: npm ci
+
+      - name: Production build (静的エクスポート)
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ""
+        run: npm run build
+
+      - name: S3 へ sync（古いオブジェクトは --delete で除去）
+        run: aws s3 sync out/ "$S3_WEB_PREFIX" --delete --region "$AWS_REGION"
+
+      - name: CloudFront キャッシュ無効化
+        id: invalidate
+        run: |
+          INV_ID=$(aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/*" \
+            --query 'Invalidation.Id' \
+            --output text)
+          echo "invalidation_id=$INV_ID" >> "$GITHUB_OUTPUT"
+          echo "Invalidation submitted: $INV_ID"
+
+      - name: 無効化完了待ち（タイムアウト 10 分）
+        run: |
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --id "${{ steps.invalidate.outputs.invalidation_id }}"
+
+      - name: トップページ疎通確認
+        run: curl -fsS -o /dev/null "$TOP_URL"

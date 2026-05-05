@@ -1,0 +1,68 @@
+# PR 時の品質ゲート: ruff + pytest + Next.js 型チェック / build
+# main へのマージ前に必ずパスさせる（branch protection で必須化を推奨）
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  # main 直接 push 時にも回す（PR 経由でない緊急修正のため）
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python (ruff + pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: uv インストール
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Python 3.12 セットアップ
+        run: uv python install 3.12
+
+      - name: 依存関係インストール
+        run: uv sync --frozen
+
+      - name: Ruff (lint)
+        run: uv run ruff check
+
+      - name: Pytest
+        run: uv run pytest --tb=short -q
+
+  web:
+    name: Web (lint + type-check + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js 22 セットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: 依存関係インストール
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript 型チェック
+        run: npm run type-check
+
+      - name: Production build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: ""
+        run: npm run build

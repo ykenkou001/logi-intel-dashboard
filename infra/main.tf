@@ -88,6 +88,12 @@ variable "lambda_timeout_sec" {
   default     = 300
 }
 
+variable "github_repo" {
+  type        = string
+  description = "GitHub リポジトリ owner/repo（例: ykenkou001/logi-intel-dashboard）"
+  default     = "ykenkou001/logi-intel-dashboard"
+}
+
 # 一意なリソース名のためにアカウント ID を取得
 data "aws_caller_identity" "current" {}
 
@@ -102,9 +108,9 @@ locals {
   name_prefix = "${var.project}-${var.env}"
   bucket_name = "${local.name_prefix}-${random_string.suffix.result}"
   common_tags = {
-    Project = var.project
-    Env     = var.env
-    Stack   = "poc"
+    Project   = var.project
+    Env       = var.env
+    Stack     = "poc"
     ManagedBy = "terraform"
   }
 }
@@ -267,15 +273,15 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = {
-      LOGI_STORAGE_BACKEND     = "s3"
-      LOGI_S3_BUCKET           = aws_s3_bucket.main.id
-      LOGI_S3_PREFIX           = "outputs/"
-      LOGI_OUTPUTS_DIR         = "/tmp/outputs"
-      LOGI_SECRETS_BACKEND     = "ssm"
-      LOGI_SSM_PREFIX          = "/${var.project}/${var.env}"
-      LOGI_API_CORS_ORIGINS    = "*"
-      LOGI_CACHE_DB_PATH       = "/tmp/.logi_cache.db"
-      PYTHONPATH               = "/var/task"
+      LOGI_STORAGE_BACKEND  = "s3"
+      LOGI_S3_BUCKET        = aws_s3_bucket.main.id
+      LOGI_S3_PREFIX        = "outputs/"
+      LOGI_OUTPUTS_DIR      = "/tmp/outputs"
+      LOGI_SECRETS_BACKEND  = "ssm"
+      LOGI_SSM_PREFIX       = "/${var.project}/${var.env}"
+      LOGI_API_CORS_ORIGINS = "*"
+      LOGI_CACHE_DB_PATH    = "/tmp/.logi_cache.db"
+      PYTHONPATH            = "/var/task"
     }
   }
 
@@ -549,4 +555,94 @@ output "s3_bucket" {
 output "s3_web_prefix" {
   description = "Next.js 静的ファイルの同期先"
   value       = "s3://${aws_s3_bucket.main.id}/web/"
+}
+
+# ─── GitHub Actions OIDC（CI/CD 用）──────────────────────────────────
+#
+# GitHub Actions が長期 access key なしで AWS にアクセスできるようにする。
+# Lambda 更新 + S3 sync + CloudFront invalidate のみを許可した最小権限ロール。
+# Terraform apply は CI から除外（人間判断で apply する運用を維持）。
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+  tags            = local.common_tags
+}
+
+data "aws_iam_policy_document" "github_actions_assume" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+    # main ブランチからの実行のみ許可（feature ブランチからのデプロイ阻止）
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:${var.github_repo}:ref:refs/heads/main"]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions" {
+  name               = "${local.name_prefix}-github-actions"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume.json
+  tags               = local.common_tags
+}
+
+data "aws_iam_policy_document" "github_actions_deploy" {
+  # Lambda コード更新
+  statement {
+    actions = [
+      "lambda:UpdateFunctionCode",
+      "lambda:GetFunction",
+      "lambda:GetFunctionConfiguration",
+    ]
+    resources = [aws_lambda_function.api.arn]
+  }
+  # Web 静的ファイルの S3 sync（web/ prefix のみ）
+  statement {
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject",
+    ]
+    resources = ["${aws_s3_bucket.main.arn}/web/*"]
+  }
+  statement {
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.main.arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["web/*", "web"]
+    }
+  }
+  # CloudFront キャッシュ無効化
+  statement {
+    actions = [
+      "cloudfront:CreateInvalidation",
+      "cloudfront:GetInvalidation",
+      "cloudfront:GetDistribution",
+    ]
+    resources = [aws_cloudfront_distribution.main.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions_deploy" {
+  name   = "${local.name_prefix}-github-actions-deploy"
+  role   = aws_iam_role.github_actions.id
+  policy = data.aws_iam_policy_document.github_actions_deploy.json
+}
+
+output "github_actions_role_arn" {
+  description = "GitHub Actions ワークフローで AWS_GITHUB_ACTIONS_ROLE_ARN として登録する値"
+  value       = aws_iam_role.github_actions.arn
 }
