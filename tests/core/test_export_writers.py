@@ -67,15 +67,27 @@ def test_write_data_table_excel() -> None:
     )
     assert path.exists()
     wb = load_workbook(path)
+    assert "Summary" in wb.sheetnames
     assert "Data" in wb.sheetnames
     assert "出典" in wb.sheetnames
+
+    ws_summary = wb["Summary"]
+    assert ws_summary.freeze_panes == "A8"
+    assert len(ws_summary._charts) >= 1
+    assert ws_summary.cell(row=5, column=1).value == 2
+
     ws = wb["Data"]
     # タイトル行・ヘッダ行・データ2行
     assert ws.cell(row=2, column=1).value == "都道府県"
     assert ws.cell(row=3, column=2).value == 15234
+    assert ws.freeze_panes == "A3"
+    assert "DataTable" in ws.tables
+
     # 出典シート
     ws_cit = wb["出典"]
     assert ws_cit.cell(row=3, column=1).value == "経済センサス2021"
+    assert ws_cit.freeze_panes == "A3"
+    assert "CitationTable" in ws_cit.tables
 
 
 # ---- ppt_writer ----
@@ -177,6 +189,9 @@ def test_write_form3_docx_creates_docx() -> None:
     assert "テスト株式会社" in full_text or any(
         "テスト株式会社" in c.text for table in doc.tables for row in table.rows for c in row.cells
     )
+    table_cells = [c.text for table in doc.tables for row in table.rows for c in row.cells]
+    assert any("提出前レビュー用ドラフト" in text for text in table_cells)
+    assert len(doc.tables) >= 3
 
 
 def test_write_form3_chain_franchise_uses_section5_title() -> None:
