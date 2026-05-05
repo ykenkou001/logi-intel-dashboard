@@ -14,10 +14,39 @@ CLO 中長期計画策定・運用支援の Web ダッシュボード。FastAPI 
 cd web
 npm install
 cp .env.local.example .env.local  # 必要に応じて API URL を変更
-npm run dev
+```
+
+### 起動（必読）
+
+**`npm run dev` を直接叩かず、リポジトリルートのヘルパースクリプトを使う。**
+
+```powershell
+# リポジトリルートから
+pwsh scripts/dev_api.ps1            # FastAPI :8000（先に起動）
+pwsh scripts/dev_web.ps1            # Next.js :3000（別シェルで）
 ```
 
 http://localhost:3000 でダッシュボードが開く。
+
+### なぜヘルパースクリプト経由か
+
+`dev_web.ps1` は **既存の `next dev` を起動時に kill** したうえで、
+`NEXT_PUBLIC_API_BASE_URL=http://localhost:8000` を環境変数で固定して
+起動する。素の `npm run dev` だと:
+
+- 過去に立てた古いプロセスが残り、ポート競合 / 古いビルドが配信される
+- 環境変数が未設定だと `lib/api.ts` のデフォルト `""` で同一 origin を叩き、
+  Next.js dev サーバーは `/api/v1/*` を解決できないため 404 になる
+
+詳細経緯は [../CLAUDE.md §6.5](../CLAUDE.md) を参照。
+
+### 直接 npm run dev を使う場合（非推奨）
+
+どうしても素で起動したいときは、必ず環境変数を明示する:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
+```
 
 ## ディレクトリ構成
 
@@ -76,7 +105,11 @@ web/
 
 | 変数 | デフォルト | 用途 |
 |------|----------|------|
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | FastAPI バックエンドの URL |
+| `NEXT_PUBLIC_API_BASE_URL` | `""`（同一 origin） | FastAPI バックエンドの URL。本番（CloudFront 同居）はそのまま空文字、ローカル開発では `http://localhost:8000` を `dev_web.ps1` 経由で注入 |
+
+> 旧バージョンではデフォルトが `http://localhost:8000` だったが、本番ビルドが
+> 意図せず localhost を叩く事故防止のため `""` に変更（2026-05-05）。
+> 経緯は [../CLAUDE.md §6.5](../CLAUDE.md) を参照。
 
 ## ビルド・型チェック
 

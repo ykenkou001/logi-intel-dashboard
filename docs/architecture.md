@@ -213,6 +213,52 @@ CREATE INDEX idx_fetched_at ON api_cache(fetched_at);
 
 ---
 
+## ローカル開発と本番の切り分け
+
+| 観点 | ローカル開発 | 本番（AWS PoC） |
+|------|------------|----------------|
+| FastAPI 起動 | `pwsh scripts/dev_api.ps1` で `uvicorn --reload`（port 8000） | Lambda + API Gateway HTTP API |
+| Web 配信 | `pwsh scripts/dev_web.ps1` で `next dev`（port 3000） | S3 静的エクスポート + CloudFront |
+| API_BASE_URL | `dev_web.ps1` が `http://localhost:8000` を環境変数で注入 | `""`（同一 origin / CloudFront 経由） |
+| ストレージ | ローカル `outputs/` ディレクトリ | S3 `outputs/` prefix |
+| シークレット | `.env` | SSM Parameter Store SecureString |
+| キャッシュ | `./.logi_cache.db`（SQLite） | `/tmp/.logi_cache.db`（Lambda 揮発） |
+
+### ローカル開発時の注意点（必読）
+
+**`uvicorn` や `npm run dev` を直接叩いてはいけない。** 必ず以下を使う:
+
+```powershell
+pwsh scripts/dev_api.ps1            # FastAPI :8000（既存 uvicorn を kill + --reload）
+pwsh scripts/dev_web.ps1            # Next.js :3000（既存 next dev を kill + API_BASE 固定）
+```
+
+#### 経緯（2026-05-05 の事故）
+
+「本番 Lambda に修正をデプロイしたのに、ブラウザのフロントが古い localhost:8000 を
+叩き続けて修正反映が確認できない」事故が発生。原因は次の 2 点:
+
+1. **`--reload` なしの古い uvicorn が `core/` をメモリにロードしたまま生存**
+   多重起動で port 8000 / 8765 を同時 listen していた。
+2. **`web/lib/api.ts` のデフォルト API_BASE が `http://localhost:8000`**
+   `NEXT_PUBLIC_API_BASE_URL` 未設定の本番ビルドでも、ブラウザが意図せずローカルを叩く構造だった。
+
+#### 恒久対策（実施済）
+
+- `web/lib/api.ts` のデフォルト API_BASE を `""`（同一 origin）に変更
+- `scripts/dev_api.ps1` / `scripts/dev_web.ps1` に **既存プロセスの自動 kill** を組み込み
+- 詳細経緯は [CLAUDE.md §6.5](../CLAUDE.md) 参照
+
+#### 自己診断手順
+
+「コード直したのに本番フロントの動作が変わらない」と感じたら:
+
+1. ブラウザ DevTools の Network タブで API 先が `localhost` か CloudFront か確認
+2. `Get-Process uvicorn,node` で残存プロセスを点検
+3. 古いプロセスを Stop → `dev_api.ps1` で再起動
+
+---
+
 ## AWS 移行計画（フェーズ4）
 
 現在はローカル稼働（Claude Desktop が stdio で子プロセスとして起動）。

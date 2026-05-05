@@ -35,6 +35,46 @@ curl -s -o NUL -w "HTTP=%%{http_code}`n" "https://d1zei8qivkf3cr.cloudfront.net/
 
 ---
 
+## ⚠️ 0.5 ローカル開発時の必須手順（必読）
+
+**`uvicorn` / `npm run dev` を直接叩かない。** 必ずヘルパースクリプト経由で起動すること。
+
+```powershell
+pwsh scripts/dev_api.ps1            # FastAPI :8000（既存 uvicorn を kill + --reload）
+pwsh scripts/dev_web.ps1            # Next.js :3000（既存 next dev を kill + API_BASE 固定）
+```
+
+### 経緯（2026-05-05 の事故・コミット `685bd77`）
+
+PPT レイアウト修正を Lambda にデプロイしたあと、ブラウザで再生成したのに修正前の
+PPT が DL される現象が発生。原因調査の結果:
+
+- ローカルに古い `uvicorn`（5/4 16:03 起動分など）が `--reload` なしで複数残存し、
+  古い `core/` をメモリに保持したまま port 8000/8765 を同時 listen
+- `web/lib/api.ts` のデフォルト API_BASE が `http://localhost:8000` だったため、
+  ブラウザのフロントが本番ではなくローカル uvicorn を叩いていた
+- ダウンロードした PPT のタイムスタンプ・サイズが Lambda 経由（13 枚 / 77 KB）と
+  ローカル経由（10 枚 / 51 KB）で食い違うことで判明
+
+### 恒久対策（実施済）
+
+| 対策 | 場所 |
+|------|------|
+| `api.ts` デフォルト API_BASE を `""`（同一 origin）に変更 | [web/lib/api.ts](web/lib/api.ts) |
+| 既存 uvicorn を pre-kill して `--reload` で起動 | [scripts/dev_api.ps1](scripts/dev_api.ps1) |
+| 既存 next dev を pre-kill して API_BASE を環境変数固定 | [scripts/dev_web.ps1](scripts/dev_web.ps1) |
+| 経緯と起動ルール記載 | [CLAUDE.md §6.5](CLAUDE.md) |
+
+### 自己診断手順（同種事故の再発時）
+
+「コード直したのに本番のフロントから動作が変わらない」と感じたら:
+
+1. ブラウザ DevTools の Network タブで API 先が `localhost` か CloudFront か確認
+2. `Get-Process uvicorn,node` で残存プロセスを点検
+3. 古いプロセスを Stop → `dev_api.ps1` / `dev_web.ps1` で再起動
+
+---
+
 ## 1. 現在地
 
 **フェーズ 4.0 完了** — AWS PoC デプロイ稼働中。社内レビューに使える状態。

@@ -55,6 +55,39 @@ uv run mypy core mcp_server    # 型チェック
 
 ---
 
+## ローカル開発サーバー起動（必読）
+
+**`uvicorn` や `npm run dev` を直接叩かず、必ず以下のヘルパースクリプトを使う。**
+
+```powershell
+pwsh scripts/dev_api.ps1            # FastAPI :8000（既存プロセス自動 kill + --reload）
+pwsh scripts/dev_web.ps1            # Next.js :3000（API_BASE=localhost:8000 を環境変数固定）
+```
+
+### なぜ必要か
+
+2026-05-05 に「本番 Lambda に修正をデプロイしたのに、ブラウザのフロントが
+古い localhost を叩き続けて修正反映が確認できない」事故が発生した。原因は:
+
+1. `--reload` なしで起動した古い uvicorn が `core/` をメモリにロードしたまま生存
+2. `web/lib/api.ts` のデフォルト API_BASE が `http://localhost:8000` で、
+   ブラウザが意図せずローカルを叩く構造だった
+
+両ヘルパースクリプトは **既存プロセスを起動時に必ず kill** + **`--reload` で
+コード変更を即時反映** するため、多重起動・コード古残存の両方を根絶する。
+
+### 症状で気付くポイント
+
+「コード直したのに本番フロントの動作が変わらない」と感じたら:
+
+1. ブラウザ DevTools の Network タブで API リクエスト先が `localhost` か確認
+2. `Get-Process uvicorn,node` で残存プロセスを点検
+3. 該当プロセスを stop → `dev_api.ps1` で再起動
+
+詳細経緯は [CLAUDE.md §6.5](CLAUDE.md) を参照。
+
+---
+
 ## ドキュメント
 
 | ドキュメント | 内容 |
