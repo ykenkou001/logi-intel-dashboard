@@ -1,11 +1,148 @@
 # 次セッションへの引継ぎ（2026-05-05 時点）
 
-## 🎯 次セッションの主目的（今回の最新指示）
+## ⚠️ 並行作業の注意（最初に必ず確認）
 
-**Word / Excel 生成物の品質改善を Codex で対応する。**
+健一は **Claude / Codex を別セッションで並行起動** して別領域を担当させる運用。
 
-健一からの最新方針:
+| 領域 | 担当 | 触ってよいファイル |
+|------|------|-------------------|
+| **Word / Excel 生成物の品質改善** | **Codex（並行作業中・触るな）** | `core/export/docx_form3_writer.py`, `core/export/excel_writer.py`, `tests/core/test_export_writers.py` |
+| **CI/CD パイプライン修正（Lambda zip 問題）** | **Claude（このセッションの主目的）** | `infra/main.tf`, `.github/workflows/*.yml`, `pyproject.toml` の依存棚卸し |
 
+**衝突注意の共有領域**: `pyproject.toml` の `[project.dependencies]` は Codex が docx/excel ライブラリ追加で触る可能性あり。変更時は健一に確認する。
+
+詳細 → メモリ `feedback_codex_parallel_collaboration.md`
+
+---
+
+## 🎯 次セッションの主目的（最優先）
+
+**CI/CD パイプラインを Green にする — Lambda zip サイズ問題を C 案で解決する。**
+
+### 経緯
+
+- フェーズ4.0 集大成 PR #1 を 2026-05-05 に main へマージ済（merge commit `5fda8b2`）
+- マージで起動した GitHub Actions `Deploy API to Lambda` が「Lambda 関数を更新」ステップで失敗:
+
+```
+RequestEntityTooLargeException:
+  Request must be smaller than 70167211 bytes (≈ 66.9 MB)
+  for the UpdateFunctionCode operation
+```
+
+- 原因: `aws lambda update-function-code --zip-file` の API 直接アップロードは ~70MB 上限。CI の Linux 環境で生成された wheel（numpy / pandas / lxml の manylinux 版）が、ローカル Windows ビルド（44MB）より大きく 70MB を超えた
+- **デプロイは現状失敗中。Lambda 上のコードは PR #1 マージ前のまま停滞している**（健一によるレイアウト修正・KPI カード修正等は本番反映していない）
+
+### 採用方針: C 案（健一指示）
+
+**A: S3 経由デプロイ + B: zip サイズ削減 を両方入れる**
+
+- A: S3 経由で 70MB → 250MB の上限へ拡張（安全マージン）
+- B: zip 自体を削減（デプロイ速度向上 + S3 容量削減）
+
+### やる作業（順番）
+
+#### 1. infra/main.tf の IAM 権限拡張
+
+`data "aws_iam_policy_document" "github_actions_deploy"` 内に追加:
+
+```hcl
+statement {
+  actions   = ["s3:PutObject"]
+  resources = ["${aws_s3_bucket.main.arn}/lambda-deploy/*"]
+}
+```
+
+`aws_s3_bucket_lifecycle_configuration.main` に rule 追加（古い zip 自動削除）:
+
+```hcl
+rule {
+  id     = "expire-lambda-deploy-zips"
+  status = "Enabled"
+  filter { prefix = "lambda-deploy/" }
+  expiration { days = 7 }
+}
+```
+
+#### 2. terraform apply（健一実行）
+
+```powershell
+cd c:\Users\ykenk\repos\logi-intel-dashboard\infra
+terraform plan -var "env=dev" -out plan.tfplan
+terraform apply plan.tfplan
+```
+
+#### 3. .github/workflows/deploy-api.yml を S3 経由に変更
+
+現在の `--zip-file fileb://...` を 2 段階に:
+
+```yaml
+- name: Lambda zip を S3 にアップロード
+  run: |
+    aws s3 cp lambda/function.zip \
+      "s3://logi-intel-dev-7m2lqc/lambda-deploy/function-${{ github.sha }}.zip" \
+      --region "$AWS_REGION"
+
+- name: Lambda 関数を更新（S3 経由）
+  run: |
+    aws lambda update-function-code \
+      --function-name "$LAMBDA_FUNCTION_NAME" \
+      --s3-bucket logi-intel-dev-7m2lqc \
+      --s3-key "lambda-deploy/function-${{ github.sha }}.zip" \
+      --region "$AWS_REGION"
+```
+
+#### 4. zip サイズ削減（B）
+
+`.github/workflows/deploy-api.yml` の Lambda zip ビルドステップで:
+
+- `mcp_server/` を Lambda zip から **除外**（API ハンドラから参照されない・Lambda では使わない）
+- `pip install --no-compile` でバイトコード生成抑制
+- インストール後に不要ファイルを削除（例: `find lambda/build -name "*.pyc" -delete`, `__pycache__` 削除, `*.dist-info/RECORD` 等）
+- numpy / pandas が本当に Lambda で必要か棚卸し
+  - 不要なら `pyproject.toml` の dependencies から外す（**Codex の Word/Excel 改善と衝突注意**）
+  - 必要なら諦めて B より A 中心で
+
+zip 内訳の確認方法（CI runner で）:
+
+```bash
+du -sh lambda/build/*/ | sort -h | tail -20
+```
+
+目標: 50MB 以下。S3 経由なら 250MB まで OK だが、デプロイ速度にも効く。
+
+#### 5. CI 動作確認
+
+修正したワークフローを feature ブランチで PR → マージ後に Actions タブで Green 確認:
+
+- https://github.com/ykenkou001/logi-intel-dashboard/actions
+- `Deploy API to Lambda` workflow が Green
+- ヘルスチェック (`curl https://d1zei8qivkf3cr.cloudfront.net/health`) が 200
+- `aws lambda get-function --function-name logi-intel-dev-api --query "Configuration.LastModified"` で更新時刻確認
+
+### 健一さん側の残タスク
+
+| タスク | 状況 |
+|---|---|
+| GitHub Secrets `AWS_GITHUB_ACTIONS_ROLE_ARN` 登録 | **登録済**（CI が動いてエラー出ているので OIDC 自体は通っている） |
+| Branch protection の Status checks 必須化 | main 上で CI が初回 green になり次第、Settings → Branches → main rule → Status checks に `CI / Python` `CI / Web` を追加 |
+
+### やらないこと（このセッション）
+
+- **`core/export/docx_form3_writer.py` `core/export/excel_writer.py` `tests/core/test_export_writers.py` を編集しない**（Codex が並行作業中）
+- ローカル dev の API_BASE 問題は前セッションで対応済 → 触らない
+- AWS インフラの構成変更は CI/CD 用 IAM ポリシー追加・S3 lifecycle rule 追加に限定（CloudFront / API Gateway / Lambda 関数本体は触らない）
+- PPT は触らない（前セッションで完了）
+
+---
+
+## 後続タスク（CI/CD 完了 + Codex 作業完了の後）
+
+### Word / Excel 生成物の品質改善（Codex 担当）
+
+健一からの方針:
+
+- **このセクションは Codex が並行作業中。Claude は触らない**
 - 本番は AWS で構築済みなので、**ローカル開発 API_BASE まわりの修正は今回やらなくてよい**
 - 前回レビューで見つかった改善点のうち、**生成物の Word / Excel を優先して改善する**
 - セッションを変えて作業するため、この引継ぎを読んでから着手する
