@@ -153,6 +153,38 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ---
 
+## 6.5 ローカル開発サーバー起動ルール（必須）
+
+ローカル FastAPI / Next.js を立てる際は **必ず `scripts/dev_api.ps1` / `scripts/dev_web.ps1` を使うこと**。
+`uvicorn ...` を直接叩いたり `npm run dev` を素で起動してはいけない。
+
+### 経緯（2026-05-05 の不具合）
+旧 uvicorn が `core/` をメモリにロードしたまま動き続け、本番に修正をデプロイしても
+ブラウザフロントが localhost を叩き続けて修正反映が確認できない事故が発生した。
+
+原因:
+1. uvicorn を `--reload` なしで起動した古いプロセスが多重に残存
+2. `web/lib/api.ts` のデフォルト API_BASE が `http://localhost:8000` で、`NEXT_PUBLIC_API_BASE_URL`
+   未設定の本番ビルドでもローカルを叩く構造だった
+
+恒久対策（実施済）:
+- `scripts/dev_api.ps1` に **既存 uvicorn の自動 kill + `--reload` 起動** を組み込み
+- `scripts/dev_web.ps1` に **既存 next dev の自動 kill + API_BASE 環境変数固定** を組み込み
+- `web/lib/api.ts` のデフォルト API_BASE を `""`（同一 origin）に変更
+
+### 起動コマンド
+```powershell
+pwsh scripts/dev_api.ps1            # FastAPI (port 8000, --reload)
+pwsh scripts/dev_web.ps1            # Next.js (port 3000, API_BASE=localhost:8000)
+```
+
+### 不具合の症状（同種の事故が再発した時の見分け方）
+- 「コードを直してデプロイしたのに本番のフロントから動作が変わらない」
+- ブラウザ DevTools の Network タブで API リクエスト先が `localhost` になっている
+- → `Get-Process uvicorn,node` で残存プロセスを確認 → `dev_api.ps1` で再起動
+
+---
+
 ## 7. フェーズ3 Step 単位の検証ルール（必須）
 
 各 Step の実装完了後、**必ず以下の検証を行ってから次の Step に進むこと**。

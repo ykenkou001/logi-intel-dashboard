@@ -40,14 +40,15 @@ export interface SampleCompany {
 
 /**
  * API ベース URL。
- * - ローカル: `http://localhost:8000`
- * - 本番（CloudFront 同居）: `""`（同一 origin の `/api/v1/...` を直接叩く）
+ * - 本番（CloudFront 同居）: `""`（同一 origin の `/api/v1/...` を直接叩く）— 既定
+ * - ローカル開発: `web/.env.development.local` に
+ *   `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000` を設定（または手動で env を渡す）
  *
- * 環境変数 `NEXT_PUBLIC_API_BASE_URL` で上書き可能。
- * 静的エクスポート時はビルド時に固定されるため、本番ビルド時は明示的に "" を渡すこと。
+ * 安全側のデフォルトは `""`（同一 origin）。環境変数未設定でも本番動作が壊れない。
+ * 過去に発生した事故: 旧 default が `http://localhost:8000` だったため、放置された
+ * 古い uvicorn を本番フロントが叩き続け、修正反映が確認できない不具合に至った。
  */
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
 function buildUrl(
   path: string,
