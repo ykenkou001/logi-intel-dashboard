@@ -15,11 +15,12 @@
 
 ---
 
-## 🎯 次セッションの主目的（最優先）
+## 🎯 CI/CD C 案 — 実装完了（コミット待ち・apply 待ち）
 
-**CI/CD パイプラインを Green にする — Lambda zip サイズ問題を C 案で解決する。**
+**CI/CD パイプラインの Lambda zip サイズ問題を C 案（A+B 両方）で解決する。**
+コード変更は本セッションで完了。**残るは健一による `terraform apply` と PR/merge による反映**。
 
-### 経緯
+### 経緯（再掲）
 
 - フェーズ4.0 集大成 PR #1 を 2026-05-05 に main へマージ済（merge commit `5fda8b2`）
 - マージで起動した GitHub Actions `Deploy API to Lambda` が「Lambda 関数を更新」ステップで失敗:
@@ -30,109 +31,82 @@ RequestEntityTooLargeException:
   for the UpdateFunctionCode operation
 ```
 
-- 原因: `aws lambda update-function-code --zip-file` の API 直接アップロードは ~70MB 上限。CI の Linux 環境で生成された wheel（numpy / pandas / lxml の manylinux 版）が、ローカル Windows ビルド（44MB）より大きく 70MB を超えた
+- 原因: `aws lambda update-function-code --zip-file` の API 直接アップロードは ~70MB 上限。CI の Linux 環境で生成された wheel（lxml / pillow 等の manylinux 版）が、ローカル Windows ビルド（44MB）より大きく 70MB を超えた
 - **デプロイは現状失敗中。Lambda 上のコードは PR #1 マージ前のまま停滞している**（健一によるレイアウト修正・KPI カード修正等は本番反映していない）
 
-### 採用方針: C 案（健一指示）
+### 採用方針: C 案（A+B 両方入れる）
 
-**A: S3 経由デプロイ + B: zip サイズ削減 を両方入れる**
+- A: S3 経由デプロイで 70MB → 250MB の上限へ拡張
+- B: zip 自体を削減（boto3 系除外 / mcp_server 除外 / `--no-compile` / 不要ファイル削除）
 
-- A: S3 経由で 70MB → 250MB の上限へ拡張（安全マージン）
-- B: zip 自体を削減（デプロイ速度向上 + S3 容量削減）
+### 本セッションで実施した変更
 
-### やる作業（順番）
+| ファイル | 変更内容 |
+|---|---|
+| `infra/main.tf` | `aws_s3_bucket_lifecycle_configuration.main` に `lambda-deploy/` を 7 日で expire するルールを追加 |
+| `infra/main.tf` | `data "aws_iam_policy_document" "github_actions_deploy"` に `s3:PutObject/GetObject` for `lambda-deploy/*` と `s3:ListBucket` への prefix 拡張を追加 |
+| `.github/workflows/deploy-api.yml` | デプロイ経路を `--zip-file fileb://` → S3 経由（`aws s3 cp` → `update-function-code --s3-bucket --s3-key`）に切替 |
+| `.github/workflows/deploy-api.yml` | zip 削減: boto3 系を export からフィルタ（Lambda ランタイム同梱）/ `mcp_server/**` を paths と zip から除外 / `pip install --no-compile` / `__pycache__` `*.pyc` `*.pyo` 削除 / `*.dist-info` 軽量化 |
+| `lambda/README.md` | S3 経由デプロイ・mcp_server 除外・boto3 系除外の運用に合わせて改訂（緊急時の手動デプロイ手順含む） |
 
-#### 1. infra/main.tf の IAM 権限拡張
+ローカル検証済み:
+- `terraform -chdir=infra fmt -check -diff` → clean
+- `terraform -chdir=infra validate` → Success
+- workflow YAML 構文 OK
+- ローカル build dir 内訳: botocore 18.3 MB + boto3 0.9 MB が除外対象 → CI 側で更に大きいのでこれだけで十分なマージン確保見込み
 
-`data "aws_iam_policy_document" "github_actions_deploy"` 内に追加:
+### 健一が実行する残タスク（順番厳守）
 
-```hcl
-statement {
-  actions   = ["s3:PutObject"]
-  resources = ["${aws_s3_bucket.main.arn}/lambda-deploy/*"]
-}
-```
-
-`aws_s3_bucket_lifecycle_configuration.main` に rule 追加（古い zip 自動削除）:
-
-```hcl
-rule {
-  id     = "expire-lambda-deploy-zips"
-  status = "Enabled"
-  filter { prefix = "lambda-deploy/" }
-  expiration { days = 7 }
-}
-```
-
-#### 2. terraform apply（健一実行）
+#### 1. terraform apply（IAM とライフサイクルだけが対象）
 
 ```powershell
 cd c:\Users\ykenk\repos\logi-intel-dashboard\infra
 terraform plan -var "env=dev" -out plan.tfplan
+# 期待される変更: aws_iam_role_policy.github_actions_deploy 更新 + aws_s3_bucket_lifecycle_configuration.main 更新（rule 追加）
 terraform apply plan.tfplan
 ```
 
-#### 3. .github/workflows/deploy-api.yml を S3 経由に変更
+**先に apply してから workflow 変更を main マージすること**（IAM が無いと S3 アップロード失敗）。
 
-現在の `--zip-file fileb://...` を 2 段階に:
+#### 2. feature ブランチを PR → main マージ
 
-```yaml
-- name: Lambda zip を S3 にアップロード
-  run: |
-    aws s3 cp lambda/function.zip \
-      "s3://logi-intel-dev-7m2lqc/lambda-deploy/function-${{ github.sha }}.zip" \
-      --region "$AWS_REGION"
+現在のブランチ `docs/handoff-cicd-zip-fix` に変更がコミットされている想定。
 
-- name: Lambda 関数を更新（S3 経由）
-  run: |
-    aws lambda update-function-code \
-      --function-name "$LAMBDA_FUNCTION_NAME" \
-      --s3-bucket logi-intel-dev-7m2lqc \
-      --s3-key "lambda-deploy/function-${{ github.sha }}.zip" \
-      --region "$AWS_REGION"
+```powershell
+git status
+git add infra/main.tf .github/workflows/deploy-api.yml lambda/README.md HANDOFF_NEXT_SESSION.md
+git commit -m "ci: Lambda デプロイを S3 経由に切替 + zip 削減（boto3 ランタイム同梱除外・mcp_server 除外）"
+git push
+gh pr create --title "ci: Lambda デプロイを S3 経由に切替 + zip 削減" --body "..."
 ```
 
-#### 4. zip サイズ削減（B）
-
-`.github/workflows/deploy-api.yml` の Lambda zip ビルドステップで:
-
-- `mcp_server/` を Lambda zip から **除外**（API ハンドラから参照されない・Lambda では使わない）
-- `pip install --no-compile` でバイトコード生成抑制
-- インストール後に不要ファイルを削除（例: `find lambda/build -name "*.pyc" -delete`, `__pycache__` 削除, `*.dist-info/RECORD` 等）
-- numpy / pandas が本当に Lambda で必要か棚卸し
-  - 不要なら `pyproject.toml` の dependencies から外す（**Codex の Word/Excel 改善と衝突注意**）
-  - 必要なら諦めて B より A 中心で
-
-zip 内訳の確認方法（CI runner で）:
-
-```bash
-du -sh lambda/build/*/ | sort -h | tail -20
-```
-
-目標: 50MB 以下。S3 経由なら 250MB まで OK だが、デプロイ速度にも効く。
-
-#### 5. CI 動作確認
-
-修正したワークフローを feature ブランチで PR → マージ後に Actions タブで Green 確認:
+#### 3. マージ後に Actions タブで Green 確認
 
 - https://github.com/ykenkou001/logi-intel-dashboard/actions
-- `Deploy API to Lambda` workflow が Green
-- ヘルスチェック (`curl https://d1zei8qivkf3cr.cloudfront.net/health`) が 200
-- `aws lambda get-function --function-name logi-intel-dev-api --query "Configuration.LastModified"` で更新時刻確認
+- `Deploy API to Lambda` が Green
+- `curl https://d1zei8qivkf3cr.cloudfront.net/health` → `{"status":"ok"}`
+- `aws lambda get-function --function-name logi-intel-dev-api --query "Configuration.LastModified"` で更新時刻が直近に動いているか
+- CI ログの `du -sh */` 出力で zip 内訳サイズも記録される（boto3 系が消えていることを確認）
 
-### 健一さん側の残タスク
+#### 4. 失敗時の切り戻し
+
+万一 S3 経由でも失敗するなら:
+- CI ログで boto3 系がフィルタされたか（`grep` 結果）確認
+- pillow / lxml が新たに膨らんでいないか（`du -sh */` で内訳）
+- 最悪 `--zip-file fileb://` に戻すには `lambda/function.zip` を直接渡す旧バージョンへ revert する
+
+### 健一さん側の残タスク（CI 関連）
 
 | タスク | 状況 |
 |---|---|
-| GitHub Secrets `AWS_GITHUB_ACTIONS_ROLE_ARN` 登録 | **登録済**（CI が動いてエラー出ているので OIDC 自体は通っている） |
+| GitHub Secrets `AWS_GITHUB_ACTIONS_ROLE_ARN` 登録 | **登録済** |
 | Branch protection の Status checks 必須化 | main 上で CI が初回 green になり次第、Settings → Branches → main rule → Status checks に `CI / Python` `CI / Web` を追加 |
 
-### やらないこと（このセッション）
+### やらないこと（このセッション完了済の確認）
 
-- **`core/export/docx_form3_writer.py` `core/export/excel_writer.py` `tests/core/test_export_writers.py` を編集しない**（Codex が並行作業中）
-- ローカル dev の API_BASE 問題は前セッションで対応済 → 触らない
-- AWS インフラの構成変更は CI/CD 用 IAM ポリシー追加・S3 lifecycle rule 追加に限定（CloudFront / API Gateway / Lambda 関数本体は触らない）
-- PPT は触らない（前セッションで完了）
+- ✅ **`core/export/docx_form3_writer.py` `core/export/excel_writer.py` `tests/core/test_export_writers.py` は触っていない**（Codex 並行作業領域）
+- ✅ **`pyproject.toml` の `[project.dependencies]` も触っていない**（boto3 系除外は workflow 側のフィルタで実現）
+- ✅ AWS インフラ変更は CI/CD 用 IAM 拡張と S3 ライフサイクル追加のみ（CloudFront / API Gateway / Lambda 本体には変更なし）
 
 ---
 

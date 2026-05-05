@@ -165,6 +165,23 @@ resource "aws_s3_bucket_lifecycle_configuration" "main" {
       noncurrent_days = 90
     }
   }
+
+  # CI/CD 経由でアップロードされる Lambda デプロイ zip。
+  # update-function-code の API 直アップロード上限（~70MB）を超えたため
+  # S3 経由（最大 250MB）に切替。zip は更新後すぐ取得されるので 7 日で十分。
+  rule {
+    id     = "expire-lambda-deploy-zips"
+    status = "Enabled"
+    filter {
+      prefix = "lambda-deploy/"
+    }
+    expiration {
+      days = 7
+    }
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
@@ -616,13 +633,22 @@ data "aws_iam_policy_document" "github_actions_deploy" {
     ]
     resources = ["${aws_s3_bucket.main.arn}/web/*"]
   }
+  # Lambda デプロイ zip の S3 アップロード（lambda-deploy/ prefix のみ）。
+  # update-function-code API 直アップロードは 70MB 上限のため、S3 経由に切替。
+  statement {
+    actions = [
+      "s3:PutObject",
+      "s3:GetObject",
+    ]
+    resources = ["${aws_s3_bucket.main.arn}/lambda-deploy/*"]
+  }
   statement {
     actions   = ["s3:ListBucket"]
     resources = [aws_s3_bucket.main.arn]
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["web/*", "web"]
+      values   = ["web/*", "web", "lambda-deploy/*", "lambda-deploy"]
     }
   }
   # CloudFront キャッシュ無効化
