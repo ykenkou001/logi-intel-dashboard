@@ -2,6 +2,12 @@ import Link from "next/link";
 
 const FEATURES = [
   {
+    href: "/dashboard/cockpit",
+    title: "🆕 デイリーコックピット（CLO 今日の3判断）",
+    description:
+      "未達 KPI ／ 放置リスク ／ 今週決める施策 を 3 件だけ提示。緊急度・経営インパクト・自信度・想定反論まで 1 画面で確認、採用／保留／却下を I2 ログに記録",
+  },
+  {
     href: "/dashboard/macro",
     title: "都道府県マクロ概況",
     description:

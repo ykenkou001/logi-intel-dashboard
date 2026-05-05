@@ -64,6 +64,100 @@ export interface SampleCompany {
   data_source: DataSource;
 }
 
+// ─── J3 デイリーコックピット（フェーズ4.5 b）─────────────────────────
+export type DecisionAxis = "compliance" | "kpi_reach" | "measure_pick";
+export type CardState =
+  | "healthy"
+  | "insufficient_data"
+  | "out_of_scope"
+  | "attention_needed";
+export type ObjectionRole = "cfo" | "sales" | "operation" | "partner" | "board";
+export type EvidenceAxis = "cost" | "legal" | "supply" | "brand_risk";
+export type DecisionStatus =
+  | "pending"
+  | "adopt"
+  | "postpone"
+  | "reject"
+  | "escalate";
+export type VerdictLevel = "green" | "yellow" | "red";
+export type ComplianceStatus =
+  | "compliant"
+  | "violation"
+  | "borderline"
+  | "not_measured";
+
+export interface ObjectionItem {
+  role: ObjectionRole;
+  objection: string;
+  rebuttal: string;
+  evidence_axis: EvidenceAxis;
+}
+
+export interface CockpitItem {
+  item_id: string;
+  decision_axis: DecisionAxis;
+  card_state: CardState;
+  headline: string;
+  rationale: string;
+  urgency_score: number;
+  impact_score: number;
+  confidence_score: number;
+  total_score: number;
+  related_measure_id: string | null;
+  related_kpi_name: string | null;
+  related_compliance_item: string | null;
+  suggested_action: string;
+  deadline_label: string;
+  next_review_due: string | null;
+  days_pending: number;
+  delta_from_last: string | null;
+  estimated_pnl_jpy: number | null;
+  citation_keys: string[];
+  anticipated_objections: ObjectionItem[];
+}
+
+export interface CockpitSnapshot {
+  snapshot_date: string;
+  load_factor_pct: number | null;
+  wait_time_avg_min: number | null;
+  wait_time_max_min: number | null;
+  handling_time_avg_min: number | null;
+  co2_intensity_g_per_tonkm: number | null;
+  over_2h_count_total: number;
+  compliance_overall: ComplianceStatus;
+  feasibility_kpi_level: VerdictLevel;
+  open_items: string[];
+}
+
+export interface CockpitMetadata {
+  company_id: string;
+  company_name: string;
+  generated_at: string;
+  data_source: DataSource;
+  overall_health: VerdictLevel;
+  one_line_summary: string;
+  delta_from_yesterday: Record<string, number | null>;
+  snapshot: CockpitSnapshot;
+  items: CockpitItem[];
+}
+
+export interface DecisionLogRequest {
+  cockpit_item_id: string;
+  decision: DecisionStatus;
+  decided_by?: string;
+  rationale?: string;
+  expected_effect_jpy?: number | null;
+  review_due?: string | null;
+  linked_alerts?: string[];
+}
+
+export interface DecisionLogResponse {
+  record_id: string;
+  company_id: string;
+  decision: DecisionStatus;
+  log_path: string;
+}
+
 /**
  * API ベース URL。
  * - 本番（CloudFront 同居）: `""`（同一 origin の `/api/v1/...` を直接叩く）— 既定
@@ -139,6 +233,36 @@ export async function fetchWaitHeatmap(companyId: string): Promise<ToolResponse>
   return request<ToolResponse>("/api/v1/clo/wait-heatmap", {
     searchParams: { company_id: companyId },
   });
+}
+
+// ─── デイリーコックピット（フェーズ4.5 b）─────────────────────
+export async function fetchTodayDecisions(
+  companyId: string,
+  options: { targetYear?: number; persistSnapshot?: boolean } = {},
+): Promise<ToolResponse> {
+  return request<ToolResponse>(
+    `/api/v1/clo/today-decisions/${encodeURIComponent(companyId)}`,
+    {
+      searchParams: {
+        target_year: options.targetYear,
+        persist_snapshot:
+          options.persistSnapshot === undefined ? undefined : options.persistSnapshot,
+      },
+    },
+  );
+}
+
+export async function logDecision(
+  companyId: string,
+  body: DecisionLogRequest,
+): Promise<DecisionLogResponse> {
+  return request<DecisionLogResponse>(
+    `/api/v1/clo/decisions/${encodeURIComponent(companyId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
 }
 
 // ─── 適用判定 ─────────────────────────────────────────────────
