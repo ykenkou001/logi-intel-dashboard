@@ -10,14 +10,18 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 from api.routers.clo import _publish_files
 from api.schemas.responses import ToolResponseModel
 from core.export.response import ToolResponse
 from core.io.company_loader import load_company_profile_from_excel
 from core.io.company_store import save_company_profile
-from core.io.template_writer import DEFAULT_TEMPLATE_PATH, write_company_template
+from core.io.template_writer import (
+    DEFAULT_TEMPLATE_PATH,
+    TemplatePurpose,
+    write_company_template,
+)
 
 router = APIRouter(prefix="/api/v1/company", tags=["company"])
 
@@ -32,23 +36,60 @@ def _to_model(response: ToolResponse) -> ToolResponseModel:
     return ToolResponseModel.model_validate(response.to_dict())
 
 
+_PURPOSE_QUERY = Query(
+    "annual",
+    description=(
+        "テンプレ用途。'annual'（既定・計画策定の網羅版）/"
+        " 'monthly'（月次レビュー・KPI 中心）/"
+        " 'daily'（日次運用入力・wait_time 軽量版）。"
+    ),
+)
+
+_PURPOSE_LABEL: dict[TemplatePurpose, str] = {
+    "annual": "計画策定用（年 1 回・網羅版）",
+    "monthly": "月次集計用（月次レビュー）",
+    "daily": "日次運用入力用（コックピット／ヒートマップ）",
+}
+
+_PURPOSE_SHEETS: dict[TemplatePurpose, str] = {
+    "annual": (
+        "profile / sites / wait_time(年集計) / handling_time / "
+        "kpi_history / _jsic_reference"
+    ),
+    "monthly": (
+        "profile / sites / wait_time(月集計) / handling_time / "
+        "kpi_history / _jsic_reference"
+    ),
+    "daily": "profile / sites / wait_time(日次・site×slot) / _jsic_reference",
+}
+
+
 @router.post("/template", response_model=ToolResponseModel)
-async def generate_template() -> ToolResponseModel:
+async def generate_template(
+    purpose: TemplatePurpose = _PURPOSE_QUERY,
+) -> ToolResponseModel:
     """自社プロフィール入力 Excel テンプレートを生成し、相対パスを返す。
+
+    フェーズ4.5 B 軸で **用途別 3 種類** に拡張。``purpose`` 未指定時は
+    ``annual``（現行互換・6 シート構成）を返すので、既存呼び出しは破壊しない。
 
     生成された Excel は `/api/v1/files/{path}` 経由でダウンロード可能。
     """
     try:
-        written = write_company_template(DEFAULT_TEMPLATE_PATH)
+        written = write_company_template(DEFAULT_TEMPLATE_PATH, purpose=purpose)
+    except ValueError as exc:
+        # purpose が想定外の値だった場合（FastAPI Literal で防げるはずだが多重安全）
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"テンプレ生成失敗: {exc}") from exc
 
     summary = (
         "=== 自社プロフィール入力テンプレ生成完了 ===\n"
-        f"出力先: {written}\n\n"
+        f"用途: {purpose}（{_PURPOSE_LABEL[purpose]}）\n"
+        f"出力先: {written}\n"
+        f"含まれるシート: {_PURPOSE_SHEETS[purpose]}\n\n"
         "次の手順:\n"
-        "  1. このファイルを開き、profile / sites / wait_time / "
-        "handling_time / kpi_history シートを記入\n"
+        "  1. このファイルを開き、各シートを記入\n"
         "  2. 必須項目（[必須] と表記）はすべて埋める\n"
         "  3. 連鎖化事業者は handling_time シートを空にしてよい\n"
         "  4. POST /api/v1/company/load にファイルを multipart/form-data でアップロード\n"

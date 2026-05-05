@@ -9,10 +9,41 @@ import {
 import {
   generateCompanyTemplate,
   loadCompanyProfile,
+  type TemplatePurpose,
   type ToolResponse,
 } from "@/lib/api";
 
+const PURPOSE_OPTIONS: ReadonlyArray<{
+  value: TemplatePurpose;
+  title: string;
+  subtitle: string;
+  body: string;
+}> = [
+  {
+    value: "annual",
+    title: "計画策定（年 1 回）",
+    subtitle: "annual ・ 既定",
+    body:
+      "中長期計画の網羅入力用。profile / sites / wait_time(年集計) / handling_time / kpi_history の 6 シート構成。年 1 回の計画策定に。",
+  },
+  {
+    value: "monthly",
+    title: "月次レビュー",
+    subtitle: "monthly ・ KPI 中心",
+    body:
+      "月次集計用。wait_time の bucket_label を「2026-04 全体」のような月次集計形式にし、handling_time / kpi_history を残します。",
+  },
+  {
+    value: "daily",
+    title: "日次運用入力",
+    subtitle: "daily ・ 軽量版",
+    body:
+      "コックピット／ヒートマップ向けの日次入力用。wait_time のみ（site×日付×slot）の軽量構成で、site_name と time_slot を埋めて配布。",
+  },
+];
+
 export default function CompanyPage() {
+  const [purpose, setPurpose] = useState<TemplatePurpose>("annual");
   const [templateResult, setTemplateResult] = useState<ToolResponse | null>(
     null
   );
@@ -26,7 +57,7 @@ export default function CompanyPage() {
     setTemplateLoading(true);
     setError(null);
     try {
-      setTemplateResult(await generateCompanyTemplate());
+      setTemplateResult(await generateCompanyTemplate(purpose));
     } catch (e) {
       setError(e instanceof Error ? e.message : "テンプレ生成失敗");
     } finally {
@@ -81,9 +112,53 @@ export default function CompanyPage() {
         </div>
         <div className="px-6 py-5 space-y-4">
           <p className="text-xs text-gray-600 leading-relaxed">
-            下記ボタンで Excel テンプレートを生成します。生成後、「生成成果物」セクションの
+            下記から用途を選択し、Excel テンプレートを生成します。生成後、「生成成果物」セクションの
             XLSX リンクからダウンロードし、各シートに自社データを記入してください。
           </p>
+          <fieldset className="space-y-2">
+            <legend className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              テンプレ用途
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {PURPOSE_OPTIONS.map((opt) => {
+                const isSelected = purpose === opt.value;
+                return (
+                  <label
+                    key={opt.value}
+                    className={`cursor-pointer rounded-lg border p-3 flex flex-col gap-1 transition-colors ${
+                      isSelected
+                        ? "border-[#1F4E79] bg-[#1F4E79]/5"
+                        : "border-gray-200 hover:border-[#2E73AC]/40 hover:bg-slate-50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="template-purpose"
+                      value={opt.value}
+                      checked={isSelected}
+                      onChange={() => setPurpose(opt.value)}
+                      className="sr-only"
+                    />
+                    <div className="flex items-center justify-between">
+                      <span
+                        className={`text-sm font-bold ${
+                          isSelected ? "text-[#1F4E79]" : "text-gray-700"
+                        }`}
+                      >
+                        {opt.title}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wider text-gray-400">
+                        {opt.subtitle}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-600 leading-snug">
+                      {opt.body}
+                    </p>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
           <button
             onClick={handleGenerateTemplate}
             disabled={templateLoading}
@@ -94,7 +169,7 @@ export default function CompanyPage() {
                 <Spinner /> 生成中...
               </>
             ) : (
-              "Excel テンプレを生成"
+              `Excel テンプレを生成（${purpose}）`
             )}
           </button>
           {templateResult && (
