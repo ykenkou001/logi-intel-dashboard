@@ -1,4 +1,4 @@
-"""core/playbook/industry_packages.py のテスト（フェーズ5.0 段階 c.1〜c.3）。
+"""core/playbook/industry_packages.py のテスト（フェーズ5.0 段階 c.1〜c.4）。
 
 Codex レビュー反映済の 4 業種パッケージに対するインバリアントと
 resolve_company_package の Override 4 分類挙動を確認する。
@@ -12,16 +12,26 @@ resolve_company_package の Override 4 分類挙動を確認する。
     - 推測排除：target_value=None の KPI は legal_basis も None or 制度 URL のみ
     - resolve_company_package: approved_better_practice / required_localization
       は上書き反映、unmanaged_deviation は無視、temporary_exception は期限制御
+    - c.4 既存資産接続検証:
+        * ALL_MEASURES.applicable_industries 側からの逆検証
+          （業種パッケージの measure_ids が ALL_MEASURES の applicable_industries
+            と矛盾していないか）
+        * plan_template_paths のファイル実在性
+        * logistics_cost_revenue_ratio_pct.baseline_value が
+          industry_benchmarks.LOGISTICS_COST_RATIO と一致
+        * measure_ids / KPI metric_id に重複がないこと
 
-plan: plans/b-c-flickering-pixel.md §段階 c.9
+plan: plans/b-c-flickering-pixel.md §段階 c.4 / c.9
 """
 from __future__ import annotations
 
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 
 from core.playbook.industry_packages import (
+    ALL_PACKAGES,
     CompanyPackageOverride,
     IndustryPackage,
     OverrideEntry,
@@ -29,8 +39,11 @@ from core.playbook.industry_packages import (
     list_packages,
     resolve_company_package,
 )
-from core.playbook.measures import ALL_MEASURES
+from core.playbook.measures import ALL_MEASURES, get_measure
+from core.static.industry_benchmarks import LOGISTICS_COST_RATIO
 from core.static.jsic import JsicCategory
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 _INDUSTRIES: list[JsicCategory] = [
     "manufacturing", "wholesale", "retail", "chain_franchise",
@@ -419,3 +432,142 @@ def test_legal_basis_urls_are_https(industry: JsicCategory) -> None:
             assert kpi.legal_basis.startswith("https://"), (
                 f"{industry} {kpi.metric_id}: legal_basis={kpi.legal_basis}"
             )
+
+
+# ---------------------------------------------------------------------------
+# 6. c.4 既存資産接続検証（ALL_MEASURES / plan_template_paths / industry_benchmarks）
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("industry", _INDUSTRIES)
+def test_measure_ids_consistent_with_all_measures_applicable_industries(
+    industry: JsicCategory,
+) -> None:
+    """逆方向検証: 業種パッケージの measure_ids が ALL_MEASURES.applicable_industries と矛盾しない。
+
+    パッケージが採用している施策は、ALL_MEASURES 側で当該業種が
+    applicable_industries に含まれている（または空 = 全業種対象）必要がある。
+    chain_franchise への warehouse_dx_wms 混入等の事故を防ぐ。
+    """
+    pkg = get_package(industry)
+    assert pkg is not None
+    for mid in pkg.measure_ids:
+        m = get_measure(mid)
+        assert m is not None, f"{industry}: measure_id {mid!r} が ALL_MEASURES 未登録"
+        if not m.applicable_industries:
+            continue  # 空リスト = 全業種対象
+        assert industry in m.applicable_industries, (
+            f"{industry}: パッケージが採用する {mid!r} の "
+            f"applicable_industries={m.applicable_industries} に "
+            f"{industry!r} が含まれていない（整合性エラー）"
+        )
+
+
+@pytest.mark.parametrize("industry", _INDUSTRIES)
+def test_kpi_related_measure_ids_consistent_with_applicable_industries(
+    industry: JsicCategory,
+) -> None:
+    """KPI.related_measure_ids も applicable_industries と整合する。"""
+    pkg = get_package(industry)
+    assert pkg is not None
+    for kpi in pkg.kpis:
+        for mid in kpi.related_measure_ids:
+            m = get_measure(mid)
+            assert m is not None, (
+                f"{industry} KPI {kpi.metric_id}: related_measure_id "
+                f"{mid!r} が ALL_MEASURES 未登録"
+            )
+            if not m.applicable_industries:
+                continue
+            assert industry in m.applicable_industries, (
+                f"{industry} KPI {kpi.metric_id}: related_measure_id "
+                f"{mid!r} の applicable_industries={m.applicable_industries} に "
+                f"{industry!r} が含まれていない"
+            )
+
+
+@pytest.mark.parametrize("industry", _INDUSTRIES)
+def test_plan_template_paths_exist_when_specified(
+    industry: JsicCategory,
+) -> None:
+    """plan_template_paths に登録された全パスが実在する（推測パス禁止）。
+
+    空 dict は許容（c.4 時点で未整備の業種があっても可）。
+    """
+    pkg = get_package(industry)
+    assert pkg is not None
+    for stage, rel_path in pkg.plan_template_paths.items():
+        full = _REPO_ROOT / rel_path
+        assert full.is_file(), (
+            f"{industry} plan_template_paths[{stage!r}]={rel_path} は実在しない"
+        )
+
+
+def test_plan_template_paths_cover_all_industries() -> None:
+    """4 業種すべてに starter / advanced のテンプレが揃う（c.4 で全業種充足）。"""
+    for industry in _INDUSTRIES:
+        pkg = get_package(industry)
+        assert pkg is not None
+        assert "starter" in pkg.plan_template_paths, (
+            f"{industry}: starter テンプレ未登録"
+        )
+        assert "advanced" in pkg.plan_template_paths, (
+            f"{industry}: advanced テンプレ未登録"
+        )
+
+
+@pytest.mark.parametrize("industry", _INDUSTRIES)
+def test_logistics_cost_baseline_matches_industry_benchmarks(
+    industry: JsicCategory,
+) -> None:
+    """logistics_cost_revenue_ratio_pct の baseline は LOGISTICS_COST_RATIO に一致。
+
+    c.1 で _common_kpis 経由で実装済。Codex レビューで採用した「業界平均比」の
+    出所が JILS で一意に決まるため、industry_packages.py 側で値を持たず
+    industry_benchmarks.py から動的に引く。乖離検出用のレグレッション。
+    """
+    pkg = get_package(industry)
+    assert pkg is not None
+    cost_kpi = next(
+        (k for k in pkg.kpis if k.metric_id == "logistics_cost_revenue_ratio_pct"),
+        None,
+    )
+    assert cost_kpi is not None
+    expected_ratio = LOGISTICS_COST_RATIO.get(industry)
+    assert expected_ratio is not None, (
+        f"{industry}: industry_benchmarks に LOGISTICS_COST_RATIO が無い"
+    )
+    expected_pct = expected_ratio * 100.0
+    assert cost_kpi.baseline_value == pytest.approx(expected_pct), (
+        f"{industry}: cost baseline={cost_kpi.baseline_value} vs "
+        f"benchmarks={expected_pct}"
+    )
+
+
+@pytest.mark.parametrize("industry", _INDUSTRIES)
+def test_measure_ids_have_no_duplicates(industry: JsicCategory) -> None:
+    """measure_ids 内に重複がない（list だが set 同等の意味で扱う）。"""
+    pkg = get_package(industry)
+    assert pkg is not None
+    assert len(pkg.measure_ids) == len(set(pkg.measure_ids)), (
+        f"{industry}: measure_ids に重複あり: {pkg.measure_ids}"
+    )
+
+
+@pytest.mark.parametrize("industry", _INDUSTRIES)
+def test_kpi_metric_ids_are_unique(industry: JsicCategory) -> None:
+    """KPI の metric_id が重複しない（_common_kpis 取込時の事故防止）。"""
+    pkg = get_package(industry)
+    assert pkg is not None
+    metric_ids = [k.metric_id for k in pkg.kpis]
+    assert len(metric_ids) == len(set(metric_ids)), (
+        f"{industry}: KPI metric_id に重複あり: {metric_ids}"
+    )
+
+
+def test_all_packages_dict_keys_match_category() -> None:
+    """ALL_PACKAGES の辞書キーと IndustryPackage.category が一致する。"""
+    for key, pkg in ALL_PACKAGES.items():
+        assert pkg.category == key, (
+            f"ALL_PACKAGES[{key!r}].category={pkg.category!r}（不一致）"
+        )
