@@ -1,556 +1,262 @@
-# 次セッションへの引継ぎ（2026-05-05 時点）
+# 次セッションへの引継ぎ（2026-05-06 時点）
+
+> このファイルを最初に読み、`uv sync` 実行後に c.4 から着手する。
+
+---
+
+## 🎯 次セッションのタスク: フェーズ5.0 段階 c — c.4 既存接続検証 + c.6 F2/J2 スコアリング
+
+### 全体像
+
+`plans/b-c-flickering-pixel.md`（健一の `~/.claude/plans/` 配下にある計画書）の **段階 c** のうち、c.1-c.3 は完了済（PR #11 マージ済）。次は **c.4 既存接続検証** と **c.6 F2 標準化スコア + J2 罠スコア** を実装する。c.5 個社差分永続化は c.3 で実装済（`core/io/override_store.py`）。c.7 MCP/REST と c.8/c.9 は本セッションのスコープ外。
+
+### 完了済の前提資産（直前 PR）
+
+| PR | 内容 |
+|---|---|
+| #11 (merged) | c.1 マトリクス + c.2 データモデル + c.3 resolve / Override 永続化 — `core/playbook/industry_packages.py` + `core/io/override_store.py` + テスト 55 件 |
+| #10 (merged) | フェーズ4.5 B 用途別テンプレ生成（daily/monthly/annual） |
+| #9 #8 #7 (merged) | b 段階：J3 デイリーコックピット中核 / Web 画面 / シナリオテスト |
+
+---
 
 ## ⚠️ 並行作業の注意（最初に必ず確認）
 
 健一は **Claude / Codex を別セッションで並行起動** して別領域を担当させる運用。
 
-| 領域 | 担当 | 触ってよいファイル |
-|------|------|-------------------|
-| **Word / Excel 生成物の品質改善** | **Codex（並行作業中・触るな）** | `core/export/docx_form3_writer.py`, `core/export/excel_writer.py`, `tests/core/test_export_writers.py` |
-| **CI/CD パイプライン修正（Lambda zip 問題）** | **Claude（このセッションの主目的）** | `infra/main.tf`, `.github/workflows/*.yml`, `pyproject.toml` の依存棚卸し |
+- 現時点で他領域に並行作業の予定はないが、本セッション開始前に健一に「Codex 並行作業はあるか？」を確認する
+- 衝突可能性が高い共有領域:
+  - `pyproject.toml` の dependencies — どちらも触る可能性。先に触る側が他方に通知する想定で、健一に都度確認する
+  - 統合テスト（`tests/api/`, `tests/core/test_plan_draft*.py`）
 
-**衝突注意の共有領域**: `pyproject.toml` の `[project.dependencies]` は Codex が docx/excel ライブラリ追加で触る可能性あり。変更時は健一に確認する。
+詳細 → メモリ `feedback_codex_parallel_collaboration.md` / CLAUDE.md §9
 
-**`main` への直接 push は禁止（branch protection 有効）**。Claude / Codex / 健一すべて、必ず feature ブランチ（`feature/...` `fix/...` `docs/...` `ci/...`）を切って Pull Request 経由でマージする。詳細 → [docs/git_workflow.md](docs/git_workflow.md) §main ブランチ運用ルール
-
-詳細 → メモリ `feedback_codex_parallel_collaboration.md`
+**`main` への直接 push は禁止**。必ず feature ブランチ + PR 経由。
 
 ---
 
-## 🎯 CI/CD C 案 — 実装完了（コミット待ち・apply 待ち）
+## 📋 必読ドキュメント（着手前）
 
-**CI/CD パイプラインの Lambda zip サイズ問題を C 案（A+B 両方）で解決する。**
-コード変更は本セッションで完了。**残るは健一による `terraform apply` と PR/merge による反映**。
-
-### 経緯（再掲）
-
-- フェーズ4.0 集大成 PR #1 を 2026-05-05 に main へマージ済（merge commit `5fda8b2`）
-- マージで起動した GitHub Actions `Deploy API to Lambda` が「Lambda 関数を更新」ステップで失敗:
-
-```
-RequestEntityTooLargeException:
-  Request must be smaller than 70167211 bytes (≈ 66.9 MB)
-  for the UpdateFunctionCode operation
-```
-
-- 原因: `aws lambda update-function-code --zip-file` の API 直接アップロードは ~70MB 上限。CI の Linux 環境で生成された wheel（lxml / pillow 等の manylinux 版）が、ローカル Windows ビルド（44MB）より大きく 70MB を超えた
-- **デプロイは現状失敗中。Lambda 上のコードは PR #1 マージ前のまま停滞している**（健一によるレイアウト修正・KPI カード修正等は本番反映していない）
-
-### 採用方針: C 案（A+B 両方入れる）
-
-- A: S3 経由デプロイで 70MB → 250MB の上限へ拡張
-- B: zip 自体を削減（boto3 系除外 / mcp_server 除外 / `--no-compile` / 不要ファイル削除）
-
-### 本セッションで実施した変更
-
-| ファイル | 変更内容 |
-|---|---|
-| `infra/main.tf` | `aws_s3_bucket_lifecycle_configuration.main` に `lambda-deploy/` を 7 日で expire するルールを追加 |
-| `infra/main.tf` | `data "aws_iam_policy_document" "github_actions_deploy"` に `s3:PutObject/GetObject` for `lambda-deploy/*` と `s3:ListBucket` への prefix 拡張を追加 |
-| `.github/workflows/deploy-api.yml` | デプロイ経路を `--zip-file fileb://` → S3 経由（`aws s3 cp` → `update-function-code --s3-bucket --s3-key`）に切替 |
-| `.github/workflows/deploy-api.yml` | zip 削減: boto3 系を export からフィルタ（Lambda ランタイム同梱）/ `mcp_server/**` を paths と zip から除外 / `pip install --no-compile` / `__pycache__` `*.pyc` `*.pyo` 削除 / `*.dist-info` 軽量化 |
-| `lambda/README.md` | S3 経由デプロイ・mcp_server 除外・boto3 系除外の運用に合わせて改訂（緊急時の手動デプロイ手順含む） |
-
-ローカル検証済み:
-- `terraform -chdir=infra fmt -check -diff` → clean
-- `terraform -chdir=infra validate` → Success
-- workflow YAML 構文 OK
-- ローカル build dir 内訳: botocore 18.3 MB + boto3 0.9 MB が除外対象 → CI 側で更に大きいのでこれだけで十分なマージン確保見込み
-
-### 健一が実行する残タスク（順番厳守）
-
-#### 1. terraform apply（IAM とライフサイクルだけが対象）
-
-```powershell
-cd c:\Users\ykenk\repos\logi-intel-dashboard\infra
-terraform plan -var "env=dev" -out plan.tfplan
-# 期待される変更: aws_iam_role_policy.github_actions_deploy 更新 + aws_s3_bucket_lifecycle_configuration.main 更新（rule 追加）
-terraform apply plan.tfplan
-```
-
-**先に apply してから workflow 変更を main マージすること**（IAM が無いと S3 アップロード失敗）。
-
-#### 2. feature ブランチを PR → main マージ
-
-現在のブランチ `docs/handoff-cicd-zip-fix` に変更がコミットされている想定。
-
-```powershell
-git status
-git add infra/main.tf .github/workflows/deploy-api.yml lambda/README.md HANDOFF_NEXT_SESSION.md
-git commit -m "ci: Lambda デプロイを S3 経由に切替 + zip 削減（boto3 ランタイム同梱除外・mcp_server 除外）"
-git push
-gh pr create --title "ci: Lambda デプロイを S3 経由に切替 + zip 削減" --body "..."
-```
-
-#### 3. マージ後に Actions タブで Green 確認
-
-- https://github.com/ykenkou001/logi-intel-dashboard/actions
-- `Deploy API to Lambda` が Green
-- `curl https://d1zei8qivkf3cr.cloudfront.net/health` → `{"status":"ok"}`
-- `aws lambda get-function --function-name logi-intel-dev-api --query "Configuration.LastModified"` で更新時刻が直近に動いているか
-- CI ログの `du -sh */` 出力で zip 内訳サイズも記録される（boto3 系が消えていることを確認）
-
-#### 4. 失敗時の切り戻し
-
-万一 S3 経由でも失敗するなら:
-- CI ログで boto3 系がフィルタされたか（`grep` 結果）確認
-- pillow / lxml が新たに膨らんでいないか（`du -sh */` で内訳）
-- 最悪 `--zip-file fileb://` に戻すには `lambda/function.zip` を直接渡す旧バージョンへ revert する
-
-### 健一さん側の残タスク（CI 関連）
-
-| タスク | 状況 |
-|---|---|
-| GitHub Secrets `AWS_GITHUB_ACTIONS_ROLE_ARN` 登録 | **登録済** |
-| Branch protection（main 直接 push 禁止 + PR 経由のみ） | **設定済** — Claude / Codex / 健一すべて feature ブランチ + PR 経由でのみ main に取り込む。詳細 → [docs/git_workflow.md](docs/git_workflow.md) §main ブランチ運用ルール |
-| Branch protection の Status checks 必須化 | main 上で CI が初回 green になり次第、Settings → Branches → main rule → Status checks に `CI / Python` `CI / Web` を追加 |
-
-### やらないこと（このセッション完了済の確認）
-
-- ✅ **`core/export/docx_form3_writer.py` `core/export/excel_writer.py` `tests/core/test_export_writers.py` は触っていない**（Codex 並行作業領域）
-- ✅ **`pyproject.toml` の `[project.dependencies]` も触っていない**（boto3 系除外は workflow 側のフィルタで実現）
-- ✅ AWS インフラ変更は CI/CD 用 IAM 拡張と S3 ライフサイクル追加のみ（CloudFront / API Gateway / Lambda 本体には変更なし）
+1. **CLAUDE.md** — プロジェクト全体方針。特に §1.5 ミッション宣言 / §6.5 dev サーバ起動ルール / §7 検証ルール / §9 Codex 協業方針
+2. **plans/b-c-flickering-pixel.md** §段階 c.6 — F2/J2 ロジック仕様（健一の `~/.claude/plans/b-c-flickering-pixel.md`）
+3. **core/playbook/industry_packages.py** — c.1-c.3 で構築した IndustryPackage / Override 4 分類 / resolve_company_package
+4. **core/io/override_store.py** — Override JSON 永続化（save_override / load_override）
+5. **core/playbook/measures.py** ALL_MEASURES — 全 10 施策の applicable_industries フィールド構造
+6. **core/static/industry_benchmarks.py** — baseline 数値の出典
+7. **memory `reference_industry_sense_ranges.md`** — 業界感覚レンジ表（妥当性判定用）
 
 ---
 
-## 後続タスク（CI/CD 完了 + Codex 作業完了の後）
+## 🛠 実装スコープ
 
-### Word / Excel 生成物の品質改善（Codex 担当）
+### c.4: 既存資産との接続検証（軽量・最初に着手）
 
-健一からの方針:
+**目的**: `core/playbook/industry_packages.py` で参照する既存資産との整合性を CI で守る。
 
-- **このセクションは Codex が並行作業中。Claude は触らない**
-- 本番は AWS で構築済みなので、**ローカル開発 API_BASE まわりの修正は今回やらなくてよい**
-- 前回レビューで見つかった改善点のうち、**生成物の Word / Excel を優先して改善する**
-- セッションを変えて作業するため、この引継ぎを読んでから着手する
+実装ファイル候補:
+- `tests/core/test_playbook_industry_packages.py` を拡張（新規ファイルは作らない）
+- 必要なら `core/playbook/industry_packages.py` に検証ヘルパを追加
 
-### 前回レビューで確認した生成物の状態
+検証項目:
+1. **measure_ids ↔ ALL_MEASURES.applicable_industries 整合性**
+   - 各業種の `IndustryPackage.measure_ids` が `measures.ALL_MEASURES` の `applicable_industries` に当該業種を含む施策と矛盾なく対応していることをテストで確認
+   - 例: chain_franchise パッケージに `warehouse_dx_wms` が混入していないか（既存テストで確認済だが、ALL_MEASURES 側からの逆検証も追加）
+2. **plan_template_paths が実在するか**
+   - 現在 manufacturing のみパス指定済、他 3 業種は空。`core/templates/clo_plan_examples/` 配下の既存テンプレファイル名で埋められる範囲を埋める
+   - 該当ファイルが無い場合は空のままで OK（推測でファイル名を作らない）
+3. **industry_benchmarks.py との接続**
+   - `LOGISTICS_COST_RATIO[industry]` が IndustryPackage.kpis の `logistics_cost_revenue_ratio_pct.baseline_value` と整合（c.1 で _common_kpis 経由で実装済 → テストで確認）
 
-2026-05-05 のレビュー時点で、`logi_clo_plan_draft` / Web の計画書生成から出る最新成果物を構造検査した。
+c.4 は実装が小さい想定（テスト 5-10 件追加程度）。コミットは「test(playbook): c.4 既存資産接続の整合性検証」。
 
-#### PPT
+### c.6: F2 標準化スコア + J2 罠スコア（中核）
 
-最新生成 PPT は **13 slides / native charts 3 / tables 0 / pictures 0**。
+**新規ファイル 2 件**:
+- `core/analytics/standardization_score.py` — F2
+- `core/analytics/waste_trap.py` — J2
 
-- `core/export/ppt_writer.py` に `ChartSpec` が入り、施策ポートフォリオ / コスト削減ウォーターフォール / KPI 5 ヶ年ロードマップの 3 チャートが生成される状態
-- PPT は今回の主対象ではない。大きな破綻がなければ触らない
+**新規テスト 2 件**:
+- `tests/core/analytics/test_standardization_score.py`（または既存 tests/core/ 直下）
+- `tests/core/analytics/test_waste_trap.py`
 
-関連ファイル:
+#### F2 標準化スコア（plans/b-c-flickering-pixel.md §c.6 F2 完全反映）
 
-- `core/export/ppt_writer.py`
-- `core/analytics/plan_draft.py`
+```python
+class StandardizationScoreResult(BaseModel):
+    company_id: str
+    base_package_category: JsicCategory
+    coverage_pct: float
+    deviation_count_unmanaged: int       # NEW: 減点対象のみ
+    deviation_count_total: int           # NEW: 全 override
+    missing_kpi_ids: list[str]
+    missing_measure_ids: list[str]
+    score: float
+    rationale: list[str]
+    citations: list[Citation]
 
-#### Word（要改善）
-
-最新生成 DOCX は **paragraphs 9 / tables 4**。構造は出るが、提出物としてはまだ薄い。
-
-現状:
-
-- `core/export/docx_form3_writer.py`
-- 公式テンプレート `core/templates/clo_plan_form3.docx` が存在すれば流し込み、なければ python-docx で簡易構造を生成
-- 公式テンプレ未取得時は先頭にドラフト注意書きを出す
-- ただし Web 側では Word カードに「様式第3別紙・e-Gov 提出用」と表示しており、実態（公式テンプレ未取得時は参考ドラフト）より強い
-
-優先改善:
-
-1. **DOCX の見た目を提出前レビュー用として整える**
-   - タイトル、注意書き、事業者情報、各セクション表のスタイルを改善
-   - 表のヘッダ塗り、列幅、余白、フォントサイズ、段落間隔を調整
-   - 「PoC 用ドラフト」「公式テンプレ未取得」注意が目立つようにする
-
-2. **提出用と誤認させない表現に揃える**
-   - 公式テンプレ未取得時は Web のダウンロードカード文言を「様式第3別紙ドラフト」などに弱める
-   - ただしユーザーは「ローカル開発修正は不要」と言っているだけで、生成物を正しく表す UI 文言の小修正は Word 改善に付随するなら可
-
-3. **DOCX レンダリング QA**
-   - `documents` skill を使う
-   - `render_docx.py --renderer artifact-tool` でページ PNG を出して目視確認
-   - 生成物を ship する前に、表の文字切れ・重なり・余白不足を確認する
-
-#### Excel（要改善）
-
-最新生成 XLSX は **sheets `Data`, `出典` / Excel tables 0 / charts 0 / freeze pane None**。
-
-現状:
-
-- `core/export/excel_writer.py`
-- openpyxl で単純に表と出典シートを書いている
-- 経営会議の付録や社内レビュー用ブックとしては、まだ「整形済み CSV」に近い
-
-優先改善:
-
-1. **Excel を分析ブックらしくする**
-   - `Data` シートに freeze pane、auto filter、Excel Table を追加
-   - 数値列に適切な表示形式、折り返し、列幅、行高を設定
-   - 主要KPIサマリーを上部または別 `Summary` シートに作る
-
-2. **チャートを最低1つ追加**
-   - 施策別コスト削減、CO2削減、投資額のいずれかを棒グラフ化
-   - できれば `Summary` シートに KPI ブロック + 施策別チャート
-   - 出典シートは監査用として残す
-
-3. **出典シートの可読性改善**
-   - freeze pane、filter、URL列折り返し、列幅調整
-   - `statsDataId/告示番号` が空でも見やすいようにする
-
-4. **XLSX QA**
-   - `spreadsheets` skill を使う
-   - 生成後に workbook 構造を検査し、少なくとも tables/charts/freeze panes が入ったことを確認
-   - 可能ならレンダーして視覚確認
-
-### 想定する実装ファイル
-
-主対象:
-
-- `core/export/docx_form3_writer.py`
-- `core/export/excel_writer.py`
-- `tests/core/test_export_writers.py`
-
-必要なら付随:
-
-- `web/app/dashboard/plan-draft/page.tsx`（Word カード文言のみ）
-- `web/components/ToolResponseDisplay.tsx`（汎用ファイル文言のみ）
-- `docs/roadmap.md` / `HANDOFF_NEXT_SESSION.md`（作業後の記録）
-
-### 次セッションの推奨開始手順
-
-```powershell
-cd c:\Users\ykenk\repos\logi-intel-dashboard
-git status
-git log --oneline -8
-uv sync
-uv run pytest tests\core\test_export_writers.py -q
+def compute_standardization_score(profile, override) -> StandardizationScoreResult: ...
 ```
 
-その後、現在の生成物を再生成してベースラインを取る:
+**ロジック（unmanaged のみ減点）**:
+```python
+coverage_pct = (
+    (実装済 KPI 数 + 実装済 施策数)
+    / (標準 KPI 総数 + 標準 施策総数)
+) * 100
 
-```powershell
-uv run python scripts\generate_sample_ppt_design.py
+deviation_penalty = (
+    sum(5 for entry in override.entries if entry.category == "unmanaged_deviation")
+    + sum(3 for entry in override.entries
+          if entry.category == "temporary_exception" and entry.expires_at < today)
+)
+# approved_better_practice / required_localization は減点なし
+
+bonus = (
+    +10 if all(必須 KPI 実装) and 月次会議定着
+    +5 if approved_better_practice 件数 >= 2
+)
+
+score = max(0, min(100, coverage_pct - deviation_penalty + bonus))
 ```
 
-または API / analytics 経由で `sample_mfg_01` の plan draft を生成し、最新の `outputs/docx` / `outputs/excel` を確認する。
+**「実装済」の判定**:
+- KPI 実装済 = `profile.kpi_history` に該当 metric_id を含む `KpiHistoryEntry` が 1 件以上存在
+- 施策実装済 = ?（次の課題：施策の実装ステータスを保持する仕組みがまだ無い）
+  - 暫定: Override の `target_kind="measure"` × `category="approved_better_practice"` を採用済とみなす
+  - 別案: `decision_log` から `decision="adopt"` の measure_id を引く（`outputs/decisions/<id>.jsonl` 参照）
 
-### 完了条件
+着手前に健一に「施策実装ステータスをどう判定するか」を確認すること。
 
-- Word:
-  - DOCX のページレンダーで、注意書き・事業者情報・各セクション表が読みやすい
-  - 公式テンプレ未取得時に「提出用完成版」と誤認しない
-  - 既存テストが通る
+#### J2 罠スコア（plans/b-c-flickering-pixel.md §c.6 J2 完全反映）
 
-- Excel:
-  - `Data` または `Summary` に Excel Table / freeze pane / chart が入る
-  - `出典` シートが監査用に読みやすい
-  - 生成された workbook を構造検査して tables/charts/freeze panes を確認
-  - 既存テストが通る
+```python
+class WasteTrapItem(BaseModel):
+    measure_id: str
+    invested_jpy: int | None
+    expected_effect_jpy: int | None
+    actual_effect_jpy: int | None
+    months_since_start: int | None
+    trap_severity: Literal["low", "medium", "high"]
+    suspected_root_cause: Literal[
+        "scale_misfit", "resource_missing", "governance_gap", "wrong_kpi",
+        "external_factor",
+        "data_quality",            # NEW (Codex 勧告⑤)
+        "adoption_resistance",     # NEW
+        "implementation_quality",  # NEW
+        "unknown",
+    ]
+    suggested_remediation: str
+    investment_freeze_recommended: bool
 
-- 検証:
-  - `uv run pytest tests\core\test_export_writers.py -q`
-  - 可能なら関連する export/plan draft テストも追加実行
-  - Word は render PNG で目視確認
-  - Excel は workbook inspect/render で確認
+def detect_waste_traps(profile, plan, decision_log) -> WasteTrapResult: ...
+```
 
-### やらないこと
+**6 軸セーフガード（Codex 勧告④・誤検知抑止）**:
+```python
+def _trap_severity(invested, expected, actual, months_since_start, ...):
+    # ① 立ち上げ期間が短い
+    if months_since_start is None or months_since_start < 6: return "low"
+    # ② データ欠損
+    if data_completeness < 0.5: return "low"
+    # ③ サンプル数不足
+    if measured_count < min_sample_size: return "low"
+    # ④ 季節性影響中
+    if seasonal_factor_active: return "low"
+    # ⑤ 外部要因（燃料急騰等）
+    if external_event_active: return "low"
+    # ⑥ 投資回収前
+    if months_since_start < payback_months_estimated: return "low"
 
-- 今回はローカル dev の API_BASE 問題を修正しない
-- AWS インフラや CloudFront 設定は触らない
-- PPT は明確な破綻がなければ触らない
+    ratio = (actual or 0) / (invested or 1)
+    if ratio <= 0.3 and (expected / invested) >= 2.0: return "high"
+    if 0.3 < ratio < 0.7: return "medium"
+    return "low"
+
+investment_freeze_recommended = (
+    trap_severity == "high"
+    and suspected_root_cause in ("scale_misfit", "wrong_kpi", "implementation_quality")
+)
+```
+
+**入力**:
+- `profile`: CompanyProfile
+- `plan`: PlanDraftResult（`core/analytics/plan_draft.py` の戻り値）— 施策の expected_effect_jpy / typical_investment_jpy 等
+- `decision_log`: `outputs/decisions/<id>.jsonl` の DecisionRecord 一覧（`core/analytics/operation_cockpit._load_pending_decisions` を参考に拡張）
+
+actual_effect_jpy は `kpi_history` の改善幅から逆算する想定（コスト削減施策なら物流コスト/売上比率の改善 × 売上）。複雑になるなら **当初は actual=None 許容で初版を出す** のもアリ。健一に方針確認。
 
 ---
 
-## ⚠️ 0. 最初に確認 — apply 待ちの差分があるか
+## 🔧 ブランチ・コミット戦略
 
-直前セッション末で **CloudFront Function（directory URL → index.html 書換）** を追加したが、
-健一の側で `terraform apply` が実行されたかどうか確認すること。
-
-```powershell
-cd c:\Users\ykenk\repos\logi-intel-dashboard\infra
-terraform plan -var="env=dev"
-# "No changes" ならapply済。差分が出たら未apply。
-```
-
-未 apply の場合は次を実行：
-```powershell
-terraform apply plan.tfplan
-# 5〜10 分（CloudFront 配信反映）
-```
-
-apply 後の動作確認:
-```powershell
-curl -s -o NUL -w "HTTP=%%{http_code}`n" "https://d1zei8qivkf3cr.cloudfront.net/dashboard/macro/"
-# HTTP=200 が期待値（apply 前は AccessDenied XML が返る）
-```
-
-### 直前セッションで発見・対応した 2 件のバグ（記録）
-
-1. **`Failed to construct 'URL': Invalid URL`** （フロントエンド）
-   - 原因: `new URL("/api/v1/...")` は base なし相対パスを受け付けない。`NEXT_PUBLIC_API_BASE_URL=""` の本番ビルドで全 fetch 失敗
-   - 対応: `web/lib/api.ts` の `request()` を文字列結合 + URLSearchParams に変更（コミット `854efdf`）。デプロイ済（S3 同期 + CloudFront 無効化済）
-
-2. **`/dashboard/<page>/` で AccessDenied XML**（インフラ）
-   - 原因: S3 はディレクトリ概念がないため `web/dashboard/macro/` の GetObject が失敗。実体は `web/dashboard/macro/index.html`
-   - 対応: CloudFront Function `rewrite-index` を追加（コミット `e6d3574`）。**未 apply の可能性あり** — 上記手順で確認
+- ブランチ名: `feature/phase-5.0-scoring-engines`
+- コミット粒度推奨:
+  - commit 1: c.4 既存接続検証（テスト追加 + 必要なら industry_packages.py に検証ヘルパ）
+  - commit 2: F2 標準化スコア（standardization_score.py + テスト）
+  - commit 3: J2 罠スコア（waste_trap.py + テスト）
+- 1 PR にまとめる想定（推定行数 1500〜2000）
+- PR タイトル: `feat(analytics): c.4-c.6 標準化スコア (F2) + 罠スコア (J2)`
 
 ---
 
-## ⚠️ 0.5 ローカル開発時の必須手順（必読）
+## ✅ 検証チェックリスト
 
-**`uvicorn` / `npm run dev` を直接叩かない。** 必ずヘルパースクリプト経由で起動すること。
+着手前 → 着手後の順:
 
-```powershell
-pwsh scripts/dev_api.ps1            # FastAPI :8000（既存 uvicorn を kill + --reload）
-pwsh scripts/dev_web.ps1            # Next.js :3000（既存 next dev を kill + API_BASE 固定）
-```
-
-### 経緯（2026-05-05 の事故・コミット `685bd77`）
-
-PPT レイアウト修正を Lambda にデプロイしたあと、ブラウザで再生成したのに修正前の
-PPT が DL される現象が発生。原因調査の結果:
-
-- ローカルに古い `uvicorn`（5/4 16:03 起動分など）が `--reload` なしで複数残存し、
-  古い `core/` をメモリに保持したまま port 8000/8765 を同時 listen
-- `web/lib/api.ts` のデフォルト API_BASE が `http://localhost:8000` だったため、
-  ブラウザのフロントが本番ではなくローカル uvicorn を叩いていた
-- ダウンロードした PPT のタイムスタンプ・サイズが Lambda 経由（13 枚 / 77 KB）と
-  ローカル経由（10 枚 / 51 KB）で食い違うことで判明
-
-### 恒久対策（実施済）
-
-| 対策 | 場所 |
-|------|------|
-| `api.ts` デフォルト API_BASE を `""`（同一 origin）に変更 | [web/lib/api.ts](web/lib/api.ts) |
-| 既存 uvicorn を pre-kill して `--reload` で起動 | [scripts/dev_api.ps1](scripts/dev_api.ps1) |
-| 既存 next dev を pre-kill して API_BASE を環境変数固定 | [scripts/dev_web.ps1](scripts/dev_web.ps1) |
-| 経緯と起動ルール記載 | [CLAUDE.md §6.5](CLAUDE.md) |
-
-### 自己診断手順（同種事故の再発時）
-
-「コード直したのに本番のフロントから動作が変わらない」と感じたら:
-
-1. ブラウザ DevTools の Network タブで API 先が `localhost` か CloudFront か確認
-2. `Get-Process uvicorn,node` で残存プロセスを点検
-3. 古いプロセスを Stop → `dev_api.ps1` / `dev_web.ps1` で再起動
+- [ ] `git pull origin main` で最新化
+- [ ] `uv sync` で依存最新化
+- [ ] `uv run pytest --tb=short -q` がベースライン pass（直近 main で 700+ 件全 pass のはず）
+- [ ] `uv run ruff check` クリーン
+- [ ] 新規テスト: F2 / J2 各 10 件以上
+- [ ] **境界条件テスト**: F2 完全一致 ≥ 90 / Override 5 件で 50 / 未実装 3 件以上で 30 以下
+- [ ] **J2 セーフガード**: months_since_start=0 の擬似データで trap_severity="low" 固定
+- [ ] **F2 単調性**: override 件数を 0,1,2,5,10 で減点対象（unmanaged）のみ単調減少、approved_better_practice は減点なし
+- [ ] PR 説明に「Codex 議論で確定した修正点」と「Claude 単独判断」を区別して書く（CLAUDE.md §9.4）
 
 ---
 
-## 1. 現在地
+## 🧠 Codex 協業の活用ポイント
 
-**フェーズ 4.0 完了** — AWS PoC デプロイ稼働中。社内レビューに使える状態。
+CLAUDE.md §9.1 に従って、以下のタイミングで Codex に相談を **積極的に** する:
 
-| 項目 | 値 |
-|------|----|
-| 社内レビュー URL | https://d1zei8qivkf3cr.cloudfront.net/ |
-| API Gateway 直叩き | https://fgwicoog66.execute-api.ap-northeast-1.amazonaws.com |
-| AWS アカウント | 538099532416（健一個人・AdministratorAccess） |
-| Region | ap-northeast-1 |
-| Lambda 関数名 | `logi-intel-dev-api` |
-| CloudFront ID | `E3F7LKFZVFU04Q` |
-| API Gateway ID | `fgwicoog66` |
-| S3 バケット | `logi-intel-dev-7m2lqc` |
-| Terraform state | `infra/terraform.tfstate`（ローカル・gitignored） |
+1. **F2 のスコア重み（5pt / 3pt / 10pt / 5pt）の妥当性** — 業界実績ベースで Codex に評価依頼。ALl 0/100 に偏らないか単調性検証の助言を求める
+2. **J2 のセーフガード閾値** — `months_since_start < 6`、`data_completeness < 0.5` 等の値が業界実態と整合するか
+3. **施策実装ステータスの判定方法** — 上記「着手前確認事項」で健一に確認 → 案が固まったら Codex にレビュー依頼
 
-## 2. 動作確認済み
-
-| 経路 | 結果 |
-|------|------|
-| `GET /` （Web トップ） | 200 / 全 8 画面リンク表示 |
-| `GET /health` | 200 `{"status":"ok"}` |
-| `GET /api/v1/company/samples` | 200 / サンプル3社 JSON |
-| `GET /api/v1/clo/playbook` | 200 / 標準10施策 |
-| `POST /api/v1/clo/plan-draft/sample_mfg_01` | 200 / PPT/Word/Excel/Markdown 生成（30〜60秒）|
-| `GET /api/v1/files/markdown/...` | 302 → S3 プレサインド URL → 19KB DL OK |
-
-## 3. 残課題（優先度順）
-
-### 🔴 必須（次セッション最優先）
-
-#### 3.1 e-Stat API キーが Lambda 上で読めるか確認
-- SSM Parameter Store: `/logi-intel/dev/ESTAT_APP_ID` に投入済
-- Lambda 環境変数: `LOGI_SECRETS_BACKEND=ssm` + `LOGI_SSM_PREFIX=/logi-intel/dev`
-- `core/secrets.py` の `get_secret("ESTAT_APP_ID")` が SSM から取得して `os.environ` に反映する仕組み
-- **未検証**: macro / benchmark / driver-gap のいずれも e-Stat 呼出が動作するか
-
-検証手順：
-```powershell
-curl -s "https://d1zei8qivkf3cr.cloudfront.net/api/v1/macro/overview?prefecture=東京都"
-curl -s "https://d1zei8qivkf3cr.cloudfront.net/api/v1/clo/benchmark?jsic_code=5411&prefecture=東京都&revenue_jpy=5000000000"
-curl -s "https://d1zei8qivkf3cr.cloudfront.net/api/v1/clo/driver-gap?prefecture=東京都"
-```
-
-`{"detail":"e-Stat API error..."}` が返れば **`core/clients/estat.py` のクライアント初期化が `os.environ.get("ESTAT_APP_ID")` を直接読んでいる**箇所が原因。`core.secrets.get_secret()` 経由に書き換える必要あり。
-
-CloudWatch Logs 確認：
-```powershell
-aws logs tail /aws/lambda/logi-intel-dev-api --follow --region ap-northeast-1
-```
-
-#### 3.2 sample_chain_01 / sample_wholesale_01 の plan-draft 動作確認
-
-```powershell
-curl.exe -X POST "https://d1zei8qivkf3cr.cloudfront.net/api/v1/clo/plan-draft/sample_chain_01"
-curl.exe -X POST "https://d1zei8qivkf3cr.cloudfront.net/api/v1/clo/plan-draft/sample_wholesale_01"
-```
-
-連鎖化事業者（chain_01）は荷役等項目が省略されるなど挙動が異なるため、念のため動作確認。
-
-### 🟡 高優先（社内デモ前）
-
-#### 3.3 Codex 指摘の PPT 視覚化強化
-PoC は数字が出るが PPT は **charts/tables/pictures = 0** で「文章を整えたスライド」状態。社内デモで「資料っぽさ」を出すには：
-
-優先 3 枚（推定 1〜2 日）：
-1. **施策ポートフォリオ図**（横軸 営業利益インパクト × 縦軸 CO2 削減 × バブル投資額・色 難易度）
-2. **重複控除後ウォーターフォール**（合算最大 → 重複控除 → 標準シナリオ → 保守シナリオ）
-3. **2030 年 KPI ロードマップ**（積載率 38→50% / CO2 ▲23.4% の四半期マイルストーン）
-
-実装ファイル：`core/export/ppt_writer.py` に追加（python-pptx で matplotlib 画像を埋込）
-
-### 🟢 中優先
-
-#### 3.4 ホーム画面のローカル開発手順を AWS 経路にも対応
-[web/app/page.tsx](web/app/page.tsx) のフッター部分が「`uv run uvicorn ... --port 8000`」のままなので、本番デプロイ表示と整合性取る（簡易タスク）。
-
-#### 3.5 認証導入（PoC 卒業後）
-- 現状: 認証なし（CloudFront URL を知ってる人なら誰でもアクセス可）
-- 案: CloudFront Functions で Basic 認証 / Cognito User Pool / IP allowlist
-- PoC 段階では不要だが社内全展開前に必要
-
-### ⚪ 低優先（フェーズ 4.5）
-
-- 計画書ドラフト docx の文章テンプレート化（公式記載見本集 MD 10 ファイル取込）
-- 実 KPI 計測フレーム（計画策定時の測定方法・頻度・閾値埋込）
-- CLO スタイル別重み付け（攻め / 守り / 環境重視 / 効率重視）
-
-## 4. アーキテクチャ概要（記事化用素材）
-
-```
-[ブラウザ] ─HTTPS─→ [CloudFront]
-                       │
-                       ├─ /            ──→ [S3: web/ プレフィックス] (Next.js 静的)
-                       │                       OAC で署名
-                       │
-                       └─ /api/* /health /docs /openapi.json
-                                          ──→ [API Gateway HTTP API]
-                                                 │ AWS_PROXY 統合
-                                                 ↓
-                                           [Lambda: Python 3.12 + Mangum + FastAPI]
-                                                 │
-                                                 ├─ /tmp/outputs ──→ [S3: outputs/ プレフィックス] (PPT/Word/Excel/Markdown)
-                                                 ├─ /tmp/profiles → [S3: profiles/ プレフィックス] (CompanyProfile JSON)
-                                                 └─ secrets        ──→ [SSM Parameter Store SecureString]
-                                                                          /logi-intel/dev/ESTAT_APP_ID
-```
-
-### Zenn 記事ネタ
-1. **「FastAPI を Mangum で Lambda に載せて API Gateway HTTP API でフロント、月 $3 で社内 PoC」**（実話そのまま）
-2. **「Lambda OAC 採用を試みて 403 沼にハマった話」**（途中の試行錯誤・最終的に API Gateway HTTP API に逃げた経緯）
-3. **「MCP × REST 同じビジネスロジックで 2 経路 — `core/` を Claude Desktop と Web ダッシュボードで共有」**（差別化ポイント）
-4. **「物流効率化法 CLO 業務 × LLM ツール — 法令準拠ドラフト生成のドメイン設計」**（業界向け）
-
-## 5. 次セッション開始時の手順
-
-```powershell
-# 1. プロジェクト確認
-cd c:\Users\ykenk\repos\logi-intel-dashboard
-git log --oneline -5
-git status
-
-# 2. ローカル環境確認
-uv run pytest --tb=short -q       # 422 件 pass を確認
-cd web && npm run type-check      # type-check pass を確認
-
-# 3. 残課題 3.1 から着手
-curl -s "https://d1zei8qivkf3cr.cloudfront.net/api/v1/macro/overview?prefecture=東京都"
-# 失敗するなら CloudWatch Logs を見る
-aws logs tail /aws/lambda/logi-intel-dev-api --since 5m --region ap-northeast-1
-```
-
-## 6. AWS リソース管理
-
-### Lambda zip 再ビルド & 再デプロイ
-```powershell
-cd c:\Users\ykenk\repos\logi-intel-dashboard
-
-# 1. lambda/build/ にコード再配置
-Remove-Item -Recurse -Force lambda\build\api, lambda\build\core -ErrorAction SilentlyContinue
-Copy-Item -Recurse -Force core lambda\build\
-Copy-Item -Recurse -Force api lambda\build\
-Get-ChildItem lambda\build -Recurse -Directory -Force | Where-Object { $_.Name -eq "__pycache__" -or $_.Name -like "*.dist-info" } | Remove-Item -Recurse -Force
-
-# 2. zip 圧縮
-Remove-Item lambda\function.zip -ErrorAction SilentlyContinue
-Compress-Archive -Path lambda\build\* -DestinationPath lambda\function.zip -CompressionLevel Optimal
-
-# 3. アップロード
-aws lambda update-function-code --function-name logi-intel-dev-api --zip-file fileb://lambda/function.zip --region ap-northeast-1
-```
-
-### Next.js 再ビルド & S3 再同期
-```powershell
-cd web
-$env:NEXT_PUBLIC_API_BASE_URL = ""
-npm run build
-aws s3 sync out/ s3://logi-intel-dev-7m2lqc/web/ --delete --region ap-northeast-1
-aws cloudfront create-invalidation --distribution-id E3F7LKFZVFU04Q --paths "/*" --region ap-northeast-1
-```
-
-### AWS リソース全削除（PoC 終了時）
-```powershell
-cd c:\Users\ykenk\repos\logi-intel-dashboard\infra
-terraform destroy -var="env=dev"
-
-# SSM パラメータも個別に削除（terraform 管理外のため）
-aws ssm delete-parameter --name /logi-intel/dev/ESTAT_APP_ID --region ap-northeast-1
-```
-
-## 7. 設計上の決定（記録）
-
-### Lambda Function URL → API Gateway HTTP API へ転換
-PoC で次の 2 つを試したが両方 403：
-1. Function URL（NONE auth）+ public resource policy
-2. Function URL（AWS_IAM auth）+ CloudFront OAC + sigv4 署名
-
-**結論**: API Gateway HTTP API + Lambda Proxy 統合に切替。コスト差 <$0.01/月で許容。
-原因は AWS の Block Public Access 系か OAC の sigv4 経路の問題と推測されるが、PoC 期限優先で深追いせず。
-
-### Docker は不要と判断
-- 当初 ECS Fargate 想定で Dockerfile を準備したが、Lambda zip で十分（45MB）。
-- Dockerfile / docker-compose.yml / .dockerignore は撤去済（コミット 9d52337）。
-
-### `core/storage.py` + `core/secrets.py` の抽象化
-- ローカル開発（既存挙動）を完全互換のまま AWS 切替対応
-- 環境変数 `LOGI_STORAGE_BACKEND={local|s3}` / `LOGI_SECRETS_BACKEND={env|ssm}` で切替
-- Lambda は両方 S3/SSM、ローカルは local/env のまま
-
-## 8. 主要ファイルマップ
-
-```
-infra/
-├── main.tf                       # Terraform IaC（S3+Lambda+API GW+CloudFront+IAM）
-├── README.md                     # デプロイ手順
-└── terraform.tfstate             # ローカル state（gitignored）
-
-lambda/
-├── README.md                     # zip ビルド手順
-├── requirements-lambda.txt       # Lambda 専用最小依存リスト
-└── function.zip                  # ビルド成果物（gitignored・43MB）
-
-scripts/
-└── put-ssm-secrets.ps1           # .env から SSM Parameter Store へ投入
-
-core/
-├── storage.py                    # LocalStorage / S3Storage 抽象（新規）
-├── secrets.py                    # env / SSM 抽象（新規）
-└── macro/
-    └── sources.py                # macro fetch ヘルパー切り出し（fastmcp 非依存）
-
-api/
-└── lambda_handler.py             # Mangum で FastAPI を Lambda 化
-
-docs/
-├── aws_migration_plan.md         # AWS 移行計画書（PoC 最安構成）
-└── roadmap.md                    # フェーズ全体（フェーズ4.0 完了マーク済）
-```
+呼出: `/codex setup` で疎通確認 → `/codex rescue` または `codex:codex-rescue` agent
 
 ---
 
-最終更新: 2026-05-05（PoC デプロイ完了直後）
+## 📝 既存コードからの参考パターン
+
+- **Pydantic v2 モデル + frozen ConfigDict**: `core/playbook/industry_packages.py` のパターン
+- **citations 構築**: `core/analytics/feasibility_check.py` の `citations=[logistics_efficiency_law_citation(), ...]`
+- **freshness_warnings**: `core/static/_freshness.all_warnings()`
+- **build_*_summary 関数**: feasibility_check.build_feasibility_summary が良いお手本
+
+---
+
+## 🚫 触らないこと
+
+- `core/playbook/measures.py` の ALL_MEASURES 編集（ALL_MEASURES の構造変更は別 PR にする）
+- `core/io/template_writer.py`（B 用途別テンプレと同じファイル — 触る場合は健一確認）
+- `web/` 配下 — c.7 以降のスコープ
+- `mcp_server/tools/clo_tools.py` — c.7 で MCP ツール追加するときに触る
+
+---
+
+## 完了の定義
+
+- F2 / J2 のロジックがコード化され、サンプル4社（製造/卸/小売/連鎖化）で動作する
+- pytest 700+ 全 pass + 新規 30+ 件全 pass
+- ruff check クリア
+- PR を `feature/phase-5.0-scoring-engines` で作成し、Codex の助言反映点を PR 説明に明記
+- HANDOFF_NEXT_SESSION.md を c.7（MCP/REST 公開）向けに更新
+
+---
+
+## 📦 リポジトリ整理（2026-05-06）
+
+ローカルブランチを整理済（main のみ残存）。remote には `origin/feature/phase-5.0-industry-packages` が orphan として残るが、これは「リフレーミング commit ef30b2e」が main 取込されなかったため。次セッションで触る必要なし（必要なら健一が remote から削除）。
+
+untracked: `docs/notebooklm/`, `docs/overview_for_review.md`, `docs/zenn_drafts/` は健一の WIP（触らない）。
