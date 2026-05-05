@@ -164,6 +164,71 @@ def test_write_clo_plan_ppt_creates_pptx() -> None:
     assert prs.slide_width > prs.slide_height
 
 
+def test_write_clo_executive_brief_creates_three_slide_pptx() -> None:
+    """フェーズ4.1 a.3: 3 スライド経営会議要約 PPT。"""
+    from pptx import Presentation
+
+    path = ppt_writer.write_clo_executive_brief(
+        company_name="テクノパーツ製造株式会社",
+        company_id="sample_mfg_01",
+        plan_period="2026-04 〜 2030-03",
+        executive_summary=[
+            "営業利益(標準): +5.2億円/年",
+            "CO2削減(標準): 約 1,200トン-CO2/年",
+            "炭素価格回避: 12〜30百万円/年",
+            "5年累積NPV: 約 18億円",
+            "会社名: テクノパーツ製造株式会社",
+            "特定荷主3区分: 第一種荷主",
+            "年間売上 850億円",
+        ],
+        actions_to_pursue=[
+            "TMS 配車最適化",
+            "バース予約システム導入",
+            "パレット標準化",
+        ],
+        actions_to_skip=[
+            "中継輸送（先送り）",
+            "同業共同配送（パートナー候補なし）",
+            "鉄道モーダルシフト（効果限定）",
+        ],
+        next_decision_due="2026-05-15（金）取締役会",
+        citations=[Citation(label="A", url="https://a.example.com")],
+    )
+    assert path.exists()
+    prs = Presentation(str(path))
+    # 3 スライド（表紙 + 経営サマリー + やる/やらない結論）
+    assert len(prs.slides) == 3
+    # ファイルサイズが軽量（500 KB 未満）
+    size_kb = path.stat().st_size / 1024
+    assert size_kb < 500, f"PPT が {size_kb:.1f} KB と大きすぎる（目標 < 500 KB）"
+
+
+def test_executive_brief_third_slide_has_decisions_and_next_due() -> None:
+    """3 スライド要約の 3 枚目に「やる/やらない」と次回意思決定期日が含まれる。"""
+    from pptx import Presentation
+
+    path = ppt_writer.write_clo_executive_brief(
+        company_name="X",
+        company_id="x",
+        plan_period="2026",
+        executive_summary=["要約 1", "要約 2"],
+        actions_to_pursue=["TMS 配車最適化", "バース予約", "パレット標準化"],
+        actions_to_skip=["中継輸送", "同業共配", "モーダルシフト"],
+        next_decision_due="2026-05-15（金）",
+        citations=[],
+    )
+    prs = Presentation(str(path))
+    slide3 = prs.slides[2]
+    slide3_text = "\n".join(
+        shape.text for shape in slide3.shapes if hasattr(shape, "text")
+    )
+    assert "やる" in slide3_text
+    assert "やらない" in slide3_text
+    assert "TMS 配車最適化" in slide3_text
+    assert "中継輸送" in slide3_text
+    assert "2026-05-15" in slide3_text
+
+
 def test_ppt_executive_summary_is_second_slide() -> None:
     """エグゼクティブサマリーが必ず 2 枚目に配置される。"""
     from pptx import Presentation
