@@ -9,6 +9,8 @@ certified-match / submission-validate / plan-draft / periodic-report）をカバ
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -86,6 +88,77 @@ def test_executive_brief_generates_three_slide_pptx() -> None:
     # summary に「やる」「やらない」セクション
     assert "やる" in body["summary"]
     assert "やらない" in body["summary"]
+
+
+def test_today_decisions_returns_three_items_with_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """フェーズ4.5 b: デイリーコックピット 3 件 + metadata 構造化データ。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    resp = client.get(
+        "/api/v1/clo/today-decisions/sample_wholesale_01",
+        params={"persist_snapshot": "false"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    _assert_tool_response_shape(body)
+    assert "metadata" in body
+    md = body["metadata"]
+    assert isinstance(md, dict)
+    # 3 件返る
+    assert len(md["items"]) == 3
+    # 各 item に anticipated_objections 3 件（attention_needed カードのみ厳格判定）
+    for item in md["items"]:
+        if item["card_state"] == "attention_needed":
+            assert len(item["anticipated_objections"]) == 3
+    # snapshot メタデータも入る
+    assert "snapshot" in md
+    assert md["snapshot"]["compliance_overall"] in (
+        "compliant", "violation", "borderline", "not_measured",
+    )
+    assert md["overall_health"] in ("green", "yellow", "red")
+
+
+def test_decisions_post_appends_to_jsonl(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """フェーズ4.5 b.8: I2 意思決定ログへ 1 行 append。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    resp = client.post(
+        "/api/v1/clo/decisions/sample_wholesale_01",
+        json={
+            "cockpit_item_id": "compl_wait_max_violation_20260505",
+            "decision": "adopt",
+            "decided_by": "山田CLO",
+            "rationale": "経営会議で承認",
+        },
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["decision"] == "adopt"
+    assert body["company_id"] == "sample_wholesale_01"
+    assert "record_id" in body
+    # jsonl ファイルに 1 行書き込まれる
+    log_path = tmp_path / "decisions" / "sample_wholesale_01.jsonl"
+    assert log_path.is_file()
+    lines = log_path.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert "山田CLO" in lines[0]
+    assert "adopt" in lines[0]
+
+
+def test_decisions_post_unknown_company_returns_404(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    resp = client.post(
+        "/api/v1/clo/decisions/nonexistent_company_xyz",
+        json={
+            "cockpit_item_id": "x",
+            "decision": "pending",
+        },
+    )
+    assert resp.status_code == 404
 
 
 def test_executive_brief_unknown_company_returns_404() -> None:

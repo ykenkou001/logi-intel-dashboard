@@ -37,6 +37,11 @@ from core.analytics.measure_eval import (
     build_eval_summary,
     evaluate_measures,
 )
+from core.analytics.operation_cockpit import (
+    CockpitResult,
+    build_cockpit_summary,
+    build_daily_cockpit,
+)
 from core.analytics.periodic_report import (
     build_periodic_report_summary,
     generate_periodic_report,
@@ -1106,4 +1111,63 @@ def register_tools(mcp: FastMCP) -> None:
             summary=summary,
             files={"profile_json": str(json_path)},
             data_source=profile.data_source,
+        ).to_dict()
+
+    @mcp.tool()
+    async def logi_clo_today_decisions(
+        company_id: str,
+        target_year: int = 2030,
+        persist_snapshot: bool = True,
+    ) -> dict[str, object]:
+        """CLO 今日の3判断（デイリーコックピット）を生成します。
+
+        フェーズ4.5 J3 中核。朝 1 回開けば、未達 KPI ／ 放置リスク ／ 今週決める
+        施策が 3 件だけ並び、緊急度・経営インパクト・自信度・推奨アクション・
+        想定反論（J4 薄版）が付与されます。前日からの変化、未決滞留日数、
+        次レビュー期日も含みます。
+
+        判断軸 3 枠の構成:
+            - compliance: 改善基準告示の違反/要注意/未計測（軸 A）
+            - kpi_reach : 積載率 38→50% 等の到達可能性 yellow/red（軸 B）
+            - measure_pick: 施策評価 Top 3 推薦（軸 C・上限 2 枠）
+
+        埋め枠ルール（card_state）:
+            - healthy           : 監視中で異常なし
+            - insufficient_data : 計測データ未取込で判定不能
+            - out_of_scope      : 連鎖化事業者の荷役等など対象外
+            - attention_needed  : 通常の要対応カード
+
+        Args:
+            company_id: サンプル/取込済 企業 ID（sample_mfg_01, sample_wholesale_01,
+                sample_chain_01, sample_retail_01 のいずれか、または取込済 ID）
+            target_year: KPI 達成目標年（feasibility_check に渡す。既定 2030）
+            persist_snapshot: True で当日 OperationKpiSnapshot を JSON 保存
+
+        Returns:
+            ToolResponse 構造:
+            - summary: 経営会議用 1 ページ要約（軸別 3 件の headline + 根拠 + 推奨）
+            - citations: 改善基準告示・物流効率化法等の出典の和集合
+            - freshness_warnings: 静的データの鮮度警告
+        """
+        profile = get_sample(company_id)
+        if profile is None:
+            return ToolResponse(
+                summary=(
+                    f"企業 '{company_id}' が見つかりません。利用可能: "
+                    "sample_mfg_01 / sample_wholesale_01 / "
+                    "sample_chain_01 / sample_retail_01"
+                ),
+            ).to_dict()
+
+        result: CockpitResult = build_daily_cockpit(
+            profile,
+            target_year=target_year,
+            persist_snapshot=persist_snapshot,
+        )
+
+        return ToolResponse(
+            summary=build_cockpit_summary(result),
+            citations=result.citations,
+            freshness_warnings=result.freshness_warnings,
+            data_source=result.data_source,
         ).to_dict()
