@@ -323,8 +323,8 @@ __all__ = [
     "APPROVED_PRACTICE_BONUS",
     "APPROVED_PRACTICE_BONUS_MIN_COUNT",
     "EXPIRED_TEMPORARY_PENALTY_PER_ENTRY",
-    "StandardizationScoreResult",
     "UNMANAGED_PENALTY_PER_ENTRY",
+    "StandardizationScoreResult",
     "build_standardization_summary",
     "compute_standardization_score",
 ]
