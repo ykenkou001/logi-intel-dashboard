@@ -11,6 +11,8 @@
 
 **衝突注意の共有領域**: `pyproject.toml` の `[project.dependencies]` は Codex が docx/excel ライブラリ追加で触る可能性あり。変更時は健一に確認する。
 
+**`main` への直接 push は禁止（branch protection 有効）**。Claude / Codex / 健一すべて、必ず feature ブランチ（`feature/...` `fix/...` `docs/...` `ci/...`）を切って Pull Request 経由でマージする。詳細 → [docs/git_workflow.md](docs/git_workflow.md) §main ブランチ運用ルール
+
 詳細 → メモリ `feedback_codex_parallel_collaboration.md`
 
 ---
@@ -100,6 +102,7 @@ gh pr create --title "ci: Lambda デプロイを S3 経由に切替 + zip 削減
 | タスク | 状況 |
 |---|---|
 | GitHub Secrets `AWS_GITHUB_ACTIONS_ROLE_ARN` 登録 | **登録済** |
+| Branch protection（main 直接 push 禁止 + PR 経由のみ） | **設定済** — Claude / Codex / 健一すべて feature ブランチ + PR 経由でのみ main に取り込む。詳細 → [docs/git_workflow.md](docs/git_workflow.md) §main ブランチ運用ルール |
 | Branch protection の Status checks 必須化 | main 上で CI が初回 green になり次第、Settings → Branches → main rule → Status checks に `CI / Python` `CI / Web` を追加 |
 
 ### やらないこと（このセッション完了済の確認）
