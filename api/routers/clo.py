@@ -6,9 +6,12 @@ MCP ツールと REST API で出力構造が完全に一致するため、Web �
 """
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, date, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from api.schemas.responses import ToolResponseModel
 from core.analytics.benchmark import analyze_benchmark, build_benchmark_summary
@@ -21,6 +24,14 @@ from core.analytics.financial_translate import (
     translate_to_pnl_impact,
 )
 from core.analytics.measure_eval import build_eval_summary, evaluate_measures
+from core.analytics.operation_cockpit import (
+    CockpitResult,
+    DecisionRecord,
+    DecisionStatus,
+    append_decision,
+    build_cockpit_summary,
+    build_daily_cockpit,
+)
 from core.analytics.periodic_report import (
     build_periodic_report_summary,
     generate_periodic_report,
@@ -601,3 +612,156 @@ async def periodic_report(
         data_source=result.data_source,
     )
     return _to_model(response)
+
+
+# ─── フェーズ4.5 b: J3 デイリーコックピット ────────────────────────────
+
+
+def _cockpit_to_metadata(result: CockpitResult) -> dict[str, object]:
+    """CockpitResult を Web フロントが描画する metadata dict に直列化する。"""
+    return {
+        "company_id": result.company_id,
+        "company_name": result.company_name,
+        "generated_at": result.generated_at.isoformat(),
+        "data_source": result.data_source,
+        "overall_health": result.overall_health,
+        "one_line_summary": result.one_line_summary,
+        "delta_from_yesterday": result.delta_from_yesterday,
+        "snapshot": {
+            "snapshot_date": result.snapshot.snapshot_date.isoformat(),
+            "load_factor_pct": result.snapshot.load_factor_pct,
+            "wait_time_avg_min": result.snapshot.wait_time_avg_min,
+            "wait_time_max_min": result.snapshot.wait_time_max_min,
+            "handling_time_avg_min": result.snapshot.handling_time_avg_min,
+            "co2_intensity_g_per_tonkm": result.snapshot.co2_intensity_g_per_tonkm,
+            "over_2h_count_total": result.snapshot.over_2h_count_total,
+            "compliance_overall": result.snapshot.compliance_overall,
+            "feasibility_kpi_level": result.snapshot.feasibility_kpi_level,
+            "open_items": list(result.snapshot.open_items),
+        },
+        "items": [
+            {
+                "item_id": item.item_id,
+                "decision_axis": item.decision_axis,
+                "card_state": item.card_state,
+                "headline": item.headline,
+                "rationale": item.rationale,
+                "urgency_score": item.urgency_score,
+                "impact_score": item.impact_score,
+                "confidence_score": item.confidence_score,
+                "total_score": item.total_score,
+                "related_measure_id": item.related_measure_id,
+                "related_kpi_name": item.related_kpi_name,
+                "related_compliance_item": item.related_compliance_item,
+                "suggested_action": item.suggested_action,
+                "deadline_label": item.deadline_label,
+                "next_review_due": (
+                    item.next_review_due.isoformat() if item.next_review_due else None
+                ),
+                "days_pending": item.days_pending,
+                "delta_from_last": item.delta_from_last,
+                "estimated_pnl_jpy": item.estimated_pnl_jpy,
+                "citation_keys": list(item.citation_keys),
+                "anticipated_objections": [
+                    {
+                        "role": o.role,
+                        "objection": o.objection,
+                        "rebuttal": o.rebuttal,
+                        "evidence_axis": o.evidence_axis,
+                    }
+                    for o in item.anticipated_objections
+                ],
+            }
+            for item in result.items
+        ],
+    }
+
+
+@router.get("/today-decisions/{company_id}", response_model=ToolResponseModel)
+async def today_decisions(
+    company_id: str,
+    target_year: Annotated[int, Query(ge=2024, le=2050)] = 2030,
+    persist_snapshot: Annotated[bool, Query()] = True,
+) -> ToolResponseModel:
+    """CLO デイリーコックピット（今日の3判断）を生成。
+
+    軸 A 法令準拠 / 軸 B KPI 達成見通し / 軸 C 今週決める施策の 3 件を、
+    緊急度・経営インパクト・自信度・想定反論まで揃えて返す。
+    Web は ToolResponseModel.metadata から構造化データを描画する。
+    """
+    profile = _resolve_profile_or_404(company_id)
+    result: CockpitResult = build_daily_cockpit(
+        profile,
+        target_year=target_year,
+        persist_snapshot=persist_snapshot,
+    )
+
+    response = ToolResponse(
+        summary=build_cockpit_summary(result),
+        citations=result.citations,
+        freshness_warnings=result.freshness_warnings,
+        data_source=result.data_source,
+    )
+    model = _to_model(response)
+    model.metadata = _cockpit_to_metadata(result)
+    return model
+
+
+class DecisionLogRequest(BaseModel):
+    """POST /decisions の入力スキーマ。
+
+    record_id と decided_at はサーバー側で生成する。CLO 名やボタン操作の結果を
+    そのまま append-only ログに追記する。
+    """
+
+    cockpit_item_id: str = Field(description="CockpitItem.item_id（必須）")
+    decision: DecisionStatus = Field(description="採用/保留/却下/エスカレーション")
+    decided_by: str = Field(default="system", description="決定者（CLO 名 or 'system'）")
+    rationale: str = Field(default="", description="決定の根拠（短文）")
+    expected_effect_jpy: int | None = Field(
+        default=None, description="採用時の想定経営効果（円）",
+    )
+    review_due: date | None = Field(
+        default=None, description="次回レビュー期日（postpone/escalate 時）",
+    )
+    linked_alerts: list[str] = Field(
+        default_factory=list, description="H1 アラート ID への参照",
+    )
+
+
+@router.post("/decisions/{company_id}", status_code=201)
+async def decisions_log(
+    company_id: str,
+    body: Annotated[DecisionLogRequest, Body()],
+) -> dict[str, str]:
+    """意思決定ログ（I2）に DecisionRecord を 1 行 append する。
+
+    UI でカードの採用/保留/却下ボタンが押されたとき呼ぶ。append-only なので
+    既存レコードは書換えず、最新ステータスは jsonl の最後の行が示す。
+    """
+    _resolve_profile_or_404(company_id)
+
+    record = DecisionRecord(
+        record_id=str(uuid.uuid4()),
+        company_id=company_id,
+        cockpit_item_id=body.cockpit_item_id,
+        decided_at=datetime.now(UTC),
+        decided_by=body.decided_by,
+        decision=body.decision,
+        rationale=body.rationale,
+        expected_effect_jpy=body.expected_effect_jpy,
+        review_due=body.review_due,
+        linked_alerts=list(body.linked_alerts),
+    )
+
+    try:
+        path = append_decision(record)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"jsonl append 失敗: {exc}") from exc
+
+    return {
+        "record_id": record.record_id,
+        "company_id": company_id,
+        "decision": record.decision,
+        "log_path": str(path),
+    }

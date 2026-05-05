@@ -243,4 +243,66 @@ pwsh scripts/dev_web.ps1            # Next.js (port 3000, API_BASE=localhost:800
 
 ---
 
-最終更新: 2026-05-05（フェーズ4.0 完了：AWS PoC デプロイ完了。社内レビュー URL `https://d1zei8qivkf3cr.cloudfront.net/` で 8 画面 + plan-draft / 成果物 DL まで稼働確認済。tests 422 件全 pass / ruff clean。月額試算 $1〜$3。次セッションは (1) e-Stat API 実動作確認 (2) sample_chain_01 / sample_wholesale_01 での plan-draft 動作確認 (3) Codex 指摘の PPT 視覚化強化 — 詳細は HANDOFF_NEXT_SESSION.md 参照）
+## 9. Codex との協業方針（必須）
+
+このプロジェクトは **Claude（Opus / 設計・統合）と Codex（GPT-5.x / 並行実装・別視点レビュー）の二者協業** で進める。「片方が全部やる」前提では運用しない。Codex は Subagent ではなく **対等な協業相手**として扱う。
+
+### 9.1 Codex に相談・助言を求めるべき場面
+
+Claude 単独で抱えず、**積極的に Codex に意見を求める**こと。判断を 1 モデル分の盲点に委ねないことが目的。
+
+| 場面 | Codex 活用方法 |
+|------|---------------|
+| 設計判断に迷う（複数の妥当な選択肢） | `/codex` または `codex:rescue` で **二者議論を持ちかける**（例: 段階 b/c 計画の二者議論で 6 件の修正点を抽出した実績あり） |
+| 実装が詰まった・別の切り口が欲しい | `codex:rescue` を呼び、症状・試したこと・期待結果を渡してセカンドオピニオンを取る |
+| Claude の計画書・PR を独立レビューさせたい | Codex に「フラットに評価してくれ」と渡し、レビュー結果を **取り込み or 反論** する形で議論する |
+| Claude が書いた数値ロジック・閾値の妥当性確認 | 業界感覚レンジ表や CLO 業務知見を Codex の知識で交差検証する |
+| NotebookLM 取込・PPT 生成・Word/Excel 改善 | **Codex 単独**で完結する（Claude は触らない・9.2 参照） |
+
+**起動方法**: スラッシュコマンド `/rescue` または `codex:rescue` agent。事前に `/codex setup` で疎通確認する。
+
+### 9.2 役割分担の固定ルール（衝突回避）
+
+同じファイルに同時に手を入れると merge 衝突 + 仕様の食い違いが発生する。**着手前に担当を固定する**こと。
+
+| 領域 | 担当 | 理由 |
+|------|------|------|
+| 中核アーキテクチャ・統合スコアリング・データモデル設計 | **Claude** | Opus の設計力を活かす（例: `core/analytics/operation_cockpit.py` の 3 軸統合エンジン） |
+| 静的データ取込（NotebookLM 由来事例・告示数値・運賃表） | **Codex** | 一括構造化に向く（例: `core/static/efficiency_law_certified.py` の 7 社事例取込） |
+| サンプルデータ生成（fixture 追加） | **Codex** | データ構築は Codex 効率的（例: `sample_retail_01` 4 業種カバー追加） |
+| Word / Excel / PPT 生成物の改善 | **Codex** | 過去実績あり。Claude は触らない |
+| Web 画面（Next.js / Tailwind / Recharts） | **Codex 優先**、Claude が API 設計後に委譲 | Tailwind CSS Grid のカスタム実装等は Codex が早い |
+| 中核ビジネスロジックの単体テスト | **Claude スモーク + Codex 拡張テスト**の二段構え | Claude が「壊れていないこと」のガード、Codex が網羅性（例: 4社×3シナリオ=12ケース） |
+| CI/CD パイプライン・インフラ（IaC） | **Claude** | AWS/Terraform 知見を Claude 側に蓄積している |
+| MCP / REST エンドポイント定義 | **Claude** | 既存パターンに合わせる定型作業 |
+
+### 9.3 並行作業時の禁止事項
+
+- **新セッション開始時に必ず HANDOFF_NEXT_SESSION.md と memory `feedback_codex_parallel_collaboration.md` を確認**する
+- 「Codex が並行作業中」と明示されている領域のファイルを Read してはいけない（Edit / Write は当然禁止）
+- 不明な領域に手を入れる前に、健一に「これは Codex 領域では？」と確認する
+- `pyproject.toml` の dependencies は両者が触りうる共有領域。先に触る側が他方に通知する想定で、健一に都度確認する
+- **`main` 直接 push は禁止**。Codex も Claude も別ブランチ + PR 経由（branch protection で hook reject される）
+
+### 9.4 Codex の助言を取り込む際の作法
+
+1. **Codex の指摘を額面通り受け入れない**。妥当性を Claude 側で評価し、「採用」「修正のうえ採用」「却下」を明示する
+2. 設計議論の結論は **plan ファイル（plans/*.md）** にバージョンを切って残す。「Codex 勧告 ① ② ③」のように番号付けする運用を踏襲する（例: [plans/b-c-flickering-pixel.md](https://github.com/ykenkou001/logi-intel-dashboard/blob/main/plans/b-c-flickering-pixel.md)）
+3. **未確定値を Codex が「不明」と返したら、推測で埋めない**。`None` または空文字で残し、健一の判断を仰ぐ（NotebookLM 取込での運用ルール）
+4. PR 説明文に「Codex 議論で確定した修正点」と「Claude 単独判断」を区別して書く
+
+### 9.5 Codex 議論の歴史的経緯
+
+| 日付 | 議題 | 結論 |
+|------|------|------|
+| 2026-05-05 | 段階 b/c 詳細実装計画 | Codex 勧告で 7 件の修正点を反映（plans/b-c-flickering-pixel.md §段階 a/b/c） |
+| 2026-05-05 | フェーズ4.0 PR #1 マージ後の Word/Excel 改善分担 | Codex 単独実施で確定 |
+| 2026-05-05 | フェーズ4.5 着手時の領域分担 | b.7 Web / b.9 拡張テストを Codex 委譲、b 中核を Claude |
+
+「Codex に聞こうか迷ったら聞く」が初動。Claude 単独で進めて後から「Codex に聞けばよかった」となる方が高コスト。
+
+詳細 → memory `feedback_codex_parallel_collaboration.md`（並行作業の境界線）
+
+---
+
+最終更新: 2026-05-05（フェーズ4.5 b 中核：J3 デイリーコックピット実装着手。`feature/phase-4.5-cockpit-core` ブランチで b.2〜b.6 + 永続化 + スモークテスト 29 件追加。tests 504 件全 pass / ruff clean。次は b.7 Web 画面と b.9 拡張テストを Codex 委譲予定 — 詳細は plans/b-c-flickering-pixel.md §段階 b 参照）
