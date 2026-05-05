@@ -30,13 +30,40 @@ Claude Desktop / Code から:
 logi_clo_generate_template
 ```
 
-→ 既定で `outputs/templates/sample_company_template.xlsx` に生成される。
+→ 既定（`purpose="annual"`）で `outputs/templates/sample_company_template.xlsx` に生成される。
 
 カスタムパスを指定する場合:
 
 ```
 logi_clo_generate_template(output_path="C:/work/my_company.xlsx")
 ```
+
+### 用途別 3 種類のテンプレ（フェーズ4.5 B）
+
+「何を・どの粒度で・いつ入力するか」を明確にするため、用途別 3 種類のテンプレを生成できる。
+スキーマ（`CompanyProfile` / `WaitTimeRow` 等）はすべて共通なので、いずれの用途で記入しても
+同じ `logi_clo_load_company` で取込可能。
+
+| `purpose` | 用途 | 含まれるシート | 想定運用頻度 |
+|-----------|------|----------------|------------|
+| `annual`（既定） | 計画策定（中長期計画） | profile / sites / wait_time(年集計) / handling_time / kpi_history / _jsic_reference | 年 1 回 |
+| `monthly` | 月次レビュー | profile / sites / wait_time(月集計) / handling_time / kpi_history / _jsic_reference | 月 1 回 |
+| `daily` | 日次運用入力（コックピット／ヒートマップ） | profile / sites / wait_time(日次・site×slot) / _jsic_reference | 日次 |
+
+`monthly` の `wait_time.bucket_label` は「`2026-04 全体`」「`2026-04 関東センター`」のような月集計形式で配布。
+`daily` の `wait_time` は `bucket_label`（例 `2026-05-01 朝便`）に加えて `site_name` と `time_slot`
+（`morning` / `midday` / `evening` / `night`）列にサンプル値を埋めた状態で配布する。
+
+呼び出し例:
+
+```
+logi_clo_generate_template(purpose="daily")        # 日次運用用
+logi_clo_generate_template(purpose="monthly")      # 月次レビュー用
+logi_clo_generate_template(purpose="annual")       # 計画策定用（既定）
+```
+
+REST API では `POST /api/v1/company/template?purpose=daily` のようにクエリパラメータで指定する。
+Web UI では「自社プロフィール入力」画面の Step 1 で 3 用途のラジオから選択する。
 
 ---
 
@@ -206,4 +233,4 @@ logi_clo_load_company(file_path="my_company/")
 
 ---
 
-最終更新: 2026-05-03（フェーズ4.0 Codex 4 フル版「実データ入力フォーム」初回実装）
+最終更新: 2026-05-06（フェーズ4.5 B 軸 用途別テンプレ拡張：daily / monthly / annual の 3 種類対応）

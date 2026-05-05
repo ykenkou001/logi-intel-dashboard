@@ -82,6 +82,8 @@ from core.io.company_loader import (
 from core.io.company_store import save_company_profile
 from core.io.template_writer import (
     DEFAULT_TEMPLATE_PATH,
+    VALID_PURPOSES,
+    TemplatePurpose,
     write_company_template,
 )
 from core.legal.eligibility import evaluate_eligibility
@@ -1003,40 +1005,73 @@ def register_tools(mcp: FastMCP) -> None:
     @mcp.tool()
     async def logi_clo_generate_template(
         output_path: str | None = None,
+        purpose: str = "annual",
     ) -> dict[str, object]:
-        """自社プロフィール入力 Excel テンプレートを生成します（フェーズ4.0）。
+        """自社プロフィール入力 Excel テンプレートを生成します（フェーズ4.0 / 4.5）。
 
         CLO 担当者がこのテンプレを DL → 自社情報を記入 → logi_clo_load_company で
         取込、というフローの起点。サンプル3社からの脱却に必須。
 
-        生成シート:
-            - profile        : 単一行（必須・基本情報）
-            - sites          : 拠点ごと 1 行
-            - wait_time      : 荷待ち時間 計測値（区分ごと）
-            - handling_time  : 荷役等時間 計測値（連鎖化事業者は省略可）
-            - kpi_history    : 直近 3 期 KPI 履歴（任意）
-            - _jsic_reference: JSIC 細分類 4 桁の参照シート
+        フェーズ4.5 B 軸で **用途別 3 種類** のテンプレに分割した:
+
+        - ``annual``  : 計画策定用（既定）。profile / sites / wait_time(年集計) /
+          handling_time / kpi_history / _jsic_reference の 6 シート構成。
+          年 1 回の中長期計画策定で網羅入力する想定（現行互換）。
+        - ``monthly`` : 月次集計用。wait_time の bucket_label を「2026-04 全体」
+          のような月次集計形式にしたうえで handling_time / kpi_history を残す。
+          月次レビュー会議の入力起点に使う。
+        - ``daily``   : 日次運用入力用。wait_time のみの軽量版で site_name と
+          time_slot を埋めて配布する（site×日付×slot の 8 サンプル行）。
+          コックピット／ヒートマップ系の日次入力フローに使う。
 
         Args:
             output_path: 出力先のパス（省略時は outputs/templates/sample_company_template.xlsx）
+            purpose: 利用用途。"daily" / "monthly" / "annual" のいずれか（既定 "annual"）。
 
         Returns:
             ToolResponse 構造:
-            - summary: 生成完了メッセージと記入手順
+            - summary: 生成完了メッセージ・含まれるシート一覧・記入手順
             - files: { "template_xlsx": Excel テンプレートのパス }
         """
+        if purpose not in VALID_PURPOSES:
+            return ToolResponse(
+                summary=(
+                    f"purpose は {list(VALID_PURPOSES)} のいずれかを指定してください: "
+                    f"'{purpose}'"
+                ),
+            ).to_dict()
+        purpose_typed: TemplatePurpose = purpose  # type: ignore[assignment]
+
         target = Path(output_path) if output_path else DEFAULT_TEMPLATE_PATH
         try:
-            written = write_company_template(target)
+            written = write_company_template(target, purpose=purpose_typed)
         except Exception as exc:
             return ToolResponse(summary=f"テンプレ生成に失敗しました: {exc}").to_dict()
 
+        sheets_by_purpose = {
+            "annual": (
+                "profile / sites / wait_time(年集計) / handling_time / "
+                "kpi_history / _jsic_reference"
+            ),
+            "monthly": (
+                "profile / sites / wait_time(月集計) / handling_time / "
+                "kpi_history / _jsic_reference"
+            ),
+            "daily": "profile / sites / wait_time(日次・site×slot) / _jsic_reference",
+        }
+        purpose_label = {
+            "annual": "計画策定用（年 1 回・網羅版）",
+            "monthly": "月次集計用（月次レビュー）",
+            "daily": "日次運用入力用（コックピット／ヒートマップ）",
+        }[purpose_typed]
+
         summary = (
             f"=== 自社プロフィール入力テンプレ生成完了 ===\n"
-            f"出力先: {written}\n\n"
+            f"用途: {purpose_typed}（{purpose_label}）\n"
+            f"出力先: {written}\n"
+            f"含まれるシート: {sheets_by_purpose[purpose_typed]}\n\n"
             "次の手順:\n"
-            "  1. このファイルを開き、profile / sites / wait_time / "
-            "handling_time / kpi_history シートを記入\n"
+            "  1. このファイルを開き、各シートを記入\n"
             "  2. 必須項目（[必須] と表記）はすべて埋める\n"
             "  3. 連鎖化事業者は handling_time シートを空にしてよい\n"
             "  4. 記入後 logi_clo_load_company(file_path=\"...\") で取込\n"

@@ -324,8 +324,21 @@ export async function runScenarioSim(
 }
 
 // ─── 自社プロフィール: テンプレ生成 ───────────────────────────
-export async function generateCompanyTemplate(): Promise<ToolResponse> {
-  return request<ToolResponse>("/api/v1/company/template", { method: "POST" });
+/**
+ * 自社プロフィール入力 Excel テンプレートの利用用途。
+ * - "annual"  : 計画策定用（年 1 回・網羅版）— 既定
+ * - "monthly" : 月次集計用（月次レビュー）
+ * - "daily"   : 日次運用入力用（コックピット／ヒートマップ）
+ */
+export type TemplatePurpose = "daily" | "monthly" | "annual";
+
+export async function generateCompanyTemplate(
+  purpose: TemplatePurpose = "annual",
+): Promise<ToolResponse> {
+  return request<ToolResponse>("/api/v1/company/template", {
+    method: "POST",
+    searchParams: { purpose },
+  });
 }
 
 // ─── 自社プロフィール: 取込 (Excel multipart) ─────────────────

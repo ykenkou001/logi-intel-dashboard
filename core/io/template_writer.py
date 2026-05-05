@@ -2,13 +2,20 @@
 
 CLO 担当者が DL → 自社情報を記入 → Excel ローダーで取込、というフローの起点。
 
-シート構成:
-    - profile        : 単一行（必須・基本情報）
-    - sites          : 拠点ごと 1 行
-    - wait_time      : 荷待ち時間 計測値（区分ごと 1 行）
-    - handling_time  : 荷役等時間 計測値（連鎖化事業者は省略可）
-    - kpi_history    : 直近 3 期 KPI 履歴（任意）
-    - _jsic_reference: JSIC 細分類 4 桁の参照（記入用）
+フェーズ4.5 B 軸で **用途別 3 種類** のテンプレに分割した:
+
+- ``annual``  : 計画策定用（現行 6 シート完全互換、年 1 回更新の網羅版・既定）
+- ``monthly`` : 月次集計用（KPI 中心・月次レビュー向け、handling/kpi_history を残す）
+- ``daily``   : 日次運用入力用（wait_time のみ・site×日付×slot の軽量版）
+
+いずれの用途も同じローダー（``core/io/company_loader``）で取込可能で、
+スキーマ（``CompanyProfile`` / ``WaitTimeRow`` 等）は共通。違いは
+
+- 含めるシート（daily は handling/kpi_history を省略）
+- ``wait_time.bucket_label`` のサンプル値（daily は日付＋時間帯、monthly は月集計）
+- daily のみ ``site_name`` / ``time_slot`` 列を埋めた状態で配布
+
+annual は既定値のため、引数を渡さない既存呼び出しの挙動は完全互換。
 
 各シートのフォーマット:
     1 行目: 列ヘッダ（必須は [必須]、任意は [任意]）
@@ -19,11 +26,21 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Literal
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
+
+TemplatePurpose = Literal["daily", "monthly", "annual"]
+"""テンプレートの利用用途:
+- ``daily``   : 日次運用入力（wait_time のみの軽量版・site×日付×slot）
+- ``monthly`` : 月次集計（wait_time は月集計ラベル、handling_time / kpi_history を残す）
+- ``annual``  : 計画策定（現行 6 シート互換、年 1 回更新の網羅版）— **既定**
+"""
+
+VALID_PURPOSES: tuple[TemplatePurpose, ...] = ("daily", "monthly", "annual")
 
 DEFAULT_TEMPLATE_PATH = (
     Path(os.environ.get("LOGI_OUTPUTS_DIR", "outputs"))
@@ -41,15 +58,28 @@ _SAMPLE_FONT = Font(color="A6A6A6")  # 薄グレー（サンプル値である�
 
 def write_company_template(
     path: Path = DEFAULT_TEMPLATE_PATH,
+    *,
+    purpose: TemplatePurpose = "annual",
 ) -> Path:
     """自社プロフィール入力テンプレ Excel を書き出す。
 
     Args:
         path: 出力先パス（親ディレクトリは自動作成）
+        purpose: 利用用途。``annual`` は現行 6 シート互換（既定）、
+            ``monthly`` は wait_time を月集計ラベルにした KPI 中心構成、
+            ``daily`` は wait_time のみの軽量構成（site×日付×slot）。
 
     Returns:
         書き出したファイルのパス
+
+    Raises:
+        ValueError: ``purpose`` が ``daily`` / ``monthly`` / ``annual`` 以外の場合
     """
+    if purpose not in VALID_PURPOSES:
+        raise ValueError(
+            f"purpose は {list(VALID_PURPOSES)} のいずれかを指定してください: '{purpose}'"
+        )
+
     path.parent.mkdir(parents=True, exist_ok=True)
     wb = Workbook()
 
@@ -58,11 +88,23 @@ def write_company_template(
     if default is not None:
         wb.remove(default)
 
+    # profile / sites / _jsic_reference は全用途共通
     _build_profile_sheet(wb)
     _build_sites_sheet(wb)
-    _build_wait_time_sheet(wb)
-    _build_handling_time_sheet(wb)
-    _build_kpi_history_sheet(wb)
+
+    if purpose == "daily":
+        # 日次運用: wait_time のみ（site×日付×slot の軽量版）
+        _build_wait_time_daily_sheet(wb)
+    elif purpose == "monthly":
+        # 月次集計: wait_time(月集計) + handling_time + kpi_history
+        _build_wait_time_monthly_sheet(wb)
+        _build_handling_time_sheet(wb)
+        _build_kpi_history_sheet(wb)
+    else:  # annual（既定・現行互換）
+        _build_wait_time_sheet(wb)
+        _build_handling_time_sheet(wb)
+        _build_kpi_history_sheet(wb)
+
     _build_jsic_reference_sheet(wb)
 
     wb.save(path)
@@ -138,6 +180,7 @@ def _build_sites_sheet(wb: Workbook) -> None:
 
 
 def _build_wait_time_sheet(wb: Workbook) -> None:
+    """annual 用 wait_time シート（年集計の bucket_label・現行互換）。"""
     ws = wb.create_sheet("wait_time")
     columns: list[tuple[str, str, str | int | float]] = [
         ("bucket_label [必須]", "集計区分（例: '全体', '関東センター'）", "全体"),
@@ -150,6 +193,79 @@ def _build_wait_time_sheet(wb: Workbook) -> None:
         ["全体", 5000, 28, 110, 4],
         ["関東センター", 3000, 25, 90, 1],
         ["関西センター", 2000, 32, 110, 3],
+    ]
+    _write_tabular_template(ws, columns, sample_rows)
+
+
+def _build_wait_time_monthly_sheet(wb: Workbook) -> None:
+    """monthly 用 wait_time シート（月集計ラベル・スキーマは annual と同一）。
+
+    bucket_label を「YYYY-MM 集計区分」の月次集計形式にしたサンプルを配布する。
+    handling_time / kpi_history と組合せて月次レビューの起点に使う想定。
+    """
+    ws = wb.create_sheet("wait_time")
+    columns: list[tuple[str, str, str | int | float]] = [
+        (
+            "bucket_label [必須]",
+            "月集計区分（例: '2026-04 全体', '2026-04 関東センター'）",
+            "2026-04 全体",
+        ),
+        ("measured_count [必須]", "計測便数（整数・0以上・当月実績）", 4200),
+        ("average_minutes [必須]", "平均荷待ち時間（分・0以上）", 26),
+        ("max_minutes [必須]", "最大荷待ち時間（分・0以上）", 105),
+        ("over_2h_count [必須]", "2時間超 件数（整数・0以上）", 2),
+    ]
+    sample_rows: list[list[str | int | float]] = [
+        ["2026-04 全体", 4200, 26, 105, 2],
+        ["2026-04 関東センター", 2500, 24, 88, 1],
+        ["2026-04 関西センター", 1700, 28, 105, 1],
+        ["2026-05 全体", 4350, 25, 95, 1],
+        ["2026-05 関東センター", 2600, 23, 80, 0],
+        ["2026-05 関西センター", 1750, 27, 95, 1],
+    ]
+    _write_tabular_template(ws, columns, sample_rows)
+
+
+def _build_wait_time_daily_sheet(wb: Workbook) -> None:
+    """daily 用 wait_time シート（site×日付×slot の軽量版）。
+
+    bucket_label を「YYYY-MM-DD <時間帯>」形式にし、site_name と time_slot 列を
+    埋めた状態で配布する（ヒートマップ系・コックピット系で日次粒度の入力を促す）。
+
+    site_name / time_slot は WaitTimeRow の Optional フィールドで、ローダー側も
+    空欄を許容するため annual / monthly と同じローダーで取込可能。
+    """
+    ws = wb.create_sheet("wait_time")
+    columns: list[tuple[str, str, str | int | float]] = [
+        (
+            "bucket_label [必須]",
+            "日次区分（例: '2026-05-01 朝便', '2026-05-01 昼便'）",
+            "2026-05-01 朝便",
+        ),
+        ("measured_count [必須]", "当該便の計測件数（整数・0以上）", 35),
+        ("average_minutes [必須]", "平均荷待ち時間（分・0以上）", 42),
+        ("max_minutes [必須]", "最大荷待ち時間（分・0以上）", 95),
+        ("over_2h_count [必須]", "2時間超 件数（整数・0以上）", 0),
+        (
+            "site_name [任意]",
+            "拠点名（sites シートと一致させる・空欄可）",
+            "関東センター",
+        ),
+        (
+            "time_slot [任意]",
+            "時間帯（morning=6-10 / midday=10-15 / evening=15-19 / night=19-翌6）",
+            "morning",
+        ),
+    ]
+    sample_rows: list[list[str | int | float]] = [
+        ["2026-05-01 朝便", 35, 42, 95, 0, "関東センター", "morning"],
+        ["2026-05-01 昼便", 50, 28, 70, 0, "関東センター", "midday"],
+        ["2026-05-01 夕便", 25, 32, 80, 0, "関東センター", "evening"],
+        ["2026-05-01 夜便", 8, 18, 40, 0, "関東センター", "night"],
+        ["2026-05-02 朝便", 38, 45, 110, 0, "関東センター", "morning"],
+        ["2026-05-02 昼便", 48, 26, 65, 0, "関東センター", "midday"],
+        ["2026-05-01 朝便", 20, 30, 65, 0, "関西センター", "morning"],
+        ["2026-05-01 昼便", 28, 22, 55, 0, "関西センター", "midday"],
     ]
     _write_tabular_template(ws, columns, sample_rows)
 
