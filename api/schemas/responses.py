@@ -45,3 +45,10 @@ class ToolResponseModel(BaseModel):
             "'actual' は自社実測データ。"
         ),
     )
+    metadata: dict[str, object] | None = Field(
+        default=None,
+        description=(
+            "テキスト要約以外の構造化データ（ヒートマップ cells、KPI snapshot など）。"
+            "Web フロントで可視化する際の入力。MCP では summary 中心に表示。"
+        ),
+    )

@@ -29,6 +29,15 @@ DataSource = Literal["sample", "estimated", "actual"]
 - "actual"   : 自社実測データに基づく
 """
 
+TimeSlot = Literal["morning", "midday", "evening", "night"]
+"""時間帯区分（拠点別待機時間ヒートマップ用、フェーズ4.1 a.1 で導入）:
+- "morning" : 6:00-10:00 朝便（始業前後の納品集中）
+- "midday"  : 10:00-15:00 昼便（センター向け定期便中心）
+- "evening" : 15:00-19:00 夕便（夕方ピーク・店舗納品）
+- "night"   : 19:00-翌6:00 夜間便（深夜配送・関東〜関西幹線）
+None の場合は "時間帯不明" として集計時 'all_day' レーンへ振り分け。
+"""
+
 
 class CompanySite(BaseModel):
     """自社拠点。"""
@@ -49,6 +58,20 @@ class WaitTimeRow(BaseModel):
     average_minutes: float = Field(..., ge=0, description="平均荷待ち時間（分）")
     max_minutes: float = Field(..., ge=0, description="最大荷待ち時間（分）")
     over_2h_count: int = Field(..., ge=0, description="2時間超 件数（基準超過の有無）")
+    site_name: str | None = Field(
+        default=None,
+        description=(
+            "拠点名（heatmap 集計の縦軸キー）。指定なしは「全体」扱い。"
+            "site_name 指定時は CompanyProfile.sites のいずれかと一致することが望ましい。"
+        ),
+    )
+    time_slot: TimeSlot | None = Field(
+        default=None,
+        description=(
+            "時間帯区分（heatmap 集計の横軸キー）。"
+            "morning/midday/evening/night のいずれか、または None（時間帯不明）。"
+        ),
+    )
 
 
 class HandlingTimeRow(BaseModel):
@@ -366,12 +389,198 @@ SAMPLE_CHAIN = CompanyProfile(
     handling_time_rows=[],
 )
 
+# サンプル4: 小売業（食料品スーパーマーケット）— 特定第一種・第二種荷主想定
+# 財務想定: 営業利益率 3%（食料品スーパー業界中央値）/ 売上原価率 75%
+# 計測値: 国交省 様式第5 記載見本集（retail_advanced.md）の数値レンジ
+# c 段階で4業種パッケージ検証時に必須となる小売単独 fixture（Codex 勧告）
+SAMPLE_RETAIL = CompanyProfile(
+    company_id="sample_retail_01",
+    name="ライフスマート小売株式会社（架空）",
+    jsic_code="5811",
+    main_business="食料品スーパーマーケット",
+    annual_revenue_jpy=120_000_000_000,    # 1,200 億円
+    annual_freight_tons_total=100_000.0,   # 10 万トン（特定第一種・第二種双方該当）
+    operating_profit_jpy=3_600_000_000,    # 36 億円（営業利益率 3%）
+    cost_of_goods_sold_jpy=90_000_000_000,  # 900 億円（売上原価率 75%）
+    is_chain_franchise=False,
+    fleet_count_owned=15,
+    fleet_count_outsourced=320,
+    sites=[
+        CompanySite(name="関東地域DC", site_type="dc",
+                    prefecture="埼玉県", annual_freight_tons=45_000),
+        CompanySite(name="中部地域DC", site_type="dc",
+                    prefecture="愛知県", annual_freight_tons=30_000),
+        CompanySite(name="関西地域DC", site_type="dc",
+                    prefecture="大阪府", annual_freight_tons=25_000),
+    ],
+    clo_name="取締役執行役員 鈴木 誠",
+    plan_period_start_fy=2026,
+    plan_period_end_fy=2030,
+    data_source="sample",
+    load_factor_actual_pct=42.0,         # 業界平均（38%）よりやや上
+    annual_fuel_liters=None,
+    annual_co2_emissions_kg=None,
+    wait_time_rows=[
+        WaitTimeRow(
+            bucket_label="全体",
+            measured_count=18500,
+            average_minutes=28,
+            max_minutes=125,
+            over_2h_count=2,
+        ),
+        # 拠点 × 時間帯 の詳細（a.1 ヒートマップ用）
+        # 関東地域DC（埼玉）：朝便集中で待機が伸びる典型パターン
+        WaitTimeRow(
+            bucket_label="関東地域DC・朝便",
+            measured_count=2400,
+            average_minutes=42,
+            max_minutes=125,
+            over_2h_count=2,
+            site_name="関東地域DC",
+            time_slot="morning",
+        ),
+        WaitTimeRow(
+            bucket_label="関東地域DC・昼便",
+            measured_count=3200,
+            average_minutes=28,
+            max_minutes=85,
+            over_2h_count=0,
+            site_name="関東地域DC",
+            time_slot="midday",
+        ),
+        WaitTimeRow(
+            bucket_label="関東地域DC・夕便",
+            measured_count=2000,
+            average_minutes=32,
+            max_minutes=95,
+            over_2h_count=0,
+            site_name="関東地域DC",
+            time_slot="evening",
+        ),
+        WaitTimeRow(
+            bucket_label="関東地域DC・夜便",
+            measured_count=600,
+            average_minutes=18,
+            max_minutes=45,
+            over_2h_count=0,
+            site_name="関東地域DC",
+            time_slot="night",
+        ),
+        # 中部地域DC（愛知）：相対的に待機が短い
+        WaitTimeRow(
+            bucket_label="中部地域DC・朝便",
+            measured_count=1800,
+            average_minutes=28,
+            max_minutes=85,
+            over_2h_count=0,
+            site_name="中部地域DC",
+            time_slot="morning",
+        ),
+        WaitTimeRow(
+            bucket_label="中部地域DC・昼便",
+            measured_count=2400,
+            average_minutes=22,
+            max_minutes=60,
+            over_2h_count=0,
+            site_name="中部地域DC",
+            time_slot="midday",
+        ),
+        WaitTimeRow(
+            bucket_label="中部地域DC・夕便",
+            measured_count=1300,
+            average_minutes=24,
+            max_minutes=70,
+            over_2h_count=0,
+            site_name="中部地域DC",
+            time_slot="evening",
+        ),
+        WaitTimeRow(
+            bucket_label="中部地域DC・夜便",
+            measured_count=300,
+            average_minutes=15,
+            max_minutes=35,
+            over_2h_count=0,
+            site_name="中部地域DC",
+            time_slot="night",
+        ),
+        # 関西地域DC（大阪）：朝・夕は中程度
+        WaitTimeRow(
+            bucket_label="関西地域DC・朝便",
+            measured_count=1400,
+            average_minutes=32,
+            max_minutes=95,
+            over_2h_count=0,
+            site_name="関西地域DC",
+            time_slot="morning",
+        ),
+        WaitTimeRow(
+            bucket_label="関西地域DC・昼便",
+            measured_count=1900,
+            average_minutes=22,
+            max_minutes=60,
+            over_2h_count=0,
+            site_name="関西地域DC",
+            time_slot="midday",
+        ),
+        WaitTimeRow(
+            bucket_label="関西地域DC・夕便",
+            measured_count=900,
+            average_minutes=26,
+            max_minutes=70,
+            over_2h_count=0,
+            site_name="関西地域DC",
+            time_slot="evening",
+        ),
+        WaitTimeRow(
+            bucket_label="関西地域DC・夜便",
+            measured_count=300,
+            average_minutes=16,
+            max_minutes=40,
+            over_2h_count=0,
+            site_name="関西地域DC",
+            time_slot="night",
+        ),
+    ],
+    handling_time_rows=[
+        HandlingTimeRow(
+            bucket_label="パレット納品（チルド）",
+            measured_count=6800,
+            average_minutes=35,
+            max_minutes=70,
+            over_1h_pct=2.0,
+        ),
+        HandlingTimeRow(
+            bucket_label="パレット納品（常温）",
+            measured_count=8200,
+            average_minutes=28,
+            max_minutes=55,
+            over_1h_pct=0.0,
+        ),
+        HandlingTimeRow(
+            bucket_label="バラ納品（生鮮）",
+            measured_count=2500,
+            average_minutes=58,
+            max_minutes=110,
+            over_1h_pct=18.0,
+        ),
+    ],
+    kpi_history=[
+        KpiHistoryEntry(fy=2023, metric="load_factor_pct", value=39.0, unit="%"),
+        KpiHistoryEntry(fy=2024, metric="load_factor_pct", value=41.0, unit="%"),
+        KpiHistoryEntry(fy=2025, metric="load_factor_pct", value=42.0, unit="%"),
+        KpiHistoryEntry(fy=2023, metric="wait_time_avg_minutes", value=34.0, unit="分"),
+        KpiHistoryEntry(fy=2024, metric="wait_time_avg_minutes", value=30.0, unit="分"),
+        KpiHistoryEntry(fy=2025, metric="wait_time_avg_minutes", value=28.0, unit="分"),
+    ],
+)
+
 
 # サンプル一覧
 ALL_SAMPLES: dict[str, CompanyProfile] = {
     SAMPLE_MANUFACTURING.company_id: SAMPLE_MANUFACTURING,
     SAMPLE_WHOLESALE.company_id: SAMPLE_WHOLESALE,
     SAMPLE_CHAIN.company_id: SAMPLE_CHAIN,
+    SAMPLE_RETAIL.company_id: SAMPLE_RETAIL,
 }
 
 

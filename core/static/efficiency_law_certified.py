@@ -55,10 +55,22 @@ class CertifiedCase:
     headline_effect: str       # 効果のヘッドライン（公表値ベース）
     certified_year: int        # 認定年
     source_url: str            # 公表ページ URL
+    before_description: str = ""  # 改修前のオペ・KPI状態
+    after_description: str = ""   # 改修後のオペ・KPI状態
+    case_source: Literal[
+        "mlit_certified",
+        "meti_clo_handbook",
+        "industry_press",
+        "interview",
+    ] = "mlit_certified"
+    investment_jpy_band: tuple[int, int] | None = None  # (下限, 上限) 万円
+    payback_months: int | None = None
 
 
 # 公表事例から抜粋した代表事例（公開情報ベース）
 # 注: 認定番号・正確な認定日付は CSV 取込時に補完。本ファイルは代表性重視のサンプル
+_METI_CLO_HANDBOOK_URL = "https://www.meti.go.jp/policy/economy/distribution/logistics/"
+
 CERTIFIED_CASES: list[CertifiedCase] = [
     CertifiedCase(
         case_id="JOINT-DAILY-DRINK",
@@ -229,6 +241,162 @@ CERTIFIED_CASES: list[CertifiedCase] = [
             "https://www.mlit.go.jp/seisakutokatsu/freight/"
             "seisakutokatsu_freight_fr2_000018.html"
         ),
+    ),
+    # 経産省 CLO 取組事例集の発行年が md 内で未確定のため certified_year=2024 で仮置き。
+    CertifiedCase(
+        case_id="METI-CLO-001",
+        title="梅の花グループの物流データ可視化と配送頻度見直し",
+        main_companies=["株式会社梅の花グループ"],
+        industry_categories=["chain_franchise", "retail"],
+        measure_types=["joint_delivery", "load_factor"],
+        summary=(
+            "Excel等で実行可能な範囲の物流データを集めてイレギュラー事象を可視化し、"
+            "レストラン業態への配送頻度見直しと米輸送の混載化を実施"
+        ),
+        headline_effect="レストラン業態への配送を週7回から週4回へ見直し",
+        certified_year=2024,
+        source_url=_METI_CLO_HANDBOOK_URL,
+        before_description=(
+            "高度なシステム導入が難しく、物流データやイレギュラー事象を十分に可視化できていなかった。"
+            "レストラン業態への配送は週7回で、米輸送はチャーター便を利用していた"
+        ),
+        after_description=(
+            "Excel等で自社が実行可能な範囲のデータを集め、イレギュラー事象を可視化して改善に接続。"
+            "配送頻度は週4回へ見直し、米輸送は他社貨物との混載に切り替えた"
+        ),
+        case_source="meti_clo_handbook",
+    ),
+    CertifiedCase(
+        case_id="METI-CLO-002",
+        title="サンゲツのユニットロードシステムによる荷役時間短縮",
+        main_companies=["株式会社サンゲツ"],
+        industry_categories=["wholesale"],
+        measure_types=["warehouse_dx", "load_factor"],
+        summary=(
+            "回転式パレットと回転フォークリフトを組み合わせた独自のユニットロードシステムを導入し、"
+            "荷役時間短縮と作業負荷軽減を優先"
+        ),
+        headline_effect="積み降ろし作業時間を約240分から約30分へ短縮",
+        certified_year=2024,
+        source_url=_METI_CLO_HANDBOOK_URL,
+        before_description=(
+            "積み降ろし作業に約240分を要しており、作業負荷と持続可能性が課題になっていた"
+        ),
+        after_description=(
+            "回転式パレットと回転フォークリフトを組み合わせたユニットロードシステムにより、"
+            "積み降ろし作業時間を約30分へ短縮した"
+        ),
+        case_source="meti_clo_handbook",
+    ),
+    CertifiedCase(
+        case_id="METI-CLO-003",
+        title="J-オイルミルズの物流ハンドブックと外装表示標準化",
+        main_companies=["株式会社J-オイルミルズ"],
+        industry_categories=["manufacturing"],
+        measure_types=["warehouse_dx", "load_factor"],
+        summary=(
+            "物流ネットワークの実態を時間軸・工程ごとに整理したハンドブックを制作し、"
+            "外装表示の標準化で誤納品防止に取り組んだ"
+        ),
+        headline_effect="物流ハンドブックによる全社共通理解と外装表示標準化を実施",
+        certified_year=2024,
+        source_url=_METI_CLO_HANDBOOK_URL,
+        before_description=(
+            "物流ネットワークの実態を他部署へ説明する材料が不足し、"
+            "ドライバーの判別ミスによる誤納品リスクもあった"
+        ),
+        after_description=(
+            "時間軸・工程ごとの物流ハンドブックを説明ツールとして活用し、"
+            "伝票記載と外装表示の一括表示ルールを採用した"
+        ),
+        case_source="meti_clo_handbook",
+    ),
+    CertifiedCase(
+        case_id="METI-CLO-004",
+        title="SUBARUの物流費可視化と完成車・長距離輸送の共同化",
+        main_companies=["株式会社SUBARU"],
+        industry_categories=["manufacturing"],
+        measure_types=["joint_delivery", "load_factor"],
+        summary=(
+            "各部門に分散していた物流費を管理会計上で集計できる仕組みに整え、"
+            "完成車共同輸送や長距離混載輸送、工場荷下ろし運用変更を実施"
+        ),
+        headline_effect="全社物流費の可視化とドライバー荷役・待機時間の削減",
+        certified_year=2024,
+        source_url=_METI_CLO_HANDBOOK_URL,
+        before_description=(
+            "物流費が各部門に分散し、全社でいくらコストがかかっているか把握しにくかった。"
+            "工場ではサプライヤー手配のドライバーがフォークリフトで荷下ろししていた"
+        ),
+        after_description=(
+            "物流費を管理会計上で集計できる仕組みを整え、完成車共同輸送や長距離混載輸送を実施。"
+            "工場荷下ろしは自社社員が担う運用に変更した"
+        ),
+        case_source="meti_clo_handbook",
+    ),
+    CertifiedCase(
+        case_id="METI-CLO-005",
+        title="日清食品の異業種共同輸送とサプライチェーン可視化",
+        main_companies=["日清食品株式会社"],
+        industry_categories=["manufacturing"],
+        measure_types=["joint_delivery", "load_factor"],
+        summary=(
+            "軽量貨物と重量貨物を組み合わせた共同輸送や米輸送とのラウンド輸送を実施し、"
+            "S&OPシステムのダッシュボードでサプライチェーンを可視化"
+        ),
+        headline_effect="軽量貨物と重量貨物の組合せ輸送・横移動ゼロのラウンド輸送を実施",
+        certified_year=2024,
+        source_url=_METI_CLO_HANDBOOK_URL,
+        after_description=(
+            "サッポログループ物流やJA全農と連携して共同輸送・ラウンド輸送を実施し、"
+            "S&OPシステムのダッシュボードでデータを一元管理した"
+        ),
+        case_source="meti_clo_handbook",
+    ),
+    CertifiedCase(
+        case_id="METI-CLO-006",
+        title="日本アクセスの入荷待機時間可視化と営業部門連携改善",
+        main_companies=["株式会社日本アクセス"],
+        industry_categories=["wholesale"],
+        measure_types=["berth_booking", "warehouse_dx"],
+        summary=(
+            "自社開発の入荷管理システムやトラック予約受付システムを140拠点以上に導入し、"
+            "営業部門と連携して納品・書類回収ルールを見直した"
+        ),
+        headline_effect="1時間以上の待機発生率を半減",
+        certified_year=2024,
+        source_url=_METI_CLO_HANDBOOK_URL,
+        before_description=(
+            "入荷待機時間の発生状況や、小売店での商品納品と書類回収時間のズレが課題になっていた"
+        ),
+        after_description=(
+            "入荷管理システムやトラック予約受付システムを140拠点以上へ導入し、"
+            "動態管理データをもとに回収日集約などのルール見直しを行った"
+        ),
+        case_source="meti_clo_handbook",
+    ),
+    CertifiedCase(
+        case_id="METI-CLO-007",
+        title="三菱食品の動態管理による車両情報可視化",
+        main_companies=["三菱食品株式会社"],
+        industry_categories=["wholesale"],
+        measure_types=["warehouse_dx", "berth_booking"],
+        summary=(
+            "動態管理システムを約3,100台のトラックにトップダウンで導入し、"
+            "現在地、走行ルート、待機時間などを可視化して改善の土台を整備"
+        ),
+        headline_effect="約3,100台のトラックに動態管理システムを導入",
+        certified_year=2024,
+        source_url=_METI_CLO_HANDBOOK_URL,
+        before_description=(
+            "車両の現在地、走行ルート、待機時間などを全体で把握する土台が不足し、"
+            "現場には導入への反対意見もあった"
+        ),
+        after_description=(
+            "約3,100台のトラックに動態管理システムを導入し、"
+            "発荷主・着荷主・運送事業者の改善に使える車両情報を可視化した"
+        ),
+        case_source="meti_clo_handbook",
     ),
 ]
 

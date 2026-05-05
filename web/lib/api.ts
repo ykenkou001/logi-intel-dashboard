@@ -29,6 +29,32 @@ export interface ToolResponse {
   citations: Citation[];
   freshness_warnings: string[];
   data_source: DataSource;
+  metadata?: Record<string, unknown> | null;
+}
+
+export type HeatmapSeverity = "green" | "yellow" | "red" | "none";
+
+export interface HeatmapCell {
+  site_name: string;
+  time_slot: string;
+  avg_minutes: number | null;
+  max_minutes: number | null;
+  measured_count: number;
+  over_2h_count: number;
+  severity: HeatmapSeverity;
+  confidence_low: boolean;
+}
+
+export interface HeatmapMetadata {
+  company_id: string;
+  company_name: string;
+  site_names: string[];
+  time_slots: string[];
+  cells: HeatmapCell[];
+  overall_avg_minutes: number | null;
+  overall_max_minutes: number | null;
+  threshold_minutes: number;
+  avg_target_minutes: number;
 }
 
 export interface SampleCompany {
@@ -105,6 +131,13 @@ export async function fetchBenchmark(params: {
 export async function fetchDriverGap(prefecture: string): Promise<ToolResponse> {
   return request<ToolResponse>("/api/v1/clo/driver-gap", {
     searchParams: { prefecture },
+  });
+}
+
+// ─── 拠点別待機時間ヒートマップ（フェーズ4.1 a.1）─────────────
+export async function fetchWaitHeatmap(companyId: string): Promise<ToolResponse> {
+  return request<ToolResponse>("/api/v1/clo/wait-heatmap", {
+    searchParams: { company_id: companyId },
   });
 }
 

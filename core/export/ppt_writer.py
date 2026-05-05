@@ -1366,6 +1366,157 @@ def _add_citations_slide(prs: Any, citations: list[Citation], total_slides: int)
     _add_footer(prs, slide, slide_no, total_slides, dark=True)
 
 
+def _add_decision_brief_body(
+    slide: Any,
+    actions_to_pursue: list[str],
+    actions_to_skip: list[str],
+    next_decision_due: str,
+) -> None:
+    """3 スライド要約の 3 枚目「やる／やらない 結論」を描画する。
+
+    左カラム：やる 3 件（緑背景）
+    右カラム：やらない 3 件（灰背景）
+    下部：次の意思決定期日
+    """
+    pursue_items = (actions_to_pursue + ["—"] * 3)[:3]
+    skip_items = (actions_to_skip + ["—"] * 3)[:3]
+
+    # 左：やる
+    _add_text(
+        slide, "やる（採用施策）", Inches(0.52), Inches(1.78),
+        Inches(6.0), Inches(0.32), size=14, color=_POSITIVE, bold=True,
+    )
+    for i, line in enumerate(pursue_items):
+        y = 2.22 + i * 1.10
+        _add_rect(
+            slide, Inches(0.52), Inches(y),
+            Inches(6.05), Inches(0.95), fill=_WHITE, line=_POSITIVE,
+        )
+        _add_rect(slide, Inches(0.52), Inches(y),
+                  Inches(0.5), Inches(0.95), fill=_POSITIVE)
+        _add_text(
+            slide, f"{i + 1}", Inches(0.55), Inches(y + 0.30),
+            Inches(0.4), Inches(0.4), size=18,
+            color=_ON_PRIMARY, bold=True, alignment=PP_ALIGN.CENTER,
+        )
+        _add_text(
+            slide, line, Inches(1.15), Inches(y + 0.18),
+            Inches(5.35), Inches(0.65),
+            size=11, color=_PRIMARY, bold=True,
+        )
+
+    # 右：やらない
+    _add_text(
+        slide, "やらない（除外・先送り）", Inches(6.78), Inches(1.78),
+        Inches(6.0), Inches(0.32), size=14, color=_MUTED, bold=True,
+    )
+    for i, line in enumerate(skip_items):
+        y = 2.22 + i * 1.10
+        _add_rect(
+            slide, Inches(6.78), Inches(y),
+            Inches(6.05), Inches(0.95), fill=_WHITE, line=_BORDER,
+        )
+        _add_rect(slide, Inches(6.78), Inches(y),
+                  Inches(0.5), Inches(0.95), fill=_MUTED)
+        _add_text(
+            slide, f"{i + 1}", Inches(6.81), Inches(y + 0.30),
+            Inches(0.4), Inches(0.4), size=18,
+            color=_ON_PRIMARY, bold=True, alignment=PP_ALIGN.CENTER,
+        )
+        _add_text(
+            slide, line, Inches(7.41), Inches(y + 0.18),
+            Inches(5.35), Inches(0.65),
+            size=11, color=_MUTED, bold=True,
+        )
+
+    # 下部：次の意思決定期日
+    _add_rect(
+        slide, Inches(0.52), Inches(5.65),
+        Inches(12.31), Inches(0.65), fill=_PRIMARY, line=_PRIMARY,
+    )
+    _add_text(
+        slide, f"📅 次回意思決定期日: {next_decision_due}",
+        Inches(0.72), Inches(5.78),
+        Inches(11.91), Inches(0.4),
+        size=14, color=_ON_PRIMARY, bold=True, alignment=PP_ALIGN.CENTER,
+    )
+
+
+def write_clo_executive_brief(
+    company_name: str,
+    company_id: str,
+    plan_period: str,
+    executive_summary: list[str],
+    actions_to_pursue: list[str],
+    actions_to_skip: list[str],
+    next_decision_due: str,
+    citations: list[Citation],
+) -> Path:
+    """経営会議直前 3 分要約 PPT（3 スライド版）。
+
+    フェーズ4.1 a.3。13 スライドの本格版（write_clo_plan_draft）とは別経路で、
+    朝のコックピットや経営会議直前に生成する軽量版。
+
+    スライド構成:
+      1. 表紙（会社名 + 「経営会議向け 3 分要約」+ 期間）
+      2. 経営サマリー（KPI 4 カード + プロフィール 3 行）
+      3. やる／やらない 結論（採用 3 件 + 除外 3 件 + 次回意思決定期日）
+
+    Args:
+        company_name: 会社名
+        company_id: 内部ID
+        plan_period: 計画期間文字列（例: "2026-04 〜 2030-03"）
+        executive_summary: 2 枚目本文の行リスト（KPI 4 行 + プロフィール 3 行 を想定）
+        actions_to_pursue: 採用する施策 3 件（短文）
+        actions_to_skip: やらない／先送りする施策 3 件（短文）
+        next_decision_due: 次回意思決定期日（例: "2026-05-15（金）取締役会"）
+        citations: 出典情報（3 スライド版では脚注表示のみで citations スライドは省略）
+
+    Returns:
+        生成された pptx ファイルのパス
+    """
+    path = make_output_path(
+        file_type="ppt",
+        purpose="clo_exec_brief",
+        company_id=company_id,
+        extension="pptx",
+    )
+    prs = _new_presentation()
+    total_slides = 3
+
+    _add_title_slide(
+        prs, company_name, f"経営会議向け 3 分要約  {plan_period}"
+    )
+
+    _add_content_slide(
+        prs,
+        SlideContent(
+            title="経営サマリー",
+            body_lines=executive_summary,
+        ),
+        2,
+        total_slides,
+        executive=True,
+    )
+
+    # 3 枚目（やる／やらない 結論）
+    slide = prs.slides.add_slide(_blank_layout(prs))
+    _set_background(slide, _WHITE)
+    _add_header(slide, "やる／やらない 結論", 3, total_slides)
+    _add_text(
+        slide, "やる／やらない 結論",
+        Inches(0.52), Inches(1.12), Inches(8.0), Inches(0.5),
+        size=25, color=_PRIMARY, bold=True,
+    )
+    _add_decision_brief_body(
+        slide, actions_to_pursue, actions_to_skip, next_decision_due,
+    )
+    _add_footer(prs, slide, 3, total_slides)
+
+    prs.save(str(path))
+    return path
+
+
 def write_clo_plan_draft(
     company_name: str,
     company_id: str,

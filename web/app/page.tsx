@@ -20,6 +20,12 @@ const FEATURES = [
       "改善基準告示（13.5%減）+ 国交省2030年試算（▲34.1%）から都道府県別ギャップを試算",
   },
   {
+    href: "/dashboard/wait-heatmap",
+    title: "拠点別 荷待ち時間ヒートマップ",
+    description:
+      "拠点 × 時間帯（朝/昼/夕/夜）で荷待ち時間を可視化。30 分以下を🟢／90 分超を🔴で即対応対象拠点を特定",
+  },
+  {
     href: "/dashboard/playbook",
     title: "施策プレイブック",
     description:
