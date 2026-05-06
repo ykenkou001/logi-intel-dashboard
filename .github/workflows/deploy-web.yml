@@ -1,5 +1,7 @@
 # main への push 時に Next.js を S3 + CloudFront に自動デプロイ
-# web/ のいずれかが変更された時のみ走る
+# web/ または web ビルド時に同梱される docs ファイルが変更された時のみ走る
+# （guide/page.tsx は ../docs/dashboard_feature_guide.md をビルド時に読み込むため、
+#  docs 側の更新もデプロイトリガーに含める必要がある）
 name: Deploy Web to S3 + CloudFront
 
 on:
@@ -7,6 +9,7 @@ on:
     branches: [main]
     paths:
       - 'web/**'
+      - 'docs/dashboard_feature_guide.md'
       - '.github/workflows/deploy-web.yml'
 
 permissions:
