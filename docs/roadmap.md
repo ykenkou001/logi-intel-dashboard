@@ -16,12 +16,12 @@
 フェーズ 4.0 Web ダッシュボード + AWS 移行 + 自社データ取込      ✅ 完了 (2026-05-05)
 フェーズ 4.1 段階 a 小改修（基盤整備 a.1〜a.5）                   ✅ 完了 (2026-05-05)
 フェーズ 4.5 段階 b J3 デイリーコックピット + B 用途別テンプレ    ✅ 完了 (2026-05-06)
-フェーズ 5.0 段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア   ← 進行中（c.8-c.9 着手前）
+フェーズ 5.0 段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア   ← 進行中（フェーズ完了直前）
              └ c.1-c.3 IndustryPackage 基盤 + Override 4 分類     ✅ 完了 (2026-05-06)
              └ c.4 既存資産接続検証                              ✅ 完了 (2026-05-06)
              └ c.5/c.6 F2 標準化スコア + J2 罠スコア              ✅ 完了 (2026-05-06)
              └ c.7 MCP/REST 3 ツール公開                         ✅ 完了 (2026-05-06)
-             └ c.8 連鎖化特有処理 / c.9 統合テスト + Web 2 画面  ⏳ 未着手
+             └ c.8 連鎖化特有処理 + c.9 統合テスト + Web 2 画面   ✅ 完了 (2026-05-06)
 フェーズ 5.5 公開・記事化（旧フェーズ5）                          ⏳ 未着手
 ```
 
@@ -30,9 +30,9 @@
 
 ---
 
-## 現在のフェーズ: フェーズ 5.0 進行中 — c.1-c.7 完了 / c.8-c.9 着手前
+## 現在のフェーズ: フェーズ 5.0 完了直前 — c.1-c.9 完了
 
-> **状況（2026-05-06 時点）**: 段階 c の中核（IndustryPackage 基盤 + F2 標準化スコア + J2 罠スコア）+ c.7 MCP/REST 公開まで完了。`logi_clo_industry_package` / `logi_clo_standardization_score` / `logi_clo_waste_traps` の MCP ツール 3 件と `/api/v1/clo/industry-package/{id}` / `/standardization-score/{id}` / `/waste-traps/{id}` の REST エンドポイント 3 件を公開済。次は c.8 連鎖化特有処理 / c.9 統合テスト + Web 2 画面。引継ぎ詳細は [HANDOFF_NEXT_SESSION.md](../HANDOFF_NEXT_SESSION.md) 参照。
+> **状況（2026-05-06 時点）**: 段階 c の中核（IndustryPackage 基盤 + F2 標準化スコア + J2 罠スコア + MCP/REST 公開）に加え、c.8 連鎖化事業者の強制ガード（handling_* KPI 排除 / form3=loading 施策排除 / 第65条徹底）と c.9 Web 2 画面（業種別パッケージ閲覧 / F2 標準化スコア）まで完了。次はフェーズ 5.5 公開・記事化。
 
 ### 完了 PR（フェーズ4.5+5.0 関連）
 
@@ -47,7 +47,8 @@
 | #12 | HANDOFF を c.4-c.6 向けに刷新 | `HANDOFF_NEXT_SESSION.md` |
 | #13 | c.4 既存資産接続検証 + c.5/c.6 F2 標準化スコア + J2 罠スコア | `core/analytics/standardization_score.py` + `core/analytics/waste_trap.py` + テスト 73 件追加（pytest 783 件全 pass） |
 | #14 | フェーズ5.0 c.1-c.6 完了状態を CLAUDE.md / roadmap / README に反映 | docs 更新のみ |
-| #15 (本 PR) | c.7 業種別パッケージ + F2 / J2 を MCP / REST で公開 | `mcp_server/tools/clo_tools.py`（+3 ツール）+ `api/routers/clo.py`（+3 エンドポイント）+ `core/playbook/industry_packages.py`（`build_industry_package_summary` 追加）+ テスト 21 件追加（pytest 804 件全 pass） |
+| #15 | c.7 業種別パッケージ + F2 / J2 を MCP / REST で公開 | `mcp_server/tools/clo_tools.py`（+3 ツール）+ `api/routers/clo.py`（+3 エンドポイント）+ `core/playbook/industry_packages.py`（`build_industry_package_summary` 追加）+ テスト 21 件追加（pytest 804 件全 pass） |
+| #16 (本 PR) | c.8 連鎖化強制ガード + c.9 Web 2 画面 + 統合テスト | `core/playbook/industry_packages.py`（`validate_chain_franchise_constraints` + 3 定数 + module-load sanity check）+ `core/analytics/standardization_score.py`（`chain_franchise_loading_misuse_count` 追加減点）+ `web/app/dashboard/industry-package/page.tsx` + `web/app/dashboard/standardization/page.tsx` + `web/lib/api.ts` 型 18 件追加 + テスト 22 件追加（pytest 826 件全 pass / Next.js build 全 16 ページ pass） |
 
 ### Codex 協業実績（CLAUDE.md §9 適用例）
 
@@ -709,7 +710,7 @@ class ScenarioSimResult:
 
 ---
 
-## フェーズ 5.0: 段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア（進行中・c.7 完了 / c.8-c.9 着手前）
+## フェーズ 5.0: 段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア（✅ 完了・c.1-c.9）
 
 **ゴール**: 「コンサル代行」の代替として、業種別の標準パッケージ（KPI / 施策 / 会議体 / レポート / データ項目）を SaaS 商品化。個社差分を Override 4 分類で別管理し、F2 標準化スコアと J2 罠スコアで継続改善を支援する。
 
@@ -761,19 +762,35 @@ class ScenarioSimResult:
 - [x] FastAPI 実機検証で 4 業種サンプルすべて動作確認（連鎖化は KPI 6 件 / 施策 5 件 でロード系除外を維持）
 - [x] ruff check クリア / mypy は c.7 関連のエラー 0 件
 
-### c.8-c.9 ⏳ 未着手
+### c.8 連鎖化事業者の強制ガード ✅ 完了（本 PR・2026-05-06）
 
-- [ ] **c.8 連鎖化事業者特有処理** — `chain_franchise` パッケージ強制（`metric_id` プレフィックス `handling_*` 禁止 / `form3_section == "loading"` 除外 / `legal_basis="第65条"` 明記）
-- [ ] **c.9 統合テスト + Web 画面 2 件** — `web/app/dashboard/industry-package/page.tsx`（4 業種タブ + 5 要素表）/ `web/app/dashboard/standardization/page.tsx`（自社 F2 + 差分テーブル）
+- [x] `core/playbook/industry_packages.py` に `validate_chain_franchise_constraints(package) -> list[str]` を追加。連鎖化パッケージ限定で以下を強制:
+  - **KPI metric_id プレフィックス** `handling_*` を持つ KPI を排除（様式第3 第5条関係に荷役等時間短縮セクションが無い）
+  - **form3_section="loading"** の施策を `measure_ids` から排除（warehouse_dx_wms / pallet_standardization / relay_transport の混入禁止）
+  - **様式第5 レポート name** に `第65条` を含むことを必須化（`第46条` 表記の事故防止）
+- [x] モジュール load 時に `_CHAIN_FRANCHISE_PACKAGE` を sanity check し、違反があれば `ValueError` で起動失敗させる
+- [x] `core/analytics/standardization_score.py` に `chain_franchise_loading_misuse_count` を追加し、Override で loading 系施策を `approved_better_practice` / `required_localization` 採用しても unmanaged 同等で減点（5pt × 件数）
+- [x] テスト追加: industry_packages 7 件（実 chain パッケージ 0 件 / handling_* / loading 検出 / 第46条 検出 / 製造卸小売は対象外 等）+ standardization_score 6 件（連鎖化 loading 誤用検出 / 単調性 / summary 警告）
 
-### フェーズ 5.0 完了条件
+### c.9 統合テスト + Web 2 画面 ✅ 完了（本 PR・2026-05-06）
+
+- [x] **Web 画面 2 件**:
+  - `web/app/dashboard/industry-package/page.tsx` — 業種解決結果 + 5 要素サマリー（KPI / 施策 / 会議 / レポート / データ項目）+ Override 4 分類別件数 + 各要素の詳細テーブル
+  - `web/app/dashboard/standardization/page.tsx` — 自社 F2 スコア大表示（緑 ≥80 / 黄 ≥50 / 赤 <50）+ 算出根拠（rationale）+ 未計測 KPI / 未採用施策一覧 + 差分テーブル（充足 vs 不足）+ 連鎖化 loading 誤用警告
+- [x] `web/lib/api.ts` に Pydantic スキーマと完全一致する 18 型を追加（IndustryPackage / StandardizationScoreResult / WasteTrapResult / 関連サブ型）
+- [x] `fetchIndustryPackage()` / `fetchStandardizationScore()` / `fetchWasteTraps()` の型付き API 関数
+- [x] `web/app/page.tsx` の FEATURES 一覧に 2 画面を追加（🆕 マーク付）
+- [x] **統合テスト E2E**: 4 業種で `industry-package` ↔ `standardization-score` の連動を保証（base_industry 一致 / missing_* がパッケージのサブセット / 連鎖化メタデータの第65条徹底 / Web 型 contract 検証）
+- [x] pytest **826 件全 pass / 新規テスト 22 件**（c.8: 11 件 + c.9: 7 件 + 関連 4 件）/ ruff check クリーン / Next.js build 全 16 ページ pass
+
+### フェーズ 5.0 完了条件 ✅ 全達成
 
 - [x] `compute_standardization_score(profile, override)` で coverage_pct + score (0-100) が返り、approved_better_practice の追加では減点されない（単調性確保）— PR #13
 - [x] `detect_waste_traps` の 6 軸セーフガードで `months_since_start=0` 時に trap_severity="low" 固定 — PR #13
 - [x] 4 業種すべてで `get_package(category)` が StandardKpiDef リストを返す — PR #11
-- [x] 連鎖化サンプルで荷役等セクション施策が混入しないことが CI で守られる — PR #11 + PR #13 で強化
-- [x] **c.7 MCP/REST 公開**: 上記 core/ 関数が `logi_clo_industry_package` / `logi_clo_standardization_score` / `logi_clo_waste_traps` の MCP ツールと対応 REST エンドポイントから呼べる — 本 PR
-- [ ] Web 2 画面が `npm run build` 成功・実機動作確認済（c.9）
+- [x] 連鎖化サンプルで荷役等セクション施策が混入しないことが CI で守られる — PR #11 + PR #13 + PR #16（強制ガード化）
+- [x] **c.7 MCP/REST 公開**: 上記 core/ 関数が `logi_clo_industry_package` / `logi_clo_standardization_score` / `logi_clo_waste_traps` の MCP ツールと対応 REST エンドポイントから呼べる — PR #15
+- [x] Web 2 画面が `npm run build` 成功・実機動作確認済 — 本 PR
 
 ---
 

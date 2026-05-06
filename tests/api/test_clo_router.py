@@ -418,3 +418,108 @@ def test_waste_traps_unknown_company_returns_404() -> None:
         "/api/v1/clo/waste-traps/nonexistent_xyz", json=[],
     )
     assert resp.status_code == 404
+
+
+# ─── フェーズ5.0 c.9: Web シナリオ E2E（4 業種で industry-package → standardization-score 連動）
+
+
+@pytest.mark.parametrize(
+    "company_id,expected_industry",
+    [
+        ("sample_mfg_01", "manufacturing"),
+        ("sample_wholesale_01", "wholesale"),
+        ("sample_retail_01", "retail"),
+        ("sample_chain_01", "chain_franchise"),
+    ],
+)
+def test_web_scenario_industry_package_and_score_consistency(
+    company_id: str, expected_industry: str,
+) -> None:
+    """Web 画面が叩く 2 つのエンドポイントの整合性を 4 業種で保証する（c.9）。
+
+    industry-package で得た base_industry / package と、
+    standardization-score の base_package_category / missing_* が
+    互いに矛盾しないことを保証する。フロントが両者を並列フェッチして
+    差分テーブルを描画する用途を想定。
+    """
+    pkg_resp = client.get(f"/api/v1/clo/industry-package/{company_id}")
+    score_resp = client.get(f"/api/v1/clo/standardization-score/{company_id}")
+    assert pkg_resp.status_code == 200, pkg_resp.text
+    assert score_resp.status_code == 200, score_resp.text
+
+    pkg_md = pkg_resp.json()["metadata"]
+    score_md = score_resp.json()["metadata"]
+
+    # 業種は両者で一致
+    assert pkg_md["base_industry"] == expected_industry
+    assert score_md["base_package_category"] == expected_industry
+
+    pkg = pkg_md["package"]
+    pkg_kpi_ids = {k["metric_id"] for k in pkg["kpis"]}
+    pkg_measure_ids = set(pkg["measure_ids"])
+
+    # missing_kpi_ids / missing_measure_ids はパッケージのサブセット
+    assert set(score_md["missing_kpi_ids"]).issubset(pkg_kpi_ids)
+    assert set(score_md["missing_measure_ids"]).issubset(pkg_measure_ids)
+
+    # スコア・カバレッジは 0-100 範囲、片方だけクランプも許容
+    assert 0.0 <= score_md["coverage_pct"] <= 100.0
+    assert 0.0 <= score_md["score"] <= 100.0
+    # サンプルは Override 未保存（連鎖化追加減点 0）
+    assert score_md["chain_franchise_loading_misuse_count"] == 0
+
+    # サンプル Override 未保存のため、施策はすべて未採用 = pkg と一致
+    assert sorted(score_md["missing_measure_ids"]) == sorted(pkg_measure_ids)
+
+
+def test_web_scenario_chain_package_constraints_in_metadata() -> None:
+    """連鎖化パッケージの metadata が c.8 強制ガードを満たす。
+
+    loading 系施策が混入せず、様式第5 は第65条のみであることを確認する。
+    """
+    resp = client.get("/api/v1/clo/industry-package/sample_chain_01")
+    assert resp.status_code == 200
+    pkg = resp.json()["metadata"]["package"]
+
+    # measure_ids に「loading」系の典型施策が混入しない
+    forbidden = {"warehouse_dx_wms", "pallet_standardization", "relay_transport"}
+    assert forbidden.isdisjoint(pkg["measure_ids"]), (
+        f"連鎖化に loading 施策が混入: {pkg['measure_ids']}"
+    )
+
+    # KPI に handling_* プレフィックスが無い
+    for kpi in pkg["kpis"]:
+        assert not kpi["metric_id"].startswith("handling_"), (
+            f"連鎖化に handling_* KPI が混入: {kpi['metric_id']}"
+        )
+
+    # 様式第5 レポートは第65条（第46条が混入しない）
+    form5_reports = [r for r in pkg["reports"] if "様式第5" in r["name"]]
+    assert len(form5_reports) >= 1
+    for r in form5_reports:
+        assert "第65条" in r["name"]
+        assert "第46条" not in r["name"]
+
+
+def test_web_scenario_standardization_score_metadata_includes_chain_misuse_field() -> None:
+    """c.8 で追加した chain_franchise_loading_misuse_count が metadata に含まれる。
+
+    Web TypeScript 型 (StandardizationScoreResult) との contract を保証する。
+    """
+    resp = client.get("/api/v1/clo/standardization-score/sample_chain_01")
+    assert resp.status_code == 200
+    md = resp.json()["metadata"]
+    # 新フィールドが Pydantic から JSON に正しく出力される
+    assert "chain_franchise_loading_misuse_count" in md
+    assert md["chain_franchise_loading_misuse_count"] == 0
+
+
+def test_web_scenario_summary_text_links_score_and_package() -> None:
+    """summary テキストに業種パッケージ名と score の両方が現れる（Web 表示の整合性）。"""
+    resp = client.get("/api/v1/clo/standardization-score/sample_mfg_01")
+    body = resp.json()
+    assert "標準化スコア" in body["summary"]
+    # rationale に基準パッケージ名が記録される
+    md = body["metadata"]
+    assert any("基準パッケージ" in r for r in md["rationale"])
+    assert any("製造業" in r for r in md["rationale"])
