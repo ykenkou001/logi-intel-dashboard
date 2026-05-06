@@ -35,6 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from core.export.citation import Citation, logistics_efficiency_law_citation
 from core.playbook.industry_packages import (
+    CHAIN_FRANCHISE_FORBIDDEN_FORM3_SECTIONS,
     CompanyPackageOverride,
     IndustryPackage,
     OverrideEntry,
@@ -85,6 +86,13 @@ class StandardizationScoreResult(BaseModel):
     )
     deviation_count_total: int = Field(
         description="全 Override 件数（カテゴリ問わず）",
+    )
+    chain_franchise_loading_misuse_count: int = Field(
+        default=0,
+        description=(
+            "連鎖化向けの追加減点件数（c.8）。Override で採用した施策が "
+            "form3_section='loading' の場合に発火し、unmanaged 同等で減点する"
+        ),
     )
     missing_kpi_ids: list[str] = Field(
         default_factory=list,
@@ -174,10 +182,14 @@ def compute_standardization_score(
     approved_count = sum(
         1 for e in entries if e.category == "approved_better_practice"
     )
+    chain_loading_misuse = _chain_franchise_loading_misuse_count(
+        base_industry, entries,
+    )
 
     penalty = (
         UNMANAGED_PENALTY_PER_ENTRY * unmanaged_count
         + EXPIRED_TEMPORARY_PENALTY_PER_ENTRY * expired_count
+        + UNMANAGED_PENALTY_PER_ENTRY * chain_loading_misuse
     )
     bonus = (
         APPROVED_PRACTICE_BONUS
@@ -194,6 +206,7 @@ def compute_standardization_score(
         unmanaged=unmanaged_count,
         expired=expired_count,
         approved=approved_count,
+        chain_loading_misuse=chain_loading_misuse,
         penalty=penalty,
         bonus=bonus,
         score=score,
@@ -207,6 +220,7 @@ def compute_standardization_score(
         coverage_pct=round(coverage_pct, 2),
         deviation_count_unmanaged=unmanaged_count,
         deviation_count_total=len(entries),
+        chain_franchise_loading_misuse_count=chain_loading_misuse,
         missing_kpi_ids=missing_kpi_ids,
         missing_measure_ids=missing_measure_ids,
         score=round(score, 2),
@@ -223,6 +237,11 @@ def build_standardization_summary(result: StandardizationScoreResult) -> str:
         f"(coverage {result.coverage_pct:.0f}% / "
         f"unmanaged {result.deviation_count_unmanaged} 件)",
     ]
+    if result.chain_franchise_loading_misuse_count > 0:
+        lines.append(
+            f"⚠️ 連鎖化で loading 系施策誤用: "
+            f"{result.chain_franchise_loading_misuse_count} 件",
+        )
     if result.missing_kpi_ids:
         lines.append(
             f"未計測 KPI: {len(result.missing_kpi_ids)} 件 "
@@ -273,6 +292,38 @@ def _implemented_measure_ids(
     }
 
 
+def _chain_franchise_loading_misuse_count(
+    base_industry: JsicCategory,
+    entries: list[OverrideEntry],
+) -> int:
+    """連鎖化向けの追加減点用カウント（c.8）。
+
+    Override で target_kind="measure" の施策が approved_better_practice /
+    required_localization で適用されても、その施策が form3_section="loading"
+    なら連鎖化では無効（様式第3 第5条関係に乗らない）ため unmanaged 同等で
+    減点する。製造/卸/小売では常に 0。
+    """
+    if base_industry != "chain_franchise":
+        return 0
+
+    # 循環 import 回避のため遅延 import
+    from core.playbook.measures import get_measure
+
+    adopted_categories = {"approved_better_practice", "required_localization"}
+    count = 0
+    for entry in entries:
+        if entry.target_kind != "measure":
+            continue
+        if entry.category not in adopted_categories:
+            continue
+        measure = get_measure(entry.target_id)
+        if measure is None:
+            continue
+        if measure.form3_section in CHAIN_FRANCHISE_FORBIDDEN_FORM3_SECTIONS:
+            count += 1
+    return count
+
+
 def _coverage_pct(
     *,
     implemented_kpis: int,
@@ -297,6 +348,7 @@ def _build_rationale(
     unmanaged: int,
     expired: int,
     approved: int,
+    chain_loading_misuse: int,
     penalty: float,
     bonus: float,
     score: float,
@@ -304,15 +356,24 @@ def _build_rationale(
     missing_measure_count: int,
 ) -> list[str]:
     """スコア算出の説明（UI 表示）。"""
+    deviation_line = (
+        f"deviation: unmanaged {unmanaged} 件 × "
+        f"{UNMANAGED_PENALTY_PER_ENTRY:.0f}pt + "
+        f"期限切れ temporary {expired} 件 × "
+        f"{EXPIRED_TEMPORARY_PENALTY_PER_ENTRY:.0f}pt"
+    )
+    if chain_loading_misuse > 0:
+        deviation_line += (
+            f" + 連鎖化 loading 誤用 {chain_loading_misuse} 件 × "
+            f"{UNMANAGED_PENALTY_PER_ENTRY:.0f}pt"
+        )
+    deviation_line += f" = -{penalty:.0f}pt"
     return [
         f"基準パッケージ: {package.label} (KPI {len(package.kpis)} 件 / "
         f"施策 {len(package.measure_ids)} 件)",
         f"coverage {coverage_pct:.1f}% "
         f"(未計測 KPI {missing_kpi_count} 件 / 未採用 施策 {missing_measure_count} 件)",
-        f"deviation: unmanaged {unmanaged} 件 × "
-        f"{UNMANAGED_PENALTY_PER_ENTRY:.0f}pt + "
-        f"期限切れ temporary {expired} 件 × "
-        f"{EXPIRED_TEMPORARY_PENALTY_PER_ENTRY:.0f}pt = -{penalty:.0f}pt",
+        deviation_line,
         f"approved_better_practice {approved} 件 → bonus +{bonus:.0f}pt"
         + (" (≥2 件で発火)" if approved < APPROVED_PRACTICE_BONUS_MIN_COUNT else ""),
         f"最終スコア: {score:.1f}/100 (max(0, min(100, coverage - penalty + bonus)))",

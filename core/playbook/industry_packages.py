@@ -1014,8 +1014,90 @@ def resolve_company_package(
     return base.model_copy(update={"kpis": new_kpis})
 
 
+# ---------------------------------------------------------------------------
+# 連鎖化事業者の強制ガード（c.8）
+# ---------------------------------------------------------------------------
+
+CHAIN_FRANCHISE_FORBIDDEN_KPI_PREFIXES: tuple[str, ...] = ("handling_",)
+"""連鎖化事業者で禁止する KPI metric_id プレフィックス。
+様式第3 第5条関係では荷役等時間短縮セクションが不要のため、
+handling_* KPI は連鎖化パッケージに混入してはならない。"""
+
+CHAIN_FRANCHISE_FORBIDDEN_FORM3_SECTIONS: tuple[str, ...] = ("loading",)
+"""連鎖化事業者で禁止する form3_section。loading 系施策（warehouse_dx_wms,
+pallet_standardization, relay_transport 等）は連鎖化の様式第3「第5条関係」では
+記載しないため measure_ids から除外する。"""
+
+CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE: str = "第65条"
+"""連鎖化事業者の様式第5 報告書の法令根拠。第46条（特定荷主）ではなく
+第65条（特定連鎖化事業者）を必ず使う。"""
+
+
+def validate_chain_franchise_constraints(
+    package: IndustryPackage,
+) -> list[str]:
+    """連鎖化パッケージの強制ガード違反を返す（c.8）。
+
+    package.category != 'chain_franchise' の場合は空リスト。違反 0 件なら
+    空リスト、違反があれば内容ごとに 1 行返す。モジュール load 時の sanity
+    check + Override 適用後の再検証両方に使う。
+    """
+    if package.category != "chain_franchise":
+        return []
+
+    # 循環 import 回避のため遅延 import
+    from core.playbook.measures import get_measure
+
+    errors: list[str] = []
+
+    for kpi in package.kpis:
+        for prefix in CHAIN_FRANCHISE_FORBIDDEN_KPI_PREFIXES:
+            if kpi.metric_id.startswith(prefix):
+                errors.append(
+                    f"連鎖化パッケージに禁止 KPI prefix {prefix!r} を持つ "
+                    f"metric_id={kpi.metric_id!r} が含まれている",
+                )
+
+    for mid in package.measure_ids:
+        measure = get_measure(mid)
+        if measure is None:
+            continue  # ALL_MEASURES 整合性は別テストで検証
+        if measure.form3_section in CHAIN_FRANCHISE_FORBIDDEN_FORM3_SECTIONS:
+            errors.append(
+                f"連鎖化パッケージに form3_section={measure.form3_section!r} の "
+                f"施策 {mid!r} が含まれている（様式第3 第5条関係 違反）",
+            )
+
+    for report in package.reports:
+        if (
+            "様式第5" in report.name
+            and CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE not in report.name
+        ):
+            errors.append(
+                f"連鎖化の様式第5 レポート {report.report_id!r} は "
+                f"{CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE} を name に含む必要が"
+                f"ある（現在: {report.name!r}）",
+            )
+
+    return errors
+
+
+# モジュール load 時の sanity check — 連鎖化パッケージの違反は import を失敗させる
+_chain_franchise_violations = validate_chain_franchise_constraints(
+    _CHAIN_FRANCHISE_PACKAGE,
+)
+if _chain_franchise_violations:
+    raise ValueError(
+        "連鎖化パッケージの c.8 強制ガード違反:\n  - "
+        + "\n  - ".join(_chain_franchise_violations),
+    )
+
+
 __all__ = [
     "ALL_PACKAGES",
+    "CHAIN_FRANCHISE_FORBIDDEN_FORM3_SECTIONS",
+    "CHAIN_FRANCHISE_FORBIDDEN_KPI_PREFIXES",
+    "CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE",
     "CompanyPackageOverride",
     "IndustryPackage",
     "OverrideCategory",
@@ -1029,4 +1111,5 @@ __all__ = [
     "get_package",
     "list_packages",
     "resolve_company_package",
+    "validate_chain_franchise_constraints",
 ]

@@ -479,3 +479,165 @@ def test_build_summary_contains_key_numbers() -> None:
     summary = build_standardization_summary(result)
     assert "標準化スコア" in summary
     assert f"{result.score:.1f}" in summary
+
+
+# ---------------------------------------------------------------------------
+# 7. c.8 連鎖化事業者の追加減点（loading 系施策の誤用検出）
+# ---------------------------------------------------------------------------
+
+
+def test_chain_franchise_loading_override_is_penalized() -> None:
+    """連鎖化で warehouse_dx_wms を approved_better_practice 採用すると loading 誤用で減点。
+
+    coverage には載らない（chain package.measure_ids に warehouse_dx_wms は無い）。
+    追加で UNMANAGED_PENALTY_PER_ENTRY × 1 = -5pt の減点が乗る。
+    """
+    profile = _full_history(SAMPLE_CHAIN)
+    override = CompanyPackageOverride(
+        company_id=profile.company_id,
+        base_industry="chain_franchise",
+        entries=[
+            OverrideEntry(
+                target_kind="measure",
+                target_id="warehouse_dx_wms",  # form3_section="loading"
+                category="approved_better_practice",
+                rationale="製造業向け施策を流用しようとした（c.8 で誤検出される）",
+                approved_by="山田CLO",
+            ),
+        ],
+        last_reviewed=_TODAY,
+    )
+    result = compute_standardization_score(profile, override, today=_TODAY)
+    assert result.chain_franchise_loading_misuse_count == 1
+    # rationale に連鎖化 loading 誤用の記述が現れる
+    assert any("連鎖化 loading 誤用" in r for r in result.rationale)
+
+
+def test_chain_franchise_required_localization_loading_also_penalized() -> None:
+    """required_localization 経由で loading 系施策を入れても同様に減点される。"""
+    profile = _full_history(SAMPLE_CHAIN)
+    override = CompanyPackageOverride(
+        company_id=profile.company_id,
+        base_industry="chain_franchise",
+        entries=[
+            OverrideEntry(
+                target_kind="measure",
+                target_id="relay_transport",  # form3_section="loading"
+                category="required_localization",
+                rationale="拠点特性で必要と主張",
+                approved_by="山田CLO",
+            ),
+        ],
+        last_reviewed=_TODAY,
+    )
+    result = compute_standardization_score(profile, override, today=_TODAY)
+    assert result.chain_franchise_loading_misuse_count == 1
+
+
+def test_chain_franchise_unmanaged_loading_does_not_double_count() -> None:
+    """unmanaged_deviation の loading 施策は二重カウントされない（unmanaged 側のみ計上）。
+
+    chain_franchise_loading_misuse_count は approved/required の場合のみ発火する設計。
+    """
+    profile = _full_history(SAMPLE_CHAIN)
+    override = CompanyPackageOverride(
+        company_id=profile.company_id,
+        base_industry="chain_franchise",
+        entries=[
+            OverrideEntry(
+                target_kind="measure",
+                target_id="warehouse_dx_wms",
+                category="unmanaged_deviation",
+                rationale="計測不十分のまま導入",
+            ),
+        ],
+        last_reviewed=_TODAY,
+    )
+    result = compute_standardization_score(profile, override, today=_TODAY)
+    assert result.deviation_count_unmanaged == 1
+    assert result.chain_franchise_loading_misuse_count == 0
+
+
+def test_non_chain_loading_override_not_penalized() -> None:
+    """製造業で warehouse_dx_wms を approved_better_practice 採用しても誤用判定は発火しない。
+
+    連鎖化以外の業種では loading 系施策は正当な採用パスのため減点なし。
+    """
+    profile = _full_history(SAMPLE_MANUFACTURING)
+    override = CompanyPackageOverride(
+        company_id=profile.company_id,
+        base_industry="manufacturing",
+        entries=[
+            OverrideEntry(
+                target_kind="measure",
+                target_id="warehouse_dx_wms",
+                category="approved_better_practice",
+                rationale="製造業では正当",
+                approved_by="山田CLO",
+            ),
+        ],
+        last_reviewed=_TODAY,
+    )
+    result = compute_standardization_score(profile, override, today=_TODAY)
+    assert result.chain_franchise_loading_misuse_count == 0
+
+
+def test_chain_franchise_summary_warns_on_loading_misuse() -> None:
+    """連鎖化 loading 誤用 ≥ 1 件で summary に警告アイコンが現れる。"""
+    profile = _full_history(SAMPLE_CHAIN)
+    override = CompanyPackageOverride(
+        company_id=profile.company_id,
+        base_industry="chain_franchise",
+        entries=[
+            OverrideEntry(
+                target_kind="measure",
+                target_id="warehouse_dx_wms",
+                category="approved_better_practice",
+                rationale="誤用",
+                approved_by="山田CLO",
+            ),
+        ],
+        last_reviewed=_TODAY,
+    )
+    result = compute_standardization_score(profile, override, today=_TODAY)
+    summary = build_standardization_summary(result)
+    assert "連鎖化で loading 系施策誤用" in summary
+
+
+def test_chain_franchise_loading_misuse_score_drops_by_unmanaged_penalty() -> None:
+    """loading 誤用 1 件で score が UNMANAGED_PENALTY_PER_ENTRY ぶん下がる（単調性）。
+
+    coverage が 100 で clamp されないよう、KPI 履歴を一部だけ持つ profile で
+    比較する。clamp の影響を避けるため、coverage 100 未満の状態を作る。
+    """
+    pkg = get_package("chain_franchise")
+    assert pkg is not None
+    # KPI 履歴を 1 件減らして coverage を下げる（満点 clamp 回避）
+    metrics = [k.metric_id for k in pkg.kpis][:-1]
+    profile = _profile_with_history(SAMPLE_CHAIN, metrics)
+    base_override = CompanyPackageOverride(
+        company_id=profile.company_id,
+        base_industry="chain_franchise",
+        entries=[],
+        last_reviewed=_TODAY,
+    )
+    score_before = compute_standardization_score(
+        profile, base_override, today=_TODAY,
+    ).score
+
+    override = _override_with_extra(base_override, [
+        OverrideEntry(
+            target_kind="measure",
+            target_id="warehouse_dx_wms",  # form3_section="loading"
+            category="approved_better_practice",
+            rationale="loading 誤用",
+            approved_by="山田CLO",
+        ),
+    ])
+    result = compute_standardization_score(profile, override, today=_TODAY)
+    assert result.chain_franchise_loading_misuse_count == 1
+    # 1 件 approved だけでは bonus 発火しない（>=2 件必要）ため、
+    # 純粋に -5pt の減点が乗る。
+    assert result.score == pytest.approx(
+        max(0.0, score_before - UNMANAGED_PENALTY_PER_ENTRY), abs=0.5,
+    )
