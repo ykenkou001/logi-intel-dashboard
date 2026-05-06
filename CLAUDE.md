@@ -154,6 +154,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 - **過剰アクセス禁止** — キャッシュ必須、リトライにバックオフ必須
 - **API キーをログに出力しない** — `core/clients/base.py` でマスク処理
 - **ロジックを先に読む** — 推測で実装しない
+- **作業は必ずブランチを切ってから始める** — `main` 上で直接編集・コミットしない。作業開始前に `git checkout -b <branch>` でブランチを作成し、PR 経由でマージする。
 - **`main` への直接 push は禁止** — branch protection で hook reject される。必ず feature ブランチ（`feature/...` `fix/...` `docs/...` `ci/...`）を切って PR 経由でマージする。詳細 → [docs/git_workflow.md](docs/git_workflow.md) §main ブランチ運用ルール
 
 ---
