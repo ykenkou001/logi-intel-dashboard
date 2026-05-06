@@ -83,6 +83,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 | [docs/api_endpoints.md](docs/api_endpoints.md) | 利用 API 一覧・認証・TTL・制約 |
 | [docs/mcp_tools.md](docs/mcp_tools.md) | MCP ツール命名規則・実装方針 |
 | [docs/clo_domain.md](docs/clo_domain.md) | CLO 業務ドメイン知識・法的定義 |
+| [docs/dashboard_feature_guide.md](docs/dashboard_feature_guide.md) | Web ダッシュボード機能別利用ガイド（初見ユーザー向け／アプリ内 `/guide` で参照可能） |
 | [docs/data_input_guide.md](docs/data_input_guide.md) | 自社データ入力ガイド（Excel/CSV テンプレ記入と取込手順） |
 | [docs/ppt_design.md](docs/ppt_design.md) | PPT デザイン方針（Logi-Intel CLO Report）・スライドファミリー定義 |
 | [docs/aws_migration_plan.md](docs/aws_migration_plan.md) | AWS 移行計画（フェーズ4.0 後半・8 Step 手順書） |
