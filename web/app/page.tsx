@@ -135,6 +135,29 @@ export default function HomePage() {
               />
             </svg>
           </Link>
+          <Link
+            href="/guide"
+            className="ml-3 inline-flex items-center gap-2 border border-white/30 bg-white/10 text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-white/20 transition-colors"
+          >
+            まず使い方を見る
+          </Link>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-blue-100 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="font-bold text-gray-900">どの機能を使えばよいか迷ったら</h3>
+            <p className="mt-1 text-sm leading-relaxed text-gray-600">
+              初見ユーザー向けに、目的別のおすすめ画面・各機能の入力と出力・結果の読み方をまとめています。
+            </p>
+          </div>
+          <Link
+            href="/guide"
+            className="inline-flex flex-shrink-0 items-center justify-center rounded-lg bg-[#1F4E79] px-4 py-2 text-sm font-bold text-white hover:bg-[#173C5C]"
+          >
+            機能別利用ガイド
+          </Link>
         </div>
       </section>
 
