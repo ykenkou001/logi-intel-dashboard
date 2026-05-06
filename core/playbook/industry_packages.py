@@ -423,7 +423,7 @@ _MANUFACTURING_PACKAGE = IndustryPackage(
     ],
     notes=[
         "積載率目標 44% は国の 2028 年度全体目標。"
-        "55% を狙う企業は Override（approved_better_practice）で個別管理する",
+        "55% を狙う企業は Override（承認済差別化）で個別管理する",
         "様式第5 は物流効率化法 第46条（特定荷主の中長期計画作成義務）",
     ],
 )
@@ -575,7 +575,7 @@ _WHOLESALE_PACKAGE = IndustryPackage(
     ],
     notes=[
         "卸売業の物流コスト/売上比率は 4.8%（JILS 2021）— 製造業より高く、改善レバレッジ大",
-        "共配率の標準値は未確定。Override approved_better_practice で個別管理推奨",
+        "共配率の標準値は未確定。Override（承認済差別化）で個別管理推奨",
     ],
 )
 
@@ -883,7 +883,8 @@ _CHAIN_FRANCHISE_PACKAGE = IndustryPackage(
     notes=[
         "連鎖化事業者は様式第3「第5条関係」 — 荷役等時間短縮セクションは記載不要",
         "様式第5 は物流効率化法 第65条（特定連鎖化事業者の中長期計画作成義務）",
-        "warehouse_dx_wms / pallet_standardization 等の loading 系施策は measure_ids から除外",
+        "倉庫DX（WMS） / パレット標準化 等の荷役等時間短縮（loading）系施策は"
+        "標準パッケージから除外",
     ],
 )
 
@@ -947,7 +948,7 @@ def build_industry_package_summary(
         counts[entry.category] = counts.get(entry.category, 0) + 1
     lines.append(
         f"Override 計 {len(override.entries)} 件: "
-        f"unmanaged {counts['unmanaged_deviation']} / "
+        f"管理外逸脱 {counts['unmanaged_deviation']} / "
         f"承認済差別化 {counts['approved_better_practice']} / "
         f"必要ローカル {counts['required_localization']} / "
         f"期限付き例外 {counts['temporary_exception']}"
