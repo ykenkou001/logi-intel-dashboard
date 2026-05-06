@@ -13,11 +13,13 @@ import {
   type IndustryPackage,
   type IndustryPackageMetadata,
   type JsicCategory,
+  type MeasureDetail,
   type SampleCompany,
   type StandardizationScoreResult,
   type StandardKpiDef,
   type ToolResponse,
 } from "@/lib/api";
+import { formatTargetValue, freqLabel } from "@/lib/labels";
 
 const INDUSTRY_LABEL: Record<JsicCategory, string> = {
   manufacturing: "製造業",
@@ -87,6 +89,7 @@ function MissingKpiTable({
                 <code
                   className="text-[10px] text-gray-400"
                   style={{ fontFamily: "var(--font-mono)" }}
+                  aria-label={`内部識別子 ${mid}`}
                 >
                   {mid}
                 </code>
@@ -95,12 +98,12 @@ function MissingKpiTable({
                 className="px-3 py-2 text-right text-gray-900"
                 style={{ fontFamily: "var(--font-mono)" }}
               >
-                {kpi?.target_value != null
-                  ? `${kpi.target_value}${kpi.unit}`
+                {kpi
+                  ? formatTargetValue(kpi.target_value, kpi.unit)
                   : "—"}
               </td>
               <td className="px-3 py-2 text-gray-700">
-                {kpi?.frequency ?? "—"}
+                {kpi ? freqLabel(kpi.frequency) : "—"}
               </td>
               <td className="px-3 py-2 text-gray-700">
                 {kpi?.owner_role ?? "—"}
@@ -113,7 +116,13 @@ function MissingKpiTable({
   );
 }
 
-function MissingMeasureList({ missingIds }: { missingIds: string[] }) {
+function MissingMeasureList({
+  missingIds,
+  measureDetails,
+}: {
+  missingIds: string[];
+  measureDetails: MeasureDetail[];
+}) {
   if (missingIds.length === 0) {
     return (
       <p className="text-xs text-emerald-700">
@@ -121,21 +130,37 @@ function MissingMeasureList({ missingIds }: { missingIds: string[] }) {
       </p>
     );
   }
+  const detailById: Record<string, MeasureDetail> = {};
+  for (const m of measureDetails) {
+    detailById[m.measure_id] = m;
+  }
   return (
-    <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-      {missingIds.map((mid) => (
-        <li
-          key={mid}
-          className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"
-        >
-          <code
-            className="text-[12px] text-rose-900"
-            style={{ fontFamily: "var(--font-mono)" }}
+    <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+      {missingIds.map((mid) => {
+        const m = detailById[mid];
+        return (
+          <li
+            key={mid}
+            className="bg-rose-50 border border-rose-200 rounded-lg px-3 py-2.5"
           >
-            {mid}
-          </code>
-        </li>
-      ))}
+            <div className="font-semibold text-rose-900 mb-0.5">
+              {m?.name ?? mid}
+            </div>
+            {m?.description && (
+              <p className="text-[11px] text-rose-800/80 leading-relaxed mb-1 line-clamp-2">
+                {m.description}
+              </p>
+            )}
+            <code
+              className="text-[10px] text-rose-700/60"
+              style={{ fontFamily: "var(--font-mono)" }}
+              aria-label={`施策ID ${mid}`}
+            >
+              {mid}
+            </code>
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -330,7 +355,10 @@ export default function StandardizationPage() {
             <h4 className="text-sm font-bold text-gray-800 mb-3">
               未採用 施策（{score.missing_measure_ids.length} 件）
             </h4>
-            <MissingMeasureList missingIds={score.missing_measure_ids} />
+            <MissingMeasureList
+              missingIds={score.missing_measure_ids}
+              measureDetails={pkgMetadata?.measure_details ?? []}
+            />
           </section>
 
           <section className="bg-white rounded-xl border border-gray-100 p-5">

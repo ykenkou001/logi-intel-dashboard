@@ -57,10 +57,12 @@ from core.io.override_store import load_override
 from core.legal.eligibility import evaluate_eligibility
 from core.playbook.filters import PlaybookFilter, build_search_summary, filter_playbook
 from core.playbook.industry_packages import (
+    CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE,
     build_industry_package_summary,
     get_package,
     resolve_company_package,
 )
+from core.playbook.measures import get_measure
 from core.static._freshness import all_warnings
 from core.static.efficiency_law_certified import IndustryCategory, MeasureType
 from core.static.jsic import category_of
@@ -819,6 +821,38 @@ async def industry_package(company_id: str) -> ToolResponseModel:
     override = load_override(profile.company_id)
     package = resolve_company_package(base_industry, override)
 
+    # c.9 Web 表示用に施策の name / description / form3_section を解決して返す。
+    # measure_id 単独では CLO 担当者に意味が伝わらないため、ALL_MEASURES から
+    # 必要情報を引いて metadata に同梱する（Codex 勧告 2026-05-06）。
+    measure_details = []
+    for mid in package.measure_ids:
+        m = get_measure(mid)
+        if m is None:
+            continue
+        measure_details.append({
+            "measure_id": m.measure_id,
+            "name": m.name,
+            "description": m.description,
+            "form3_section": m.form3_section,
+            "measure_type": m.measure_type,
+        })
+
+    chain_franchise_notice: dict[str, str] | None = None
+    if base_industry == "chain_franchise":
+        chain_franchise_notice = {
+            "legal_article": CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE,
+            "headline": (
+                f"連鎖化事業者（特定連鎖化事業者）— 物流効率化法 "
+                f"{CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE}"
+            ),
+            "scope_note": (
+                "様式第3「第5条関係」では荷役等時間短縮セクションが対象外。"
+                "倉庫DX（WMS）・パレット標準化・中継輸送等の loading 系施策は"
+                "標準パッケージから除外され、Override 採用しても F2 標準化スコアで"
+                "減点されます。"
+            ),
+        }
+
     response = ToolResponse(
         summary=build_industry_package_summary(package, override),
         citations=[logistics_efficiency_law_citation()],
@@ -831,6 +865,8 @@ async def industry_package(company_id: str) -> ToolResponseModel:
         "base_industry": base_industry,
         "package": package.model_dump(mode="json"),
         "override": override.model_dump(mode="json") if override else None,
+        "measure_details": measure_details,
+        "chain_franchise_notice": chain_franchise_notice,
     }
     return model
 

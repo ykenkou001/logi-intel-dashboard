@@ -492,11 +492,27 @@ export interface CompanyPackageOverride {
   last_reviewed: string;
 }
 
+export interface MeasureDetail {
+  measure_id: string;
+  name: string;
+  description: string;
+  form3_section: string;
+  measure_type: string;
+}
+
+export interface ChainFranchiseNotice {
+  legal_article: string;
+  headline: string;
+  scope_note: string;
+}
+
 export interface IndustryPackageMetadata {
   company_id: string;
   base_industry: JsicCategory;
   package: IndustryPackage;
   override: CompanyPackageOverride | null;
+  measure_details: MeasureDetail[];
+  chain_franchise_notice: ChainFranchiseNotice | null;
 }
 
 export interface StandardizationScoreResult {

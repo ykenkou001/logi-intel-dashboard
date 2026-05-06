@@ -523,3 +523,71 @@ def test_web_scenario_summary_text_links_score_and_package() -> None:
     md = body["metadata"]
     assert any("基準パッケージ" in r for r in md["rationale"])
     assert any("製造業" in r for r in md["rationale"])
+
+
+# ─── c.9 後追い: Web 可読性向上（measure_details / chain_franchise_notice）
+
+
+@pytest.mark.parametrize(
+    "company_id",
+    ["sample_mfg_01", "sample_wholesale_01", "sample_retail_01", "sample_chain_01"],
+)
+def test_industry_package_metadata_includes_measure_details(company_id: str) -> None:
+    """industry-package の metadata に施策の name / description / form3_section が含まれる。
+
+    measure_id 単独表示は CLO 担当者に伝わらないため、Web 表示用に
+    ALL_MEASURES から解決した詳細を同梱する。
+    """
+    resp = client.get(f"/api/v1/clo/industry-package/{company_id}")
+    assert resp.status_code == 200
+    md = resp.json()["metadata"]
+    assert "measure_details" in md
+    details = md["measure_details"]
+    assert isinstance(details, list)
+    pkg_measure_ids = set(md["package"]["measure_ids"])
+    detail_ids = {d["measure_id"] for d in details}
+    # measure_details は package.measure_ids を完全カバーする
+    # （ALL_MEASURES に登録済の施策のみ採用しているため）
+    assert detail_ids == pkg_measure_ids
+    # 各エントリに name / description / form3_section / measure_type が含まれる
+    for d in details:
+        assert d["name"] and isinstance(d["name"], str)
+        assert d["description"] and isinstance(d["description"], str)
+        assert d["form3_section"] in ("load", "wait", "loading")
+
+
+def test_industry_package_chain_franchise_notice_present() -> None:
+    """連鎖化事業者では chain_franchise_notice が含まれ、第65条と荷役等対象外を含む。"""
+    resp = client.get("/api/v1/clo/industry-package/sample_chain_01")
+    assert resp.status_code == 200
+    md = resp.json()["metadata"]
+    notice = md.get("chain_franchise_notice")
+    assert notice is not None
+    assert notice["legal_article"] == "第65条"
+    assert "第65条" in notice["headline"]
+    assert "荷役等" in notice["scope_note"]
+
+
+@pytest.mark.parametrize(
+    "company_id",
+    ["sample_mfg_01", "sample_wholesale_01", "sample_retail_01"],
+)
+def test_industry_package_chain_franchise_notice_absent_for_non_chain(
+    company_id: str,
+) -> None:
+    """製造 / 卸 / 小売では chain_franchise_notice が None。"""
+    resp = client.get(f"/api/v1/clo/industry-package/{company_id}")
+    assert resp.status_code == 200
+    md = resp.json()["metadata"]
+    assert md.get("chain_franchise_notice") is None
+
+
+def test_chain_franchise_measure_details_excludes_loading_section() -> None:
+    """連鎖化の measure_details に form3_section='loading' が無い（c.8 強制ガード × c.9 表示）。"""
+    resp = client.get("/api/v1/clo/industry-package/sample_chain_01")
+    assert resp.status_code == 200
+    details = resp.json()["metadata"]["measure_details"]
+    for d in details:
+        assert d["form3_section"] != "loading", (
+            f"連鎖化に loading 系施策 {d['measure_id']} の詳細が含まれている"
+        )
