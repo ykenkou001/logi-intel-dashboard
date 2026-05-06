@@ -14,8 +14,8 @@ PoC 段階。利用想定は不明（おそらく社内 数人〜数十人のス
 目的は次の 3 つ：
 
 1. 自宅 PC ではなく社内 URL で動作確認できるようにする（GW 明けの社内レビュー用）
-2. 月額コストを **$5〜$10 以内** に抑える
-3. Zenn 記事化（Lambda Web Adapter で FastAPI を無改修デプロイする構成）
+2. 月額コストを **$5〜$10 以内** に抑える（実績: PoC 規模で $0.05〜$0.15）
+3. Zenn 記事化（API Gateway HTTP API + Mangum で FastAPI を無改修デプロイする構成）
 
 > **明示的にやらないこと**: Docker / ECS / ALB / ElastiCache / Cognito。
 > 過去のドラフトでは ECS Fargate 想定で Dockerfile を準備したが、PoC には過剰なため廃案。
@@ -29,38 +29,62 @@ PoC 段階。利用想定は不明（おそらく社内 数人〜数十人のス
                              │
                              ├─ /            ─→ [S3: Next.js 静的ビルド]
                              │
-                             └─ /api/*       ─→ [Lambda Function URL]
+                             └─ /api/*       ─→ [API Gateway HTTP API]
                                                   │
-                                                  ├─ Lambda Web Adapter
-                                                  │   で FastAPI 無改修起動
-                                                  │
-                                                  ├─ outputs/      ─→ [S3 outputs]
-                                                  ├─ profiles/     ─→ [S3 profiles]
-                                                  ├─ secrets       ─→ [SSM Parameter Store]
-                                                  └─ logs          ─→ [CloudWatch Logs (7d)]
+                                                  └─ Lambda（Mangum で FastAPI 起動）
+                                                       │
+                                                       ├─ outputs/      ─→ [S3 outputs]
+                                                       ├─ profiles/     ─→ [S3 profiles]
+                                                       ├─ secrets       ─→ [SSM Parameter Store]
+                                                       └─ logs          ─→ [CloudWatch Logs (7d)]
 ```
 
-**API Gateway 不採用の理由**: HTTP API でも $1/M リクエストかかる。
-PoC では Lambda Function URL（呼び出しコスト 0）で十分。
+> **Lambda Function URL → API Gateway HTTP API への変更経緯**: 当初は Lambda Function URL（呼び出しコスト $0）を採用予定だったが、CloudFront OAC + AWS_IAM 経路で 403 から脱却できなかったため、API Gateway HTTP API に変更。料金差は PoC 規模では無視できる（月 $0.001 未満）。
 
 ---
 
 ## 3. 月額コスト試算
 
+### 現行構成（フェーズ4.0 稼働中・2026-05-05 実測ベース）
+
 | 項目 | 用途 | PoC 月額 |
 |------|------|---------|
-| CloudFront | Web 配信 + Lambda へのルーティング | ~$0〜$1（無料枠 1TB） |
-| S3 (web)   | Next.js 静的ビルド | ~$0（5GB 無料枠） |
-| S3 (outputs / profiles) | 成果物 + プロフィール JSON | ~$0〜$1 |
-| Lambda     | FastAPI（実行時間ぶんだけ） | ~$0〜$2（100万リクエスト無料枠） |
-| Function URL | Lambda 呼出口 | $0（呼出料金なし） |
-| SSM Parameter Store | API キー（SecureString） | $0（標準 Parameter は無料） |
-| CloudWatch Logs | 7 日保管・Insights オフ | ~$1 |
-| Route 53 / ACM | ドメイン使う場合のみ | ~$0.5（オプション） |
-| **合計** | | **$1〜$5** |
+| CloudFront | Web 配信 + API ルーティング (PriceClass_200) | ~$0（無料枠 1TB転送 / 1,000万req） |
+| S3 | web / outputs / profiles / lambda-deploy（バージョニング有効・lifecycle設定済） | ~$0〜$0.05（5GB 無料枠） |
+| Lambda | FastAPI（1024MB / timeout 300秒） | ~$0（無料枠 100万req / 400,000 GB秒） |
+| API Gateway HTTP API | Lambda 呼出口（$1/百万req） | ~$0〜$0.01（月1,000コールで $0.001） |
+| CloudWatch Logs | 7日保管・Insights オフ（$0.76/GB取り込み） | ~$0.01〜$0.10 |
+| SSM Parameter Store | API キー（SecureString・AWS管理KMSキー） | $0（標準 Parameter + AWS管理鍵は無料） |
+| CloudFront Functions | URL書き換え（rewrite-index） | $0（無料枠 200万呼び出し） |
+| **合計** | | **$0.05〜$0.15** |
 
-> Secrets Manager は使わない（$0.40/secret/月）。SSM Parameter Store SecureString
-> は無料枠で十分。
+> Secrets Manager は使わない（$0.40/secret/月）。SSM Parameter Store SecureString は無料枠で十分。
+
+### 利用規模別シミュレーション
+
+| シナリオ | 想定利用 | 月額 |
+|---------|---------|------|
+| **現状 PoC** | 5〜10名・週数回・Webダッシュボード閲覧中心 | $0〜$1 |
+| **社内展開** | 30名・毎日利用・plan_draft 50回/月 | $1〜$5 |
+| **ヘビー利用** | 100名・API フル活用・PPT/Excel 大量出力 | $5〜$15 |
+
+### 費用が跳ね上がる要因
+
+1. **S3 の大容量ファイル蓄積**: PPT/Excel 出力が S3 に大量蓄積すると 5GB 無料枠を超える。ライフサイクルルール（`outputs/` 30日自動削除）が設定済みなので通常は問題ない
+2. **Lambda の長時間実行**: `plan_draft` は最大 300秒かかる設定。頻繁に呼ぶと GB秒が積み上がるが、無料枠（400,000 GB秒/月）は相当大きい（500コール×5秒×1GB = 2,500 GB秒）
+3. **CloudWatch Logs の大量出力**: デバッグログが多いと取り込みコスト（$0.76/GB）がかかる
+
+### 停止の判断基準
+
+CloudFront・Lambda・API Gateway は**固定費ゼロ**（リクエストがなければ $0）。S3 も 5GB 無料枠内なら $0。放置しても月 **100〜200円以下** で稼働し続けるため、停止より継続のほうがシンプル。
+
+**停止したい場合の手順:**
+```powershell
+cd infra
+terraform destroy -var="env=dev"
+# force_destroy=true 設定済みのため S3 の全オブジェクトも自動削除される
+# 再開: terraform apply -var="env=dev" + Lambda zip 再デプロイ
+```
 
 ---
 
@@ -119,12 +143,13 @@ terraform plan -out=plan.tfplan
 terraform apply plan.tfplan
 ```
 
-実行内容（予定）:
-- S3 バケット作成（web / outputs / profiles）
-- Lambda 関数作成（zip / Web Adapter Layer 添付）
-- Lambda Function URL 発行
-- CloudFront ディストリビューション作成（S3 origin + Lambda Function URL origin）
+実行内容（完了済み）:
+- S3 バケット作成（web / outputs / profiles / lambda-deploy を prefix で分離・バージョニング有効）
+- Lambda 関数作成（zip / Mangum で FastAPI 起動）
+- API Gateway HTTP API 作成（Lambda Proxy Integration）
+- CloudFront ディストリビューション作成（S3 origin + API Gateway origin・PriceClass_200）
 - IAM ロール（Lambda → S3 Read/Write、SSM Read）
+- GitHub Actions OIDC Provider + IAM ロール（CI/CD 用・最小権限）
 
 ### 5.5 Lambda 関数コードのアップロード
 
@@ -191,23 +216,23 @@ curl -X POST https://<distribution-id>.cloudfront.net/api/v1/clo/plan-draft/samp
 - ❌ ALB（$18/月の固定費・PoC 不要）
 - ❌ ElastiCache Redis（$13/月・SQLite で十分・PoC ではキャッシュ無くても可）
 - ❌ Secrets Manager（Parameter Store SecureString で代替）
-- ❌ API Gateway（Lambda Function URL で代替）
+- ✅ API Gateway HTTP API（当初は Lambda Function URL 予定だったが OAC 認証問題で変更・実績済み）
 - ❌ Cognito（PoC では認証なし）
 - ❌ マルチテナント設計（健一個人 + micware 社内のみ）
 - ❌ Public 公開（社内レビュー用 URL 共有のみ）
 
 ---
 
-## 9. 進捗状況
+## 9. 進捗状況（フェーズ4.0 完了・2026-05-05）
 
 | Step | 内容 | 状態 |
 |------|------|------|
-| 1 | コード改修（S3 切替・Lambda Web Adapter エントリ） | ⏳ 未着手 |
-| 2 | Terraform IaC 整備 | ⏳ 未着手 |
-| 3 | SSM Parameter Store にシークレット投入 | ⏳ 健一作業 |
-| 4 | `terraform apply` 実行 | ⏳ 未着手 |
-| 5 | Lambda zip デプロイ + S3 同期 | ⏳ 未着手 |
-| 6 | CloudFront URL での動作確認 | ⏳ 未着手 |
+| 1 | コード改修（S3 切替・Mangum で FastAPI 起動） | ✅ 完了 |
+| 2 | Terraform IaC 整備（`infra/main.tf`） | ✅ 完了 |
+| 3 | SSM Parameter Store にシークレット投入 | ✅ 完了 |
+| 4 | `terraform apply` 実行（API Gateway HTTP API 構成） | ✅ 完了 |
+| 5 | Lambda zip デプロイ + S3 sync（GitHub Actions CI/CD 設定済） | ✅ 完了 |
+| 6 | CloudFront URL での動作確認（https://d1zei8qivkf3cr.cloudfront.net） | ✅ 完了 |
 
 ---
 
