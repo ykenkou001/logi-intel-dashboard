@@ -23,6 +23,7 @@ export const metadata: Metadata = {
 };
 
 const NAV = [
+  { href: "/guide", label: "ガイド" },
   { href: "/dashboard/plan-draft", label: "計画書生成" },
   { href: "/dashboard/measure-eval", label: "施策評価" },
   { href: "/dashboard/scenario-sim", label: "シナリオ" },
