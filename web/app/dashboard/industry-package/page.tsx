@@ -12,12 +12,21 @@ import {
   type IndustryPackage,
   type IndustryPackageMetadata,
   type JsicCategory,
+  type MeasureDetail,
   type OverrideCategory,
   type OverrideEntry,
   type SampleCompany,
   type StandardKpiDef,
   type ToolResponse,
 } from "@/lib/api";
+import {
+  DATA_SOURCE_LABEL,
+  formatTargetValue,
+  freqLabel,
+  OUTPUT_FORMAT_LABEL,
+  REPORT_AUDIENCE_LABEL,
+  targetValueMissingNote,
+} from "@/lib/labels";
 
 const INDUSTRY_LABEL: Record<JsicCategory, string> = {
   manufacturing: "製造業",
@@ -75,33 +84,41 @@ function KpiTable({ kpis }: { kpis: StandardKpiDef[] }) {
       </thead>
       <tbody className="divide-y divide-gray-100">
         {kpis.map((kpi) => (
-          <tr key={kpi.metric_id} className="hover:bg-gray-50">
+          <tr key={kpi.metric_id} className="hover:bg-gray-50 align-top">
             <td className="px-3 py-2">
               <div className="font-semibold text-gray-900">{kpi.label}</div>
               <code
                 className="text-[10px] text-gray-400"
                 style={{ fontFamily: "var(--font-mono)" }}
+                aria-label={`内部識別子 ${kpi.metric_id}`}
               >
                 {kpi.metric_id}
               </code>
             </td>
-            <td
-              className="px-3 py-2 text-right text-gray-900"
-              style={{ fontFamily: "var(--font-mono)" }}
-            >
-              {kpi.target_value != null
-                ? `${kpi.target_value}${kpi.unit}`
-                : "—"}
+            <td className="px-3 py-2 text-right">
+              <div
+                className="text-gray-900"
+                style={{ fontFamily: "var(--font-mono)" }}
+              >
+                {formatTargetValue(kpi.target_value, kpi.unit)}
+              </div>
+              {kpi.target_value == null && (
+                <div className="text-[10px] text-gray-400 mt-0.5 leading-tight max-w-[180px]">
+                  {targetValueMissingNote(kpi.legal_basis)}
+                </div>
+              )}
             </td>
             <td
               className="px-3 py-2 text-right text-gray-500"
               style={{ fontFamily: "var(--font-mono)" }}
             >
               {kpi.baseline_value != null
-                ? `${kpi.baseline_value}${kpi.unit}`
+                ? `${kpi.baseline_value.toFixed(1)}${kpi.unit}`
                 : "—"}
             </td>
-            <td className="px-3 py-2 text-gray-700">{kpi.frequency}</td>
+            <td className="px-3 py-2 text-gray-700">
+              {freqLabel(kpi.frequency)}
+            </td>
             <td className="px-3 py-2 text-gray-700">{kpi.owner_role}</td>
             <td className="px-3 py-2">
               {kpi.legal_basis ? (
@@ -124,12 +141,81 @@ function KpiTable({ kpis }: { kpis: StandardKpiDef[] }) {
   );
 }
 
+function MeasureCardList({
+  details,
+  fallbackIds,
+}: {
+  details: MeasureDetail[];
+  fallbackIds: string[];
+}) {
+  // measure_details がある場合はそれを優先。無い場合は ID のみのフォールバック表示。
+  if (details.length === 0 && fallbackIds.length === 0) {
+    return <p className="text-xs text-gray-500">標準施策が登録されていません</p>;
+  }
+  if (details.length === 0) {
+    return (
+      <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-800">
+        {fallbackIds.map((mid) => (
+          <li
+            key={mid}
+            className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2"
+          >
+            <code
+              className="text-[12px]"
+              style={{ fontFamily: "var(--font-mono)" }}
+            >
+              {mid}
+            </code>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {details.map((m) => (
+        <li
+          key={m.measure_id}
+          className="border border-gray-100 rounded-lg p-3 bg-white hover:border-[#2E73AC]/30 transition-colors"
+        >
+          <div className="font-semibold text-sm text-gray-900 mb-1">
+            {m.name}
+          </div>
+          <p className="text-xs text-gray-600 leading-relaxed mb-2 line-clamp-2">
+            {m.description}
+          </p>
+          <div className="flex items-center gap-2 text-[10px] text-gray-400">
+            <code
+              style={{ fontFamily: "var(--font-mono)" }}
+              aria-label={`施策ID ${m.measure_id}`}
+            >
+              {m.measure_id}
+            </code>
+            <span className="bg-gray-100 px-1.5 py-0.5 rounded">
+              様式第3:{" "}
+              {m.form3_section === "load"
+                ? "積載率向上"
+                : m.form3_section === "wait"
+                  ? "荷待ち時間短縮"
+                  : m.form3_section === "loading"
+                    ? "荷役等時間短縮"
+                    : m.form3_section}
+            </span>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function PackageDetail({
   pkg,
   override,
+  measureDetails,
 }: {
   pkg: IndustryPackage;
   override: IndustryPackageMetadata["override"];
+  measureDetails: MeasureDetail[];
 }) {
   const overrideCounts = useMemo(
     () => (override ? countByCategory(override.entries) : null),
@@ -196,21 +282,10 @@ function PackageDetail({
       </Section>
 
       <Section title={`標準施策（${pkg.measure_ids.length} 件）`}>
-        <ul className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-800">
-          {pkg.measure_ids.map((mid) => (
-            <li
-              key={mid}
-              className="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2"
-            >
-              <code
-                className="text-[12px]"
-                style={{ fontFamily: "var(--font-mono)" }}
-              >
-                {mid}
-              </code>
-            </li>
-          ))}
-        </ul>
+        <MeasureCardList
+          details={measureDetails}
+          fallbackIds={pkg.measure_ids}
+        />
       </Section>
 
       <Section title={`標準会議体（${pkg.meetings.length} 件）`}>
@@ -225,7 +300,7 @@ function PackageDetail({
                   {m.name}
                 </span>
                 <span className="text-[11px] text-gray-500">
-                  {m.frequency} / {m.standard_duration_min} 分
+                  {freqLabel(m.frequency)} / {m.standard_duration_min} 分
                 </span>
               </div>
               <div className="text-[11px] text-gray-500 mt-0.5">
@@ -252,7 +327,8 @@ function PackageDetail({
             >
               <span className="font-semibold text-gray-900">{r.name}</span>
               <span className="text-[11px] text-gray-500">
-                {r.audience} / {r.frequency} / {r.output_format}
+                {REPORT_AUDIENCE_LABEL[r.audience]} / {freqLabel(r.frequency)} /{" "}
+                {OUTPUT_FORMAT_LABEL[r.output_format]}
               </span>
             </li>
           ))}
@@ -268,7 +344,7 @@ function PackageDetail({
             >
               <span className="font-semibold text-gray-900">{d.label}</span>
               <span className="text-[11px] text-gray-500">
-                {d.source} / {d.refresh_cadence}
+                {DATA_SOURCE_LABEL[d.source]} / {freqLabel(d.refresh_cadence)}
               </span>
             </li>
           ))}
@@ -401,18 +477,39 @@ export default function IndustryPackagePage() {
                 {INDUSTRY_LABEL[metadata.base_industry] ??
                   metadata.base_industry}
               </span>
-              <code
-                className="text-[11px] text-gray-500"
-                style={{ fontFamily: "var(--font-mono)" }}
-              >
-                {metadata.base_industry}
-              </code>
               <span className="text-xs text-gray-400 ml-auto">
                 {metadata.company_id}
               </span>
             </div>
           </div>
-          <PackageDetail pkg={metadata.package} override={metadata.override} />
+
+          {metadata.chain_franchise_notice && (
+            <div
+              role="note"
+              aria-label="連鎖化事業者の制度上の注意"
+              className="rounded-xl border-2 border-amber-300 bg-amber-50 px-5 py-4"
+            >
+              <div className="flex items-start gap-3">
+                <span className="text-amber-600 text-lg leading-none mt-0.5">
+                  ⚖️
+                </span>
+                <div className="flex-1">
+                  <div className="font-bold text-amber-900 mb-1">
+                    {metadata.chain_franchise_notice.headline}
+                  </div>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    {metadata.chain_franchise_notice.scope_note}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <PackageDetail
+            pkg={metadata.package}
+            override={metadata.override}
+            measureDetails={metadata.measure_details ?? []}
+          />
         </>
       )}
 
