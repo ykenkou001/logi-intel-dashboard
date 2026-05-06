@@ -78,7 +78,6 @@ from core.analytics.waste_trap import (
     build_waste_trap_summary,
     detect_waste_traps,
 )
-from core.io.measure_run_store import load_runs, merge_with_stored, save_runs
 from core.export.citation import (
     Citation,
     logistics_efficiency_law_citation,
@@ -90,6 +89,7 @@ from core.io.company_loader import (
     load_company_profile_from_excel,
 )
 from core.io.company_store import save_company_profile
+from core.io.measure_run_store import load_runs, merge_with_stored, save_runs
 from core.io.override_store import load_override
 from core.io.template_writer import (
     DEFAULT_TEMPLATE_PATH,
