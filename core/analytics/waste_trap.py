@@ -25,16 +25,24 @@ CLO の中長期計画書では「実施した施策」だけでなく「効果�
 入力ソース:
     - profile: CompanyProfile
     - measure_runs: list[MeasureExecutionRecord]（投資額・経過月数・実績効果等）
-        新しい記録モデルとして本モジュールに同梱
+        MeasureExecutionRecord は core/io/measure_run_store.py で定義・永続化される。
+        後方互換性のためここでも re-export する。
 """
 from __future__ import annotations
 
 from datetime import date
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from core.export.citation import Citation, logistics_efficiency_law_citation
+
+# MeasureExecutionRecord / RootCause / TrapSeverity は I/O 層に昇格（フェーズ5.5 #0）。
+# 後方互換性のため re-export する（既存 import を壊さない）。
+from core.io.measure_run_store import (
+    MeasureExecutionRecord,
+    RootCause,
+    TrapSeverity,
+)
 from core.playbook.measures import get_measure
 from core.static._freshness import all_warnings
 from core.static.sample_company import CompanyProfile
@@ -64,78 +72,6 @@ MID_RATIO_MEDIUM_SEVERITY: float = 0.7
 
 HIGH_EXPECTATION_RATIO: float = 2.0
 """high severity 確定の前提となる expected/invested しきい値。"""
-
-
-# ---------------------------------------------------------------------------
-# 型定義
-# ---------------------------------------------------------------------------
-
-TrapSeverity = Literal["low", "medium", "high"]
-
-RootCause = Literal[
-    "scale_misfit",            # 規模不適合
-    "resource_missing",        # 必要リソース不足
-    "governance_gap",          # ガバナンス未整備
-    "wrong_kpi",               # KPI 設計の誤り
-    "external_factor",         # 燃料急騰等の外部要因
-    "data_quality",            # NEW: データ品質問題
-    "adoption_resistance",     # NEW: 現場の抵抗
-    "implementation_quality",  # NEW: 実装品質
-    "unknown",
-]
-
-
-# ---------------------------------------------------------------------------
-# 入力モデル
-# ---------------------------------------------------------------------------
-
-
-class MeasureExecutionRecord(BaseModel):
-    """施策の実行状況 1 件分。Override 4 分類 + 実績データの集約。
-
-    この記録は将来 outputs/measure_runs/<id>.json で永続化する想定だが、
-    c.6 時点では呼出側（Web / CLI）で組立てて引数として渡す。
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    measure_id: str = Field(description="ALL_MEASURES の measure_id を参照")
-    started_on: date | None = Field(
-        default=None, description="開始日（months_since_start 計算用）",
-    )
-    invested_jpy: int | None = Field(
-        default=None, ge=0, description="投資実績（円）",
-    )
-    expected_effect_jpy: int | None = Field(
-        default=None,
-        description="期待効果（年・円・PlanDraft 由来）",
-    )
-    actual_effect_jpy: int | None = Field(
-        default=None,
-        description="実績効果（年・円）。未計測なら None で判定保留",
-    )
-    measured_count: int | None = Field(
-        default=None, ge=0,
-        description="計測サンプル数。<30 なら判定保留",
-    )
-    data_completeness: float | None = Field(
-        default=None, ge=0.0, le=1.0,
-        description="データ完全度（0.0〜1.0）。<0.5 なら判定保留",
-    )
-    seasonal_factor_active: bool = Field(
-        default=False, description="季節性影響中（夏需要・年末等）",
-    )
-    external_event_active: bool = Field(
-        default=False, description="外部要因（燃料急騰・災害等）の影響中",
-    )
-    payback_months_estimated: int | None = Field(
-        default=None, ge=0,
-        description="想定回収月数。経過月数 < この値なら判定保留",
-    )
-    suspected_root_cause: RootCause = Field(
-        default="unknown",
-        description="現場が疑う root cause（事前ヒアリング由来）",
-    )
 
 
 # ---------------------------------------------------------------------------

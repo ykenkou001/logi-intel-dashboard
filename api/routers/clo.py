@@ -50,6 +50,7 @@ from core.analytics.waste_trap import (
     build_waste_trap_summary,
     detect_waste_traps,
 )
+from core.io.measure_run_store import load_runs, merge_with_stored, save_runs
 from core.export.citation import Citation, logistics_efficiency_law_citation
 from core.export.ppt_writer import write_clo_executive_brief
 from core.export.response import ToolResponse
@@ -918,10 +919,19 @@ async def waste_traps(
 
     立ち上げ期間 / データ欠損 / サンプル数不足 / 季節性 / 外部要因 / 投資回収前
     の 6 軸セーフガードが発火した場合は trap_severity=low に固定して誤検知を抑止する。
+
+    受け取った measure_runs は outputs/measure_runs/<company_id>.json に永続化され、
+    保存済みデータと measure_id ベースで merge（incoming 優先）して分析する。
+    measure_runs が null/空の場合は保存済みデータのみで分析する。
     """
     profile = _resolve_profile_or_404(company_id)
 
-    runs = list(measure_runs) if measure_runs else []
+    incoming = list(measure_runs) if measure_runs else []
+    if incoming:
+        runs = merge_with_stored(company_id, incoming)
+        save_runs(company_id, runs)
+    else:
+        runs = load_runs(company_id)
     result = detect_waste_traps(profile, runs)
 
     response = ToolResponse(
