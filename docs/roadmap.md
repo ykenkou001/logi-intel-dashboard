@@ -22,7 +22,7 @@
              └ c.5/c.6 F2 標準化スコア + J2 罠スコア              ✅ 完了 (2026-05-06)
              └ c.7 MCP/REST 3 ツール公開                         ✅ 完了 (2026-05-06)
              └ c.8 連鎖化特有処理 + c.9 統合テスト + Web 2 画面   ✅ 完了 (2026-05-06)
-フェーズ 5.5 公開・記事化（旧フェーズ5）                          ⏳ 未着手
+フェーズ 5.5 公開・記事化（旧フェーズ5）                          🔄 進行中（#0/#1 完了・2026-05-06）
 ```
 
 > 段階 a/b/c の詳細設計は `~/.claude/plans/b-c-flickering-pixel.md`（健一の global plans）参照。
@@ -805,15 +805,32 @@ Codex 評価: **「条件付き完了」** — 完了宣言の粒度を明文化
 
 **本フェーズが完成させていないもの**（過大表現を避けるための明示）:
 - ⚠️ **「法令提出を完全保証」は本フェーズの範囲外**。様式第3 別紙 / 様式第5 のドラフト生成は実装済だが、法令準拠の最終判断は CLO の専門家による精査を前提
-- ⚠️ **継続運用循環の実証は弱い**。MeasureExecutionRecord の永続化が未実装のため、施策実行履歴は POST body / MCP 引数で都度受け取る形（フェーズ5.5 #0 で対応）
+- ~~⚠️ **継続運用循環の実証は弱い**。MeasureExecutionRecord の永続化が未実装のため、施策実行履歴は POST body / MCP 引数で都度受け取る形（フェーズ5.5 #0 で対応）~~ → ✅ フェーズ5.5 #0 で完了（2026-05-06）
 - ⚠️ **取引先連携は明示スコープ外**（フェーズ4.5 以降）
-- ⚠️ **AWS 運用ハーデニング**（監視 / アラート / コスト上限 / 障害時ロールバック）はフェーズ5.5 着手前のチェックリストとして整理
+- ~~⚠️ **AWS 運用ハーデニング**（監視 / アラート / コスト上限 / 障害時ロールバック）はフェーズ5.5 着手前のチェックリストとして整理~~ → ✅ フェーズ5.5 #1 で完了（2026-05-06）。`infra/main.tf` に CloudWatch アラーム + Budget アラート追加、`docs/aws_migration_plan.md` にロールバック手順追記。要 `terraform apply`
 
 公開・記事化（フェーズ5.5）では「**産業別パッケージ・F2 標準化スコア・J2 罠スコアの基盤公開**」と限定して訴求し、「**法令提出を完全保証**」「**全ての CLO 業務を自動化**」のような過大表現は避ける。
 
 ---
 
-## フェーズ 5.5: 公開・記事化 ⏳ 未着手
+## フェーズ 5.5: 公開・記事化 🔄 進行中（2026-05-06〜）
+
+### 完了タスク
+
+- [x] **#0 MeasureExecutionRecord 永続化**（2026-05-06）
+  - `core/io/measure_run_store.py` 新規作成（save / load / append / merge_with_stored）
+  - `MeasureExecutionRecord` / `RootCause` / `TrapSeverity` を `waste_trap.py` → `core/io/` に昇格（後方互換性維持）
+  - REST `POST /waste-traps/{id}` + MCP `logi_clo_waste_traps` で incoming を永続化 & stored と merge
+  - `tests/io/test_measure_run_store.py` 10 件新規追加 / `tests/conftest.py` cleanup fixture 追加
+  - pytest 845 件全 pass（+11 件）
+- [x] **#1 AWS 運用ハーデニング**（2026-05-06・infra/main.tf 更新済み。要 `terraform apply`）
+  - CloudWatch Logs 保管期間: 7 日 → 30 日
+  - Lambda エラー率アラーム（5 分で 5 件超 → SNS 通知）
+  - Lambda p95 レイテンシアラーム（p95 > 20s → SNS 通知）
+  - Budget アラート（月 $50 の 80%/100% 超でメール通知）
+  - `docs/aws_migration_plan.md` §9 にセキュリティ確認結果 + ロールバック手順を追記
+
+### 残タスク
 
 - [ ] README 整備
 - [ ] Zenn 記事執筆

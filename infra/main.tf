@@ -94,6 +94,18 @@ variable "github_repo" {
   default     = "ykenkou001/logi-intel-dashboard"
 }
 
+variable "alert_email" {
+  type        = string
+  description = "CloudWatch/Budget アラートの通知先メールアドレス"
+  default     = "ykenkou001@gmail.com"
+}
+
+variable "monthly_budget_usd" {
+  type        = number
+  description = "月額コスト上限（USD）。超過時に alert_email へ通知"
+  default     = 50
+}
+
 # 一意なリソース名のためにアカウント ID を取得
 data "aws_caller_identity" "current" {}
 
@@ -271,7 +283,7 @@ resource "aws_iam_role_policy" "lambda_inline" {
 
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${local.name_prefix}-api"
-  retention_in_days = 7 # PoC 用: 7 日のみ保管（コスト最小化）
+  retention_in_days = 30 # 運用ハーデニング: 7 日から 30 日に延長（コスト vs 可観測性のバランス）
   tags              = local.common_tags
 }
 
@@ -574,6 +586,93 @@ output "s3_web_prefix" {
   value       = "s3://${aws_s3_bucket.main.id}/web/"
 }
 
+# ─── 監視・アラート（運用ハーデニング フェーズ5.5 #1）──────────────────────
+#
+# PoC 段階でも「気づかず Lambda がエラーを出し続ける」「コストが爆発する」
+# 状況を防ぐために最小限のアラートを設置する。
+
+# SNS トピック（Lambda / Budget アラートの通知先）
+resource "aws_sns_topic" "alerts" {
+  name = "${local.name_prefix}-alerts"
+  tags = local.common_tags
+}
+
+resource "aws_sns_topic_subscription" "email" {
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+# Lambda エラー率アラート（5% 超で通知）
+# エラー数 / 呼出数 >= 0.05 を 5 分間の評価期間で判断する。
+# errors_rate を直接メトリクスとして持てないため、エラー数の絶対値アラームで代用。
+# PoC 規模（数十リクエスト/日）では errors >= 5 回/5 分を異常とする。
+resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
+  alarm_name          = "${local.name_prefix}-lambda-errors"
+  alarm_description   = "Lambda 関数のエラー数が 5 分間で 5 件を超えました（要調査）"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Errors"
+  dimensions = {
+    FunctionName = aws_lambda_function.api.function_name
+  }
+  statistic           = "Sum"
+  period              = 300  # 5 分
+  evaluation_periods  = 1
+  threshold           = 5
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = local.common_tags
+}
+
+# Lambda レイテンシアラート（p95 > 20s で通知）
+# タイムアウトが 300s なので、p95 > 20s は plan_draft 以外の処理が遅延している兆候。
+resource "aws_cloudwatch_metric_alarm" "lambda_p95_duration" {
+  alarm_name          = "${local.name_prefix}-lambda-p95-duration"
+  alarm_description   = "Lambda p95 レイテンシが 20 秒を超えました（パフォーマンス劣化）"
+  namespace           = "AWS/Lambda"
+  metric_name         = "Duration"
+  dimensions = {
+    FunctionName = aws_lambda_function.api.function_name
+  }
+  extended_statistic  = "p95"
+  period              = 300
+  evaluation_periods  = 2
+  threshold           = 20000  # ms
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  treat_missing_data  = "notBreaching"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  tags                = local.common_tags
+}
+
+# ─── Budget アラート（月次コスト超過を early warning）──────────────────
+#
+# PoC 想定は $1〜$5/月。$50 を超えたら何かが誤動作している。
+resource "aws_budgets_budget" "monthly" {
+  name         = "${local.name_prefix}-monthly-budget"
+  budget_type  = "COST"
+  limit_amount = tostring(var.monthly_budget_usd)
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 80  # 予算の 80% 超で警告
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.alert_email]
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100  # 予算超過で緊急通知
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.alert_email]
+  }
+}
+
 # ─── GitHub Actions OIDC（CI/CD 用）──────────────────────────────────
 #
 # GitHub Actions が長期 access key なしで AWS にアクセスできるようにする。
@@ -671,4 +770,9 @@ resource "aws_iam_role_policy" "github_actions_deploy" {
 output "github_actions_role_arn" {
   description = "GitHub Actions ワークフローで AWS_GITHUB_ACTIONS_ROLE_ARN として登録する値"
   value       = aws_iam_role.github_actions.arn
+}
+
+output "sns_alerts_topic_arn" {
+  description = "CloudWatch アラーム通知先 SNS トピック ARN"
+  value       = aws_sns_topic.alerts.arn
 }

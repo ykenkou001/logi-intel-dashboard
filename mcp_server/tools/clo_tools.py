@@ -89,6 +89,7 @@ from core.io.company_loader import (
     load_company_profile_from_excel,
 )
 from core.io.company_store import save_company_profile
+from core.io.measure_run_store import load_runs, merge_with_stored, save_runs
 from core.io.override_store import load_override
 from core.io.template_writer import (
     DEFAULT_TEMPLATE_PATH,
@@ -1350,12 +1351,16 @@ def register_tools(mcp: FastMCP) -> None:
         actual_effect_jpy が None の MeasureExecutionRecord は判定保留扱いで、
         kpi_history からの自動逆算は次 PR の課題（c.7 持ち越し）。
 
+        受け取った measure_runs は outputs/measure_runs/<company_id>.json に永続化され、
+        保存済みデータと measure_id ベースで merge（incoming 優先）して分析する。
+        measure_runs が null/空の場合は保存済みデータのみで分析する。
+
         Args:
             company_id: サンプル/取込済 企業 ID
             measure_runs: 施策実行記録のリスト（MeasureExecutionRecord）。
                 各レコードは measure_id / 開始日 / 投資額 / 期待効果 / 実績効果 /
                 計測サンプル数 / データ完全度 / 季節性 / 外部要因 / 想定回収月数 /
-                root cause を含む。None または空配列なら結果は空件数で返る。
+                root cause を含む。None または空配列なら保存済みデータのみで分析する。
 
         Returns:
             ToolResponse 構造:
@@ -1373,7 +1378,12 @@ def register_tools(mcp: FastMCP) -> None:
                 ),
             ).to_dict()
 
-        runs = list(measure_runs) if measure_runs else []
+        incoming = list(measure_runs) if measure_runs else []
+        if incoming:
+            runs = merge_with_stored(company_id, incoming)
+            save_runs(company_id, runs)
+        else:
+            runs = load_runs(company_id)
         result = detect_waste_traps(profile, runs)
 
         return ToolResponse(

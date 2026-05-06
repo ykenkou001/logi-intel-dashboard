@@ -223,7 +223,129 @@ curl -X POST https://<distribution-id>.cloudfront.net/api/v1/clo/plan-draft/samp
 
 ---
 
-## 9. 進捗状況（フェーズ4.0 完了・2026-05-05）
+## 9. 運用ハーデニング（フェーズ5.5 #1 対応・2026-05-06）
+
+### 9.1 実施済みの変更（infra/main.tf 更新）
+
+| 項目 | 変更前 | 変更後 | 適用方法 |
+|------|--------|--------|---------|
+| CloudWatch Logs 保管期間 | 7 日 | 30 日 | `terraform apply` |
+| Lambda エラー率アラート | なし | 5 分で 5 件超 → SNS 通知 | `terraform apply` |
+| Lambda p95 レイテンシアラート | なし | 5 分 p95 > 20s → SNS 通知 | `terraform apply` |
+| Budget アラート | なし | 月 $50 の 80%/100% 超でメール通知 | `terraform apply` |
+
+**適用コマンド（健一が手動実行）**:
+```powershell
+cd infra
+terraform plan -var="env=dev" -out=plan.tfplan
+terraform apply plan.tfplan
+```
+
+> ⚠️ SNS メールサブスクリプションは apply 後に `ykenkou001@gmail.com` へ確認メールが届く。
+> メール内の "Confirm subscription" をクリックしないとアラートが届かない。
+
+### 9.2 セキュリティ公開範囲チェック（確認済み）
+
+| リソース | 設定 | 評価 |
+|---------|------|------|
+| S3 バケット | `block_public_acls=true` + バケットポリシーで CloudFront OAC のみ読取可 | ✅ 安全 |
+| CloudFront | `geo_restriction = whitelist = JP`（日本国内のみ） | ✅ 意図通り |
+| API Gateway HTTP API | `allow_origins = ["*"]`（CloudFront 経由前提・直叩きは CORS で拒否） | ✅ PoC 許容 |
+| Lambda 環境変数 | API キーなし。`LOGI_SECRETS_BACKEND=ssm` で SSM Parameter Store 経由 | ✅ 安全 |
+| SSM Parameter Store | SecureString（KMS 暗号化）で保存 | ✅ 安全 |
+
+### 9.3 障害時ロールバック手順
+
+#### Lambda コードのロールバック（CI/CD デプロイ後に問題が発生した場合）
+
+```powershell
+# 1. 現在の関数設定を確認して前リビジョンを特定
+aws lambda get-function --function-name logi-intel-api-dev
+
+# 2. 前バージョンへ戻す（S3 の前回 zip を使う場合）
+#    S3 バケットのバージョニングが有効なので、lambda-deploy/ の前バージョン ID を取得
+aws s3api list-object-versions `
+  --bucket <S3_BUCKET_NAME> `
+  --prefix "lambda-deploy/" `
+  --max-items 5
+
+# 3. 前バージョンの zip を再デプロイ
+aws lambda update-function-code `
+  --function-name logi-intel-api-dev `
+  --s3-bucket <S3_BUCKET_NAME> `
+  --s3-key "lambda-deploy/function.zip" `
+  --s3-object-version <前バージョンのVersionId>
+
+# 4. デプロイ完了を待機
+aws lambda wait function-updated --function-name logi-intel-api-dev
+
+# 5. 動作確認
+curl https://d1zei8qivkf3cr.cloudfront.net/health
+```
+
+#### Web（Next.js）のロールバック
+
+```powershell
+# S3 バージョニングを使って前バージョンのファイルを復元
+# 個別ファイルの場合（例: index.html）
+aws s3api get-object `
+  --bucket <S3_BUCKET_NAME> `
+  --key "web/index.html" `
+  --version-id <前バージョンのVersionId> `
+  /tmp/index.html.backup
+
+# CloudFront キャッシュを無効化
+aws cloudfront create-invalidation `
+  --distribution-id <CLOUDFRONT_DISTRIBUTION_ID> `
+  --paths "/*"
+```
+
+#### Terraform インフラのロールバック（terraform apply で壊れた場合）
+
+```powershell
+# git で前のコミット時点の main.tf に戻す
+git log --oneline infra/main.tf
+git checkout <前のコミットハッシュ> -- infra/main.tf
+
+# plan で差分を確認してから apply
+cd infra
+terraform plan -var="env=dev" -out=rollback.tfplan
+terraform apply rollback.tfplan
+```
+
+#### 緊急停止（PoC を即座に止める場合）
+
+```powershell
+# Lambda を無効化（リクエストが 503 になる）
+aws lambda put-function-concurrency `
+  --function-name logi-intel-api-dev `
+  --reserved-concurrent-executions 0
+
+# 復旧時
+aws lambda delete-function-concurrency --function-name logi-intel-api-dev
+```
+
+### 9.4 CloudWatch ダッシュボード（手動設定・任意）
+
+AWS コンソール → CloudWatch → ダッシュボード → 新規作成で以下ウィジェットを追加:
+- Lambda Invocations / Errors / Duration（5 分粒度）
+- API Gateway Count / 4XX / 5XX
+- CloudFront Requests / BytesDownloaded / 5XXErrorRate
+
+### 9.5 コスト監視の確認方法
+
+```powershell
+# 今月の累計コストを確認
+aws ce get-cost-and-usage `
+  --time-period Start=$(Get-Date -Format "yyyy-MM-01"),End=$(Get-Date -Format "yyyy-MM-dd") `
+  --granularity MONTHLY `
+  --metrics "UnblendedCost" `
+  --group-by Type=DIMENSION,Key=SERVICE
+```
+
+---
+
+## 10. 進捗状況（フェーズ4.0 完了・2026-05-05）
 
 | Step | 内容 | 状態 |
 |------|------|------|

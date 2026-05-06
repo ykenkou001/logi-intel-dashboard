@@ -24,29 +24,26 @@
 
 ## 🚦 フェーズ5.5 タスク優先順位（Codex 勧告反映）
 
-### #0 [最優先] MeasureExecutionRecord 永続化（昇格課題）
+### #0 [✅ 完了] MeasureExecutionRecord 永続化（2026-05-06）
 
-Codex 勧告:「**継続運用と監査証跡に直結。2026年10月31日の中長期計画提出支援では『誰が、いつ、どの施策を実行・見直したか』が弱いと実務導入で詰まる**」
+- `core/io/measure_run_store.py` 新規作成（save / load / append / merge_with_stored）
+- `MeasureExecutionRecord` / `RootCause` / `TrapSeverity` を `core/io/` に昇格（`waste_trap.py` で re-export し後方互換維持）
+- REST `POST /waste-traps/{id}` + MCP `logi_clo_waste_traps` で incoming を永続化 & stored と merge
+- `tests/io/test_measure_run_store.py` 10 件新規 / `tests/conftest.py` cleanup fixture 追加
+- pytest 845 件全 pass（+11 件）
 
-実装内容:
-- `core/io/measure_run_store.py` 新規 — `outputs/measure_runs/<company_id>.json` で施策実行記録を永続化（save / load / append）
-- `MeasureExecutionRecord` を `core/analytics/waste_trap.py` から共通モデル層に昇格させるか、`core/io/` 配下に移動して循環 import を回避
-- POST body / MCP 引数で受け取った run を保存し、`logi_clo_waste_traps` を呼ぶ際に永続化済みデータと merge できるようにする
-- 永続化テスト 5-10 件追加（save/load round-trip / append / 同 measure_id 複数回 / company_id 分離）
+### #1 [✅ 完了] AWS 運用ハーデニング（2026-05-06）
 
-**フェーズ5.5 着手の最初の PR としてこれをやる**。記事化・README 整備より先。
+`infra/main.tf` に以下を追加（**要 `terraform apply`**）:
+- CloudWatch Logs 保管期間: 7 日 → 30 日
+- Lambda エラー率アラーム（5 分で 5 件超 → SNS → `ykenkou001@gmail.com`）
+- Lambda p95 レイテンシアラーム（p95 > 20s）
+- Budget アラート（月 $50 の 80%/100% 超でメール通知）
+- 公開範囲確認済み（S3/CloudFront/API GW すべて OK）、SSM 経由のシークレット管理確認済み
+- `docs/aws_migration_plan.md` §9 にロールバック手順 + セキュリティチェック結果を追記
 
-### #1 [高] AWS 運用ハーデニング（Codex 指摘 ③）
-
-公開前に最低限揃える:
-
-- [ ] CloudWatch Logs の保管期間（現状デフォルト = 永久。30 日 or 90 日に短縮してコスト圧迫回避）
-- [ ] Lambda のエラー率アラート（5% 超で SNS → 健一のメール）
-- [ ] Lambda のレイテンシアラート（p95 > 5s 等）
-- [ ] CloudFront / Lambda のコスト急増アラート（Cost Anomaly Detection or Budget アラート $50/月で通知）
-- [ ] 公開範囲確認（CloudFront ディストリビューション / API Gateway / S3 バケットすべて意図した公開範囲か）
-- [ ] APIキー秘匿（e-Stat appId 等が Lambda 環境変数に直接書かれていないか、SSM Parameter Store 経由か再確認）
-- [ ] 障害時ロールバック手順を `docs/aws_migration_plan.md` に追記（`aws lambda update-function-code --revision-id` で前リビジョンに戻す等）
+**次セッション開始時に `cd infra && terraform apply -var="env=dev"` を実行してアラートを有効化する。**
+SNS サブスクリプション確認メールが届いたら "Confirm subscription" をクリックすること。
 
 ### #2 README 整備
 
