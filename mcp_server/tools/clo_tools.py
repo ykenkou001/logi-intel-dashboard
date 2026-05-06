@@ -60,6 +60,10 @@ from core.analytics.simulator import (
     build_simulation_summary,
     simulate_measures,
 )
+from core.analytics.standardization_score import (
+    build_standardization_summary,
+    compute_standardization_score,
+)
 from core.analytics.target_proposal import (
     TargetProposalResult,
     build_target_proposal_summary,
@@ -68,6 +72,11 @@ from core.analytics.target_proposal import (
 from core.analytics.wait_time_heatmap import (
     HeatmapResult,
     build_wait_time_heatmap,
+)
+from core.analytics.waste_trap import (
+    MeasureExecutionRecord,
+    build_waste_trap_summary,
+    detect_waste_traps,
 )
 from core.export.citation import (
     Citation,
@@ -80,6 +89,7 @@ from core.io.company_loader import (
     load_company_profile_from_excel,
 )
 from core.io.company_store import save_company_profile
+from core.io.override_store import load_override
 from core.io.template_writer import (
     DEFAULT_TEMPLATE_PATH,
     VALID_PURPOSES,
@@ -92,7 +102,13 @@ from core.playbook.filters import (
     build_search_summary,
     filter_playbook,
 )
+from core.playbook.industry_packages import (
+    build_industry_package_summary,
+    get_package,
+    resolve_company_package,
+)
 from core.static._freshness import all_warnings
+from core.static.jsic import category_of
 from core.static.sample_company import get_sample
 from core.validators.submission_validator import (
     build_validation_summary,
@@ -1205,4 +1221,164 @@ def register_tools(mcp: FastMCP) -> None:
             citations=result.citations,
             freshness_warnings=result.freshness_warnings,
             data_source=result.data_source,
+        ).to_dict()
+
+    # ─── フェーズ5.0 c.7: 業種別パッケージ + F2/J2 スコアの公開 ─────────
+
+    @mcp.tool()
+    async def logi_clo_industry_package(company_id: str) -> dict[str, object]:
+        """業種別 CLO 標準パッケージを取得します（Override 4 分類を反映済）。
+
+        フェーズ5.0 c.7。CompanyProfile の jsic_code から業種を解決し、
+        ALL_PACKAGES の標準パッケージに outputs/profiles/<id>_override.json の
+        個社差分（CompanyPackageOverride）を合成して返します。
+
+        Override 4 分類の挙動:
+            - approved_better_practice / required_localization: KPI target_value 上書き
+            - temporary_exception: 期限内のみ上書き、期限後は base に戻る
+            - unmanaged_deviation: 上書きせず、F2 標準化スコア側で減点される
+
+        Args:
+            company_id: サンプル/取込済 企業 ID（sample_mfg_01 / sample_wholesale_01 /
+                sample_chain_01 / sample_retail_01 のいずれか、または取込済 ID）
+
+        Returns:
+            ToolResponse 構造（KPI / 施策 / 会議 / レポート / データ項目の総数 +
+            Override 4 分類別件数の要約。詳細は REST API 経由で metadata 取得可能）
+        """
+        profile = get_sample(company_id)
+        if profile is None:
+            return ToolResponse(
+                summary=(
+                    f"企業 '{company_id}' が見つかりません。利用可能: "
+                    "sample_mfg_01 / sample_wholesale_01 / "
+                    "sample_chain_01 / sample_retail_01"
+                ),
+            ).to_dict()
+
+        base_industry = category_of(profile.jsic_code)
+        if base_industry is None or base_industry == "other":
+            return ToolResponse(
+                summary=(
+                    f"jsic_code={profile.jsic_code!r} から CLO 標準パッケージの"
+                    f"業種を解決できません（manufacturing / wholesale / retail / "
+                    f"chain_franchise のいずれかが必要）"
+                ),
+                data_source=profile.data_source,
+            ).to_dict()
+        if get_package(base_industry) is None:
+            return ToolResponse(
+                summary=f"業種 {base_industry!r} に対応する IndustryPackage が未定義",
+                data_source=profile.data_source,
+            ).to_dict()
+
+        override = load_override(profile.company_id)
+        package = resolve_company_package(base_industry, override)
+        summary = build_industry_package_summary(package, override)
+
+        return ToolResponse(
+            summary=summary,
+            citations=[logistics_efficiency_law_citation()],
+            freshness_warnings=all_warnings(),
+            data_source=profile.data_source,
+        ).to_dict()
+
+    @mcp.tool()
+    async def logi_clo_standardization_score(
+        company_id: str,
+    ) -> dict[str, object]:
+        """F2 標準化スコア（業種別 CLO 標準パッケージへの準拠度 0-100）を算出します。
+
+        フェーズ5.0 c.7。CompanyProfile.kpi_history（実装済 KPI）と Override
+        （実装済 / 未管理 施策・期限切れ例外）を突き合わせ、標準化度合いを
+        0-100 で返します。
+
+        スコア算出（c.6 で実装。減点対象は unmanaged_deviation のみで単調性確保）:
+            coverage_pct = (実装済 KPI 数 + 採用済 施策数)
+                           / (標準 KPI 総数 + 標準 施策総数) × 100
+            penalty = 5pt × unmanaged + 3pt × 期限切れ temporary_exception
+            bonus = +5pt（approved_better_practice ≥ 2 件）
+            score = max(0, min(100, coverage - penalty + bonus))
+
+        Args:
+            company_id: サンプル/取込済 企業 ID
+
+        Returns:
+            ToolResponse 構造:
+            - summary: 標準化スコア + coverage / unmanaged 件数 +
+              不足 KPI / 未採用 施策の要約
+            - citations: 物流効率化法
+            - freshness_warnings: 静的データの鮮度警告
+        """
+        profile = get_sample(company_id)
+        if profile is None:
+            return ToolResponse(
+                summary=(
+                    f"企業 '{company_id}' が見つかりません。利用可能: "
+                    "sample_mfg_01 / sample_wholesale_01 / "
+                    "sample_chain_01 / sample_retail_01"
+                ),
+            ).to_dict()
+
+        override = load_override(profile.company_id)
+        try:
+            result = compute_standardization_score(profile, override)
+        except ValueError as exc:
+            return ToolResponse(
+                summary=str(exc), data_source=profile.data_source,
+            ).to_dict()
+
+        return ToolResponse(
+            summary=build_standardization_summary(result),
+            citations=list(result.citations),
+            freshness_warnings=list(result.freshness_warnings),
+            data_source=profile.data_source,
+        ).to_dict()
+
+    @mcp.tool()
+    async def logi_clo_waste_traps(
+        company_id: str,
+        measure_runs: list[MeasureExecutionRecord] | None = None,
+    ) -> dict[str, object]:
+        """J2 罠スコア（効果が出ていない施策を 6 軸セーフガード付きで検出）を算出します。
+
+        フェーズ5.0 c.7。施策の投資額・期待効果・実績を比較し、罠（waste trap）を
+        高/中/低 severity で検出します。立ち上げ期間 / データ欠損 / サンプル数不足 /
+        季節性 / 外部要因 / 投資回収前の 6 軸セーフガードが発火した場合は
+        trap_severity=low に固定し、誤検知を抑止します。
+
+        actual_effect_jpy が None の MeasureExecutionRecord は判定保留扱いで、
+        kpi_history からの自動逆算は次 PR の課題（c.7 持ち越し）。
+
+        Args:
+            company_id: サンプル/取込済 企業 ID
+            measure_runs: 施策実行記録のリスト（MeasureExecutionRecord）。
+                各レコードは measure_id / 開始日 / 投資額 / 期待効果 / 実績効果 /
+                計測サンプル数 / データ完全度 / 季節性 / 外部要因 / 想定回収月数 /
+                root cause を含む。None または空配列なら結果は空件数で返る。
+
+        Returns:
+            ToolResponse 構造:
+            - summary: high / medium / low 件数 + 投資凍結推奨 + high 例の要約
+            - citations: 物流効率化法
+            - freshness_warnings: 静的データの鮮度警告
+        """
+        profile = get_sample(company_id)
+        if profile is None:
+            return ToolResponse(
+                summary=(
+                    f"企業 '{company_id}' が見つかりません。利用可能: "
+                    "sample_mfg_01 / sample_wholesale_01 / "
+                    "sample_chain_01 / sample_retail_01"
+                ),
+            ).to_dict()
+
+        runs = list(measure_runs) if measure_runs else []
+        result = detect_waste_traps(profile, runs)
+
+        return ToolResponse(
+            summary=build_waste_trap_summary(result),
+            citations=list(result.citations),
+            freshness_warnings=list(result.freshness_warnings),
+            data_source=profile.data_source,
         ).to_dict()

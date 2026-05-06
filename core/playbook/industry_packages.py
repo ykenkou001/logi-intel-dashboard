@@ -911,6 +911,50 @@ def list_packages() -> list[IndustryPackage]:
     return list(ALL_PACKAGES.values())
 
 
+def build_industry_package_summary(
+    package: IndustryPackage,
+    override: CompanyPackageOverride | None = None,
+) -> str:
+    """経営層・CLO 向けの 1 段落サマリー（MCP / REST 共通）。
+
+    package は resolve_company_package 適用後の状態を渡す前提。
+    override は元の差分件数表示用に別途受け取り、4 分類別に件数を表示する。
+    """
+    kpi_count = len(package.kpis)
+    measure_count = len(package.measure_ids)
+    meeting_count = len(package.meetings)
+    report_count = len(package.reports)
+    data_item_count = len(package.data_items)
+    lines = [
+        f"業種パッケージ: {package.label}（version {package.version}）",
+        (
+            f"標準 KPI {kpi_count} 件 / 施策 {measure_count} 件 / "
+            f"会議 {meeting_count} 件 / レポート {report_count} 件 / "
+            f"データ項目 {data_item_count} 件"
+        ),
+    ]
+    if override is None or not override.entries:
+        lines.append("Override: なし（base パッケージそのまま）")
+        return " / ".join(lines)
+
+    counts: dict[OverrideCategory, int] = {
+        "unmanaged_deviation": 0,
+        "approved_better_practice": 0,
+        "required_localization": 0,
+        "temporary_exception": 0,
+    }
+    for entry in override.entries:
+        counts[entry.category] = counts.get(entry.category, 0) + 1
+    lines.append(
+        f"Override 計 {len(override.entries)} 件: "
+        f"unmanaged {counts['unmanaged_deviation']} / "
+        f"承認済差別化 {counts['approved_better_practice']} / "
+        f"必要ローカル {counts['required_localization']} / "
+        f"期限付き例外 {counts['temporary_exception']}"
+    )
+    return " / ".join(lines)
+
+
 def resolve_company_package(
     base_industry: JsicCategory,
     override: CompanyPackageOverride | None = None,
@@ -981,6 +1025,7 @@ __all__ = [
     "StandardKpiDef",
     "StandardMeetingDef",
     "StandardReportDef",
+    "build_industry_package_summary",
     "get_package",
     "list_packages",
     "resolve_company_package",

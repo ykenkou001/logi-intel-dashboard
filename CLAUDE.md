@@ -96,14 +96,14 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ## 3. 現在のフェーズ
 
-**フェーズ 5.0 進行中 — 業種別 CLO 標準パッケージ（c.7 MCP/REST 公開フェーズ）— 2026-05-06 時点**
+**フェーズ 5.0 進行中 — 業種別 CLO 標準パッケージ（c.7 MCP/REST 公開完了 / c.8-c.9 着手前）— 2026-05-06 時点**
 
 | フェーズ | 状態 | 主な PR |
 |---|---|---|
 | 4.0 Web + AWS + 自社データ取込 | ✅ 完了（2026-05-05） | #1〜#5 |
 | 4.1 段階 a 小改修（a.1〜a.5） | ✅ 完了（2026-05-05） | #6 |
 | 4.5 段階 b J3 コックピット + B 用途別テンプレ | ✅ 完了（2026-05-06） | #7 / #8 / #9 / #10 |
-| **5.0 段階 c 業種別パッケージ + F2/J2 スコア** | 🔄 **c.1-c.6 完了 / c.7 着手前（2026-05-06）** | **#11 / #12 / #13** |
+| **5.0 段階 c 業種別パッケージ + F2/J2 スコア** | 🔄 **c.1-c.7 完了 / c.8-c.9 着手前（2026-05-06）** | **#11 / #12 / #13 / #14 / #15(本 PR)** |
 | 5.5 公開・記事化 | ⏳ 未着手 | — |
 
 **社内レビュー URL**: https://d1zei8qivkf3cr.cloudfront.net/
@@ -113,14 +113,15 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 - ✅ **c.1-c.3 IndustryPackage 基盤**（PR #11）— `core/playbook/industry_packages.py`（770 行）/ `core/io/override_store.py` / Override 4 分類（Codex KPI レビュー反映済）
 - ✅ **c.4 既存資産接続検証**（PR #13）— `measure_ids ↔ ALL_MEASURES.applicable_industries` 整合性 / `LOGISTICS_COST_RATIO` baseline 接続
 - ✅ **c.5/c.6 F2 標準化スコア + J2 罠スコア**（PR #13）— `core/analytics/standardization_score.py` / `core/analytics/waste_trap.py`。J2 は 6 軸セーフガード（立ち上げ期間 / データ欠損 / サンプル数 / 季節性 / 外部要因 / 投資回収前）で誤検知抑止。F2 は unmanaged_deviation のみ減点で単調性確保
-- ⏳ **c.7 MCP/REST 3 ツール公開** — 次セッション（HANDOFF_NEXT_SESSION.md 参照）。`logi_clo_industry_package_get` / `logi_clo_standardization_score` / `logi_clo_waste_trap_detect` + 対応 REST エンドポイント
+- ✅ **c.7 MCP/REST 3 ツール公開**（本 PR）— `logi_clo_industry_package` / `logi_clo_standardization_score` / `logi_clo_waste_traps` の MCP ツール 3 件、`/api/v1/clo/industry-package/{id}` / `/standardization-score/{id}` / `/waste-traps/{id}` の REST エンドポイント 3 件を追加。REST は metadata に Pydantic model_dump を載せ Web フロントが型安全に消費可能。pytest 804 件全 pass（新規 21 件）。
 - ⏳ **c.8 連鎖化特有処理 / c.9 統合テスト + Web 2 画面** — 未着手
 
-### c.5/c.6 持ち越し課題（c.7 後の改善 PR で対応予定）
+### c.5/c.6 + c.7 持ち越し課題（c.8 以降の改善 PR で対応予定）
 
 1. J2 罠スコアの `decision_log` 連動（現状は `plan` 入力に閉じている）
 2. `actual_effect_jpy` の逆算（kpi_history からの自動算出）
 3. F2 bonus 拡張（必須 KPI 全実装 + 月次会議定着の判定ロジック追加）
+4. （c.7 由来）`MeasureExecutionRecord` の永続化レイヤ — 現状は POST body / MCP 引数で都度受け取る。`outputs/measure_runs/<company_id>.json` に保存する `measure_run_store.py` を c.8 と同時に整備する候補
 
 ### 直近の主要成果物（フェーズ4.5 + 5.0）
 
@@ -128,6 +129,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 - **業種別 CLO 標準パッケージ**（PR #11）— 4 業種 × 5 要素マトリクス + Override 4 分類 + Codex 業種別 KPI 数値妥当性レビュー反映済（積載率は国の 2028 目標 44% に統一、推測値は target_value=None で残す方針）
 - **用途別 入力テンプレ**（PR #10）— `logi_clo_generate_template(purpose="daily|monthly|annual")`
 - **F2 標準化スコア + J2 罠スコア**（PR #13）— pytest 783 件全 pass / 新規テスト 73 件追加
+- **c.7 業種別パッケージ + F2/J2 の MCP/REST 公開**（本 PR）— Claude Desktop / Web ダッシュボード双方から呼び出し可能に。pytest 804 件全 pass / 新規 21 件追加
 
 ### Codex 協業実績（CLAUDE.md §9 適用例）
 
@@ -323,4 +325,4 @@ Claude 単独で抱えず、**積極的に Codex に意見を求める**こと�
 
 ---
 
-最終更新: 2026-05-06（フェーズ5.0 c.1-c.6 完了 / c.7 着手前。PR #13 で c.4 + F2 標準化スコア + J2 罠スコアを統合・main 取込済。pytest 783 件全 pass / 新規テスト 73 件追加。Codex 協業 2 回目：c.1 業種別 KPI 数値妥当性レビューで 3 件 critical 修正を全反映。次は c.7 MCP/REST 3 ツール公開 — 詳細は HANDOFF_NEXT_SESSION.md / docs/roadmap.md §フェーズ5.0 / `~/.claude/plans/b-c-flickering-pixel.md` 参照）
+最終更新: 2026-05-06（フェーズ5.0 c.1-c.7 完了 / c.8-c.9 着手前。本 PR で c.7 MCP/REST 3 ツール公開 — `logi_clo_industry_package` / `logi_clo_standardization_score` / `logi_clo_waste_traps` の MCP ツール 3 件 + REST エンドポイント 3 件を追加。pytest 804 件全 pass / 新規テスト 21 件追加。次は c.8 連鎖化特有処理 / c.9 統合テスト + Web 2 画面 — 詳細は HANDOFF_NEXT_SESSION.md / docs/roadmap.md §フェーズ5.0 / `~/.claude/plans/b-c-flickering-pixel.md` 参照）

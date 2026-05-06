@@ -16,11 +16,11 @@
 フェーズ 4.0 Web ダッシュボード + AWS 移行 + 自社データ取込      ✅ 完了 (2026-05-05)
 フェーズ 4.1 段階 a 小改修（基盤整備 a.1〜a.5）                   ✅ 完了 (2026-05-05)
 フェーズ 4.5 段階 b J3 デイリーコックピット + B 用途別テンプレ    ✅ 完了 (2026-05-06)
-フェーズ 5.0 段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア   ← 進行中（c.7 着手前）
+フェーズ 5.0 段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア   ← 進行中（c.8-c.9 着手前）
              └ c.1-c.3 IndustryPackage 基盤 + Override 4 分類     ✅ 完了 (2026-05-06)
              └ c.4 既存資産接続検証                              ✅ 完了 (2026-05-06)
              └ c.5/c.6 F2 標準化スコア + J2 罠スコア              ✅ 完了 (2026-05-06)
-             └ c.7 MCP/REST 3 ツール公開                         ⏳ 次セッション着手
+             └ c.7 MCP/REST 3 ツール公開                         ✅ 完了 (2026-05-06)
              └ c.8 連鎖化特有処理 / c.9 統合テスト + Web 2 画面  ⏳ 未着手
 フェーズ 5.5 公開・記事化（旧フェーズ5）                          ⏳ 未着手
 ```
@@ -30,9 +30,9 @@
 
 ---
 
-## 現在のフェーズ: フェーズ 5.0 進行中 — c.1-c.6 完了 / c.7 MCP/REST 公開フェーズ着手前
+## 現在のフェーズ: フェーズ 5.0 進行中 — c.1-c.7 完了 / c.8-c.9 着手前
 
-> **状況（2026-05-06 時点）**: 段階 c の中核（IndustryPackage 基盤 + F2 標準化スコア + J2 罠スコア）まで main 取込済。次は c.7 で `logi_clo_*` ツール 3 件 + REST 3 エンドポイント公開。引継ぎ詳細は [HANDOFF_NEXT_SESSION.md](../HANDOFF_NEXT_SESSION.md) 参照。
+> **状況（2026-05-06 時点）**: 段階 c の中核（IndustryPackage 基盤 + F2 標準化スコア + J2 罠スコア）+ c.7 MCP/REST 公開まで完了。`logi_clo_industry_package` / `logi_clo_standardization_score` / `logi_clo_waste_traps` の MCP ツール 3 件と `/api/v1/clo/industry-package/{id}` / `/standardization-score/{id}` / `/waste-traps/{id}` の REST エンドポイント 3 件を公開済。次は c.8 連鎖化特有処理 / c.9 統合テスト + Web 2 画面。引継ぎ詳細は [HANDOFF_NEXT_SESSION.md](../HANDOFF_NEXT_SESSION.md) 参照。
 
 ### 完了 PR（フェーズ4.5+5.0 関連）
 
@@ -46,6 +46,8 @@
 | #11 | c.1-c.3 業種別 CLO 標準パッケージ基盤（Codex KPI レビュー反映済） | `core/playbook/industry_packages.py`（770 行）+ `core/io/override_store.py` |
 | #12 | HANDOFF を c.4-c.6 向けに刷新 | `HANDOFF_NEXT_SESSION.md` |
 | #13 | c.4 既存資産接続検証 + c.5/c.6 F2 標準化スコア + J2 罠スコア | `core/analytics/standardization_score.py` + `core/analytics/waste_trap.py` + テスト 73 件追加（pytest 783 件全 pass） |
+| #14 | フェーズ5.0 c.1-c.6 完了状態を CLAUDE.md / roadmap / README に反映 | docs 更新のみ |
+| #15 (本 PR) | c.7 業種別パッケージ + F2 / J2 を MCP / REST で公開 | `mcp_server/tools/clo_tools.py`（+3 ツール）+ `api/routers/clo.py`（+3 エンドポイント）+ `core/playbook/industry_packages.py`（`build_industry_package_summary` 追加）+ テスト 21 件追加（pytest 804 件全 pass） |
 
 ### Codex 協業実績（CLAUDE.md §9 適用例）
 
@@ -707,7 +709,7 @@ class ScenarioSimResult:
 
 ---
 
-## フェーズ 5.0: 段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア（進行中・c.7 着手前）
+## フェーズ 5.0: 段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア（進行中・c.7 完了 / c.8-c.9 着手前）
 
 **ゴール**: 「コンサル代行」の代替として、業種別の標準パッケージ（KPI / 施策 / 会議体 / レポート / データ項目）を SaaS 商品化。個社差分を Override 4 分類で別管理し、F2 標準化スコアと J2 罠スコアで継続改善を支援する。
 
@@ -737,15 +739,30 @@ class ScenarioSimResult:
 - [x] **c.6 J2 罠スコア** — `core/analytics/waste_trap.py` + 6 軸セーフガード（立ち上げ期間 / データ欠損 / サンプル数 / 季節性 / 外部要因 / 投資回収前）で誤検知抑止 / 9 種 root cause 分類 / テスト 34 件
 - [x] pytest 783 件全 pass / ruff クリーン / 新規テスト 73 件追加（c.4: 17 / F2: 22 / J2: 34）
 
-#### 持ち越し課題（c.7 後の改善 PR で対応予定）
+#### 持ち越し課題（c.8 以降の改善 PR で対応予定）
 
 1. **J2 罠スコアの decision_log 連動** — 現状は `plan` 入力に閉じている。`outputs/decisions/<id>.jsonl` 連動で「pending のまま X ヶ月」検出を強化
 2. **actual_effect_jpy の逆算** — `kpi_history` の改善幅（積載率 ▲pp / 物流コスト/売上比率 ▲%）から自動算出
 3. **F2 bonus 拡張** — 「必須 KPI 全実装 + 月次会議定着」判定ロジックの追加（現状は実装ベース判定のみ）
+4. **MeasureExecutionRecord の永続化** — c.7 では POST body / MCP 引数で都度受け取る形のみ。`outputs/measure_runs/<company_id>.json` で永続化する store を c.8 と同時に整備候補
 
-### c.7-c.9 ⏳ 未着手
+### c.7 MCP/REST 3 ツール公開 ✅ 完了（本 PR・2026-05-06）
 
-- [ ] **c.7 MCP/REST 3 ツール公開**（次セッション） — `logi_clo_industry_package_get` / `logi_clo_standardization_score` / `logi_clo_waste_trap_detect` + 対応 REST エンドポイント
+- [x] **MCP ツール 3 件**（`mcp_server/tools/clo_tools.py`）:
+  - `logi_clo_industry_package(company_id)` — `resolve_company_package` で Override 4 分類を反映済の業種パッケージを返す
+  - `logi_clo_standardization_score(company_id)` — `compute_standardization_score` で F2 スコア（0-100）を返す
+  - `logi_clo_waste_traps(company_id, measure_runs)` — `detect_waste_traps` で 6 軸セーフガード付き罠検出
+- [x] **REST エンドポイント 3 件**（`api/routers/clo.py`）:
+  - `GET /api/v1/clo/industry-package/{company_id}` — metadata に IndustryPackage + Override の `model_dump(mode="json")` を載せ Web から型安全に消費可能
+  - `GET /api/v1/clo/standardization-score/{company_id}` — metadata に `StandardizationScoreResult.model_dump(mode="json")`
+  - `POST /api/v1/clo/waste-traps/{company_id}` — body に `list[MeasureExecutionRecord]`、metadata に `WasteTrapResult.model_dump(mode="json")`
+- [x] `core/playbook/industry_packages.py` に `build_industry_package_summary(package, override)` を追加（MCP / REST 共通の経営層向け 1 段落要約）
+- [x] テスト 21 件追加（pytest 804 件全 pass）: MCP 10 件（`tests/mcp_server/test_clo_scoring_tools.py`）+ REST 11 件（`tests/api/test_clo_router.py`）
+- [x] FastAPI 実機検証で 4 業種サンプルすべて動作確認（連鎖化は KPI 6 件 / 施策 5 件 でロード系除外を維持）
+- [x] ruff check クリア / mypy は c.7 関連のエラー 0 件
+
+### c.8-c.9 ⏳ 未着手
+
 - [ ] **c.8 連鎖化事業者特有処理** — `chain_franchise` パッケージ強制（`metric_id` プレフィックス `handling_*` 禁止 / `form3_section == "loading"` 除外 / `legal_basis="第65条"` 明記）
 - [ ] **c.9 統合テスト + Web 画面 2 件** — `web/app/dashboard/industry-package/page.tsx`（4 業種タブ + 5 要素表）/ `web/app/dashboard/standardization/page.tsx`（自社 F2 + 差分テーブル）
 
@@ -755,7 +772,7 @@ class ScenarioSimResult:
 - [x] `detect_waste_traps` の 6 軸セーフガードで `months_since_start=0` 時に trap_severity="low" 固定 — PR #13
 - [x] 4 業種すべてで `get_package(category)` が StandardKpiDef リストを返す — PR #11
 - [x] 連鎖化サンプルで荷役等セクション施策が混入しないことが CI で守られる — PR #11 + PR #13 で強化
-- [ ] **c.7 MCP/REST 公開**: 上記 core/ 関数を `logi_clo_*` ツール経由で呼べる状態（次セッション着手）
+- [x] **c.7 MCP/REST 公開**: 上記 core/ 関数が `logi_clo_industry_package` / `logi_clo_standardization_score` / `logi_clo_waste_traps` の MCP ツールと対応 REST エンドポイントから呼べる — 本 PR
 - [ ] Web 2 画面が `npm run build` 成功・実機動作確認済（c.9）
 
 ---

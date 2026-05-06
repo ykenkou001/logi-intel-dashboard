@@ -277,3 +277,144 @@ def test_plan_draft_chain_endpoints_run(endpoint: str, method: str) -> None:
     assert resp.status_code == 200, resp.text
     body = resp.json()
     _assert_tool_response_shape(body)
+
+
+# ─── フェーズ5.0 c.7: 業種別パッケージ + F2 / J2 スコア REST ───────────
+
+
+@pytest.mark.parametrize(
+    "company_id,expected_industry",
+    [
+        ("sample_mfg_01", "manufacturing"),
+        ("sample_wholesale_01", "wholesale"),
+        ("sample_retail_01", "retail"),
+        ("sample_chain_01", "chain_franchise"),
+    ],
+)
+def test_industry_package_returns_metadata(
+    company_id: str, expected_industry: str,
+) -> None:
+    """4 業種サンプルでパッケージが解決され metadata が含まれる。"""
+    resp = client.get(f"/api/v1/clo/industry-package/{company_id}")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    _assert_tool_response_shape(body)
+    md = body["metadata"]
+    assert md["base_industry"] == expected_industry
+    assert "package" in md
+    pkg = md["package"]
+    assert pkg["category"] == expected_industry
+    assert isinstance(pkg["kpis"], list) and len(pkg["kpis"]) >= 1
+    assert isinstance(pkg["measure_ids"], list) and len(pkg["measure_ids"]) >= 1
+    # サンプル profile は override 未保存なので None
+    assert md["override"] is None
+
+
+def test_industry_package_unknown_company_returns_404() -> None:
+    resp = client.get("/api/v1/clo/industry-package/nonexistent_xyz")
+    assert resp.status_code == 404
+
+
+def test_standardization_score_returns_score_metadata() -> None:
+    """F2 標準化スコアが score / coverage_pct / missing_* を含むメタデータを返す。"""
+    resp = client.get("/api/v1/clo/standardization-score/sample_mfg_01")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    _assert_tool_response_shape(body)
+    md = body["metadata"]
+    assert md["company_id"] == "sample_mfg_01"
+    assert md["base_package_category"] == "manufacturing"
+    assert 0.0 <= md["score"] <= 100.0
+    assert 0.0 <= md["coverage_pct"] <= 100.0
+    assert isinstance(md["missing_kpi_ids"], list)
+    assert isinstance(md["missing_measure_ids"], list)
+    # サンプル profile は kpi_history 空で coverage 0
+    assert md["coverage_pct"] == 0.0
+
+
+def test_standardization_score_unknown_company_returns_404() -> None:
+    resp = client.get("/api/v1/clo/standardization-score/nonexistent_xyz")
+    assert resp.status_code == 404
+
+
+def test_waste_traps_with_empty_body_returns_zero_items() -> None:
+    """body 未指定（None）でも 200 で空件数が返る。"""
+    resp = client.post(
+        "/api/v1/clo/waste-traps/sample_mfg_01",
+        json=None,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    _assert_tool_response_shape(body)
+    md = body["metadata"]
+    assert md["high_count"] == 0
+    assert md["medium_count"] == 0
+    assert md["low_count"] == 0
+    assert md["items"] == []
+
+
+def test_waste_traps_high_severity_with_freeze_recommendation() -> None:
+    """high severity + wrong_kpi root_cause で投資凍結推奨が立つ。"""
+    runs = [
+        {
+            "measure_id": "modal_shift_to_rail",
+            "started_on": "2024-01-01",
+            "invested_jpy": 100_000_000,
+            "expected_effect_jpy": 300_000_000,
+            "actual_effect_jpy": 20_000_000,
+            "measured_count": 50,
+            "data_completeness": 0.8,
+            "seasonal_factor_active": False,
+            "external_event_active": False,
+            "payback_months_estimated": 12,
+            "suspected_root_cause": "wrong_kpi",
+        },
+    ]
+    resp = client.post(
+        "/api/v1/clo/waste-traps/sample_mfg_01", json=runs,
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    _assert_tool_response_shape(body)
+    md = body["metadata"]
+    assert md["high_count"] == 1
+    assert md["investment_freeze_count"] == 1
+    item = md["items"][0]
+    assert item["trap_severity"] == "high"
+    assert item["investment_freeze_recommended"] is True
+    assert item["safeguard_triggered"] == []
+
+
+def test_waste_traps_safeguard_pins_severity_to_low() -> None:
+    """actual_effect_jpy=None でセーフガード発火 → low 固定 + freeze=False。"""
+    runs = [
+        {
+            "measure_id": "modal_shift_to_rail",
+            "started_on": "2025-10-01",
+            "invested_jpy": 100_000_000,
+            "expected_effect_jpy": 300_000_000,
+            "actual_effect_jpy": None,
+            "measured_count": 50,
+            "data_completeness": 0.8,
+            "payback_months_estimated": 12,
+            "suspected_root_cause": "wrong_kpi",
+        },
+    ]
+    resp = client.post(
+        "/api/v1/clo/waste-traps/sample_mfg_01", json=runs,
+    )
+    assert resp.status_code == 200, resp.text
+    md = resp.json()["metadata"]
+    assert md["high_count"] == 0
+    assert md["low_count"] == 1
+    item = md["items"][0]
+    assert item["trap_severity"] == "low"
+    assert item["investment_freeze_recommended"] is False
+    assert "actual_not_measured" in item["safeguard_triggered"]
+
+
+def test_waste_traps_unknown_company_returns_404() -> None:
+    resp = client.post(
+        "/api/v1/clo/waste-traps/nonexistent_xyz", json=[],
+    )
+    assert resp.status_code == 404

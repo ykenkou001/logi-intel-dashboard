@@ -39,15 +39,31 @@ from core.analytics.periodic_report import (
 from core.analytics.plan_draft import build_plan_draft_summary, generate_plan_draft
 from core.analytics.scenario_sim import build_scenario_summary, simulate_scenarios
 from core.analytics.simulator import build_simulation_summary, simulate_measures
+from core.analytics.standardization_score import (
+    build_standardization_summary,
+    compute_standardization_score,
+)
 from core.analytics.target_proposal import build_target_proposal_summary, propose_targets
 from core.analytics.wait_time_heatmap import HeatmapResult, build_wait_time_heatmap
+from core.analytics.waste_trap import (
+    MeasureExecutionRecord,
+    build_waste_trap_summary,
+    detect_waste_traps,
+)
 from core.export.citation import Citation, logistics_efficiency_law_citation
 from core.export.ppt_writer import write_clo_executive_brief
 from core.export.response import ToolResponse
+from core.io.override_store import load_override
 from core.legal.eligibility import evaluate_eligibility
 from core.playbook.filters import PlaybookFilter, build_search_summary, filter_playbook
+from core.playbook.industry_packages import (
+    build_industry_package_summary,
+    get_package,
+    resolve_company_package,
+)
 from core.static._freshness import all_warnings
 from core.static.efficiency_law_certified import IndustryCategory, MeasureType
+from core.static.jsic import category_of
 from core.static.sample_company import get_sample
 from core.storage import get_storage
 from core.validators.submission_validator import (
@@ -57,7 +73,12 @@ from core.validators.submission_validator import (
 
 router = APIRouter(prefix="/api/v1/clo", tags=["clo"])
 
-_VALID_SAMPLE_IDS = ("sample_mfg_01", "sample_wholesale_01", "sample_chain_01")
+_VALID_SAMPLE_IDS = (
+    "sample_mfg_01",
+    "sample_wholesale_01",
+    "sample_chain_01",
+    "sample_retail_01",
+)
 
 
 def _resolve_profile_or_404(company_id: str):  # type: ignore[no-untyped-def]
@@ -765,3 +786,114 @@ async def decisions_log(
         "decision": record.decision,
         "log_path": str(path),
     }
+
+
+# ─── フェーズ5.0 c.7: 業種別パッケージ + F2 / J2 スコアの公開 ───────────
+
+
+@router.get("/industry-package/{company_id}", response_model=ToolResponseModel)
+async def industry_package(company_id: str) -> ToolResponseModel:
+    """業種別 CLO 標準パッケージ（Override 適用済）を返す。
+
+    Web フロントは ToolResponseModel.metadata 経由で IndustryPackage 全体を
+    受け取り、KPI / 施策 / 会議体 / レポート / データ項目を可視化する。
+    """
+    profile = _resolve_profile_or_404(company_id)
+
+    base_industry = category_of(profile.jsic_code)
+    if base_industry is None or base_industry == "other":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"jsic_code={profile.jsic_code!r} から CLO 標準パッケージの"
+                "業種を解決できません（manufacturing / wholesale / retail / "
+                "chain_franchise のいずれかが必要）"
+            ),
+        )
+    if get_package(base_industry) is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"業種 {base_industry!r} に対応する IndustryPackage が未定義",
+        )
+
+    override = load_override(profile.company_id)
+    package = resolve_company_package(base_industry, override)
+
+    response = ToolResponse(
+        summary=build_industry_package_summary(package, override),
+        citations=[logistics_efficiency_law_citation()],
+        freshness_warnings=all_warnings(),
+        data_source=profile.data_source,
+    )
+    model = _to_model(response)
+    model.metadata = {
+        "company_id": profile.company_id,
+        "base_industry": base_industry,
+        "package": package.model_dump(mode="json"),
+        "override": override.model_dump(mode="json") if override else None,
+    }
+    return model
+
+
+@router.get(
+    "/standardization-score/{company_id}", response_model=ToolResponseModel,
+)
+async def standardization_score(company_id: str) -> ToolResponseModel:
+    """F2 標準化スコア（業種別 CLO 標準パッケージへの準拠度 0-100）を算出する。
+
+    coverage_pct と Override 4 分類別件数を分離して返すことで、UI 側で
+    「coverage で○、deviation で×」の根拠を表示できる。
+    """
+    profile = _resolve_profile_or_404(company_id)
+    override = load_override(profile.company_id)
+
+    try:
+        result = compute_standardization_score(profile, override)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    response = ToolResponse(
+        summary=build_standardization_summary(result),
+        citations=list(result.citations),
+        freshness_warnings=list(result.freshness_warnings),
+        data_source=profile.data_source,
+    )
+    model = _to_model(response)
+    model.metadata = result.model_dump(mode="json")
+    return model
+
+
+@router.post("/waste-traps/{company_id}", response_model=ToolResponseModel)
+async def waste_traps(
+    company_id: str,
+    measure_runs: Annotated[
+        list[MeasureExecutionRecord] | None,
+        Body(
+            description=(
+                "施策実行記録のリスト。各レコードは measure_id / 開始日 / "
+                "投資額 / 期待効果 / 実績効果 / 計測サンプル数 / "
+                "データ完全度 / 季節性 / 外部要因 / 想定回収月数 / root cause を含む。"
+                "空配列または null なら結果は 0 件で返る。"
+            ),
+        ),
+    ] = None,
+) -> ToolResponseModel:
+    """J2 罠スコア（効果が出ていない施策を 6 軸セーフガード付きで検出）。
+
+    立ち上げ期間 / データ欠損 / サンプル数不足 / 季節性 / 外部要因 / 投資回収前
+    の 6 軸セーフガードが発火した場合は trap_severity=low に固定して誤検知を抑止する。
+    """
+    profile = _resolve_profile_or_404(company_id)
+
+    runs = list(measure_runs) if measure_runs else []
+    result = detect_waste_traps(profile, runs)
+
+    response = ToolResponse(
+        summary=build_waste_trap_summary(result),
+        citations=list(result.citations),
+        freshness_warnings=list(result.freshness_warnings),
+        data_source=profile.data_source,
+    )
+    model = _to_model(response)
+    model.metadata = result.model_dump(mode="json")
+    return model
