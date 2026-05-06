@@ -96,7 +96,9 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ## 3. 現在のフェーズ
 
-**フェーズ 5.0 完了 — 業種別 CLO 標準パッケージ（c.1-c.9 全完了）— 2026-05-06 時点 / 次フェーズ 5.5 公開・記事化**
+**フェーズ 5.0 完了 — 業種別 CLO 標準パッケージ（c.1-c.9 全完了 / Codex 評価「条件付き完了」を docs 整備で「機能基盤の完成」と限定して完了確定）— 2026-05-06 時点 / 次フェーズ 5.5 公開・記事化 + 運用ハーデニング**
+
+> ⚠️ **完了の粒度**: 完成したのは「業種別 CLO 標準パッケージ機能基盤」であり、「法令提出を完全保証」ではない。公開時は「産業別パッケージ・F2 標準化スコア・J2 罠スコアの基盤公開」と限定して訴求する。詳細 → [docs/roadmap.md](docs/roadmap.md) §フェーズ5.0 完了の粒度
 
 | フェーズ | 状態 | 主な PR |
 |---|---|---|
@@ -327,4 +329,4 @@ Claude 単独で抱えず、**積極的に Codex に意見を求める**こと�
 
 ---
 
-最終更新: 2026-05-06（フェーズ5.0 段階 c 完了。本 PR で c.8 連鎖化強制ガード（`validate_chain_franchise_constraints`：handling_* KPI / form3=loading 施策 / 第65条徹底）+ F2 スコア追加減点（chain_franchise_loading_misuse_count）+ c.9 Web 2 画面（業種別パッケージ閲覧 / F2 標準化スコア）+ Web シナリオ E2E 統合テストを追加。pytest 826 件全 pass / 新規テスト 22 件追加 / Next.js build 全 16 ページ pass。次はフェーズ5.5 公開・記事化 — 詳細は HANDOFF_NEXT_SESSION.md / docs/roadmap.md §フェーズ5.0 / `~/.claude/plans/b-c-flickering-pixel.md` 参照）
+最終更新: 2026-05-06（フェーズ5.0 完了確定。PR #16 で c.8 連鎖化強制ガード + c.9 Web 2 画面 + 統合テスト、PR #17 で Web 可読性向上（施策日本語名 / enum 日本語化 / 連鎖化バナー / labels.ts 共通表示層 / measure_details + chain_franchise_notice REST 拡張）、PR #18 で notes / Override summary の英語コード日本語化、PR #19（本 PR）で Codex 独立評価を反映した完了粒度の明文化。pytest 835 件全 pass / Next.js build 全 16 ページ pass / AWS 本番稼働確認済。次はフェーズ5.5 — 最優先タスクは MeasureExecutionRecord 永続化（Codex 勧告で昇格）+ AWS 運用ハーデニング、その後 README 整備 / Zenn 記事 / 社内デモ。詳細は HANDOFF_NEXT_SESSION.md / docs/roadmap.md §フェーズ5.0 完了の粒度 参照）
