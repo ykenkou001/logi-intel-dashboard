@@ -106,7 +106,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 | 4.0 Web + AWS + 自社データ取込 | ✅ 完了（2026-05-05） | #1〜#5 |
 | 4.1 段階 a 小改修（a.1〜a.5） | ✅ 完了（2026-05-05） | #6 |
 | 4.5 段階 b J3 コックピット + B 用途別テンプレ | ✅ 完了（2026-05-06） | #7 / #8 / #9 / #10 |
-| **5.0 段階 c 業種別パッケージ + F2/J2 スコア** | ✅ **完了（2026-05-06）** | **#11 / #12 / #13 / #14 / #15 / #16(本 PR)** |
+| **5.0 段階 c 業種別パッケージ + F2/J2 スコア** | ✅ **完了（2026-05-06）** | **#11 / #12 / #13 / #14 / #15 / #16** |
 | 5.5 公開・記事化 | ⏳ 未着手 | — |
 
 **社内レビュー URL**: https://d1zei8qivkf3cr.cloudfront.net/
@@ -117,8 +117,8 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 - ✅ **c.4 既存資産接続検証**（PR #13）— `measure_ids ↔ ALL_MEASURES.applicable_industries` 整合性 / `LOGISTICS_COST_RATIO` baseline 接続
 - ✅ **c.5/c.6 F2 標準化スコア + J2 罠スコア**（PR #13）— `core/analytics/standardization_score.py` / `core/analytics/waste_trap.py`。J2 は 6 軸セーフガード（立ち上げ期間 / データ欠損 / サンプル数 / 季節性 / 外部要因 / 投資回収前）で誤検知抑止。F2 は unmanaged_deviation のみ減点で単調性確保
 - ✅ **c.7 MCP/REST 3 ツール公開**（PR #15）— `logi_clo_industry_package` / `logi_clo_standardization_score` / `logi_clo_waste_traps` の MCP ツール 3 件、`/api/v1/clo/industry-package/{id}` / `/standardization-score/{id}` / `/waste-traps/{id}` の REST エンドポイント 3 件を追加。REST は metadata に Pydantic model_dump を載せ Web フロントが型安全に消費可能。pytest 804 件全 pass（新規 21 件）。
-- ✅ **c.8 連鎖化事業者の強制ガード**（本 PR）— `validate_chain_franchise_constraints()` を追加し、連鎖化パッケージで以下を強制:（i）`metric_id` プレフィックス `handling_*` を含む KPI 排除 / （ii）`form3_section="loading"` の施策排除（warehouse_dx_wms / pallet_standardization / relay_transport 等）/ （iii）様式第5 レポートの法令根拠を `第65条` に統一。違反時はモジュール load 時に `ValueError`。F2 標準化スコアにも `chain_franchise_loading_misuse_count` を追加し、Override で loading 施策を approved/required で採用しても unmanaged 同等で減点する。
-- ✅ **c.9 統合テスト + Web 2 画面**（本 PR）— `web/app/dashboard/industry-package/page.tsx`（4 業種パッケージ閲覧 / KPI / 施策 / 会議 / レポート / データ項目 + Override 4 分類別件数）+ `web/app/dashboard/standardization/page.tsx`（自社 F2 スコア + 算出根拠 + 未計測 KPI / 未採用施策 + 差分テーブル）。`web/lib/api.ts` に Pydantic スキーマと完全一致する 18 型を追加。`tests/api/test_clo_router.py` に 4 業種で `industry-package` ↔ `standardization-score` 連動を保証する Web シナリオ E2E テストを追加。pytest 826 件全 pass / Next.js build 全 16 ページ pass。
+- ✅ **c.8 連鎖化事業者の強制ガード**（PR #16）— `validate_chain_franchise_constraints()` を追加し、連鎖化パッケージで以下を強制:（i）`metric_id` プレフィックス `handling_*` を含む KPI 排除 / （ii）`form3_section="loading"` の施策排除（warehouse_dx_wms / pallet_standardization / relay_transport 等）/ （iii）様式第5 レポートの法令根拠を `第65条` に統一。違反時はモジュール load 時に `ValueError`。F2 標準化スコアにも `chain_franchise_loading_misuse_count` を追加し、Override で loading 施策を approved/required で採用しても unmanaged 同等で減点する。
+- ✅ **c.9 統合テスト + Web 2 画面**（PR #16）— `web/app/dashboard/industry-package/page.tsx`（4 業種パッケージ閲覧 / KPI / 施策 / 会議 / レポート / データ項目 + Override 4 分類別件数）+ `web/app/dashboard/standardization/page.tsx`（自社 F2 スコア + 算出根拠 + 未計測 KPI / 未採用施策 + 差分テーブル）。`web/lib/api.ts` に Pydantic スキーマと完全一致する 18 型を追加。`tests/api/test_clo_router.py` に 4 業種で `industry-package` ↔ `standardization-score` 連動を保証する Web シナリオ E2E テストを追加。pytest 826 件全 pass / Next.js build 全 16 ページ pass。
 
 ### c.5/c.6 + c.7 + c.8 持ち越し課題（フェーズ 5.5 以降の改善 PR で対応予定）
 
@@ -134,7 +134,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 - **用途別 入力テンプレ**（PR #10）— `logi_clo_generate_template(purpose="daily|monthly|annual")`
 - **F2 標準化スコア + J2 罠スコア**（PR #13）— pytest 783 件全 pass / 新規テスト 73 件追加
 - **c.7 業種別パッケージ + F2/J2 の MCP/REST 公開**（PR #15）— Claude Desktop / Web ダッシュボード双方から呼び出し可能に。pytest 804 件全 pass / 新規 21 件追加
-- **c.8 連鎖化強制ガード + c.9 Web 2 画面**（本 PR）— 連鎖化パッケージで `handling_*` KPI / `form3=loading` 施策 / `第46条` 表記を CI で fail。F2 スコアに連鎖化 loading 誤用検出を追加。Web に業種別パッケージ閲覧 + F2 標準化スコア の 2 画面を追加。pytest 826 件全 pass / 新規 22 件追加 / Next.js build 全 16 ページ pass
+- **c.8 連鎖化強制ガード + c.9 Web 2 画面**（PR #16）— 連鎖化パッケージで `handling_*` KPI / `form3=loading` 施策 / `第46条` 表記を CI で fail。F2 スコアに連鎖化 loading 誤用検出を追加。Web に業種別パッケージ閲覧 + F2 標準化スコア の 2 画面を追加。pytest 826 件全 pass / 新規 22 件追加 / Next.js build 全 16 ページ pass
 
 ### Codex 協業実績（CLAUDE.md §9 適用例）
 
@@ -154,6 +154,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 - **過剰アクセス禁止** — キャッシュ必須、リトライにバックオフ必須
 - **API キーをログに出力しない** — `core/clients/base.py` でマスク処理
 - **ロジックを先に読む** — 推測で実装しない
+- **作業は必ずブランチを切ってから始める** — `main` 上で直接編集・コミットしない。作業開始前に `git checkout -b <branch>` でブランチを作成し、PR 経由でマージする。
 - **`main` への直接 push は禁止** — branch protection で hook reject される。必ず feature ブランチ（`feature/...` `fix/...` `docs/...` `ci/...`）を切って PR 経由でマージする。詳細 → [docs/git_workflow.md](docs/git_workflow.md) §main ブランチ運用ルール
 
 ---
@@ -164,6 +165,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 2. 現在のフェーズを [docs/roadmap.md](docs/roadmap.md) で確認したか
 3. 直近の git log を見て、どこまで進んでいるか確認したか（`git log --oneline -20`）
 4. 作業前に `uv sync` で依存関係を最新化したか
+5. `git checkout -b <branch>` でブランチを切ったか（`main` 上で直接作業しない）
 
 ---
 
@@ -330,4 +332,4 @@ Claude 単独で抱えず、**積極的に Codex に意見を求める**こと�
 
 ---
 
-最終更新: 2026-05-06（フェーズ5.0 完了確定。PR #16 で c.8 連鎖化強制ガード + c.9 Web 2 画面 + 統合テスト、PR #17 で Web 可読性向上（施策日本語名 / enum 日本語化 / 連鎖化バナー / labels.ts 共通表示層 / measure_details + chain_franchise_notice REST 拡張）、PR #18 で notes / Override summary の英語コード日本語化、PR #19（本 PR）で Codex 独立評価を反映した完了粒度の明文化。pytest 835 件全 pass / Next.js build 全 16 ページ pass / AWS 本番稼働確認済。次はフェーズ5.5 — 最優先タスクは MeasureExecutionRecord 永続化（Codex 勧告で昇格）+ AWS 運用ハーデニング、その後 README 整備 / Zenn 記事 / 社内デモ。詳細は HANDOFF_NEXT_SESSION.md / docs/roadmap.md §フェーズ5.0 完了の粒度 参照）
+最終更新: 2026-05-06（フェーズ5.0 完了確定。PR #16 で c.8 連鎖化強制ガード + c.9 Web 2 画面 + 統合テスト、PR #17 で Web 可読性向上（施策日本語名 / enum 日本語化 / 連鎖化バナー / labels.ts 共通表示層 / measure_details + chain_franchise_notice REST 拡張）、PR #18 で notes / Override summary の英語コード日本語化、PR #19 で Codex 独立評価を反映した完了粒度の明文化。pytest 835 件全 pass / Next.js build 全 16 ページ pass / AWS 本番稼働確認済。次はフェーズ5.5 — 最優先タスクは MeasureExecutionRecord 永続化（Codex 勧告で昇格）+ AWS 運用ハーデニング、その後 README 整備 / Zenn 記事 / 社内デモ。詳細は HANDOFF_NEXT_SESSION.md / docs/roadmap.md §フェーズ5.0 完了の粒度 参照）
