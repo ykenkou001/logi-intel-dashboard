@@ -20,7 +20,7 @@
 |--------------|------|----|
 | `logi_estat_*` | e-Stat 単独 | `logi_estat_search`, `logi_estat_get_data` |
 | `logi_corp_*` | 国税庁法人番号 単独 | `logi_corp_search`, `logi_corp_by_pref` |
-| `logi_traffic_*` | xROAD 交通量 単独 | `logi_traffic_realtime`, `logi_traffic_by_route` |
+| `logi_traffic_*` | xROAD 交通量 単独 | `logi_traffic_realtime`, `logi_traffic_by_bbox` |
 | `logi_weather_*` | 気象庁 単独 | `logi_weather_forecast`, `logi_weather_warning` |
 | `logi_fuel_*` | 燃料価格 単独 | `logi_fuel_price`, `logi_fuel_history` |
 | `logi_macro_*` | 都道府県マクロ統合 | `logi_macro_overview` |

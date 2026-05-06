@@ -10,16 +10,22 @@ from core.clients.xroad import XRoadApiError, XRoadClient
 
 def _format_features(features: list[dict[str, Any]]) -> str:
     if not features:
-        return "交通量データが見つかりませんでした。route_id または地理範囲を確認してください。"
+        return (
+            "交通量データが見つかりませんでした。"
+            "常時観測点コード、地理範囲、時間帯を確認してください。"
+        )
     lines: list[str] = []
     for f in features[:10]:
         props = f.get("properties", {})
-        route = props.get("route_id", "-")
-        speed = props.get("speed", "-")
-        volume = props.get("volume", "-")
-        level = props.get("congestion_level", "-")
-        time_ = props.get("time_from", "-")
-        lines.append(f"路線={route} 時刻={time_} 速度={speed}km/h 交通量={volume}台/h 混雑={level}")
+        station = props.get("常時観測点コード", "-")
+        time_ = props.get("時間コード", props.get("時間帯", "-"))
+        up = _sum_volume(props, "上り")
+        down = _sum_volume(props, "下り")
+        total = up + down
+        lines.append(
+            f"観測点={station} 時間コード={time_} "
+            f"交通量={total}台/5分（上り {up} / 下り {down}）"
+        )
     total = len(features)
     result = "\n".join(lines)
     if total > 10:
@@ -27,19 +33,31 @@ def _format_features(features: list[dict[str, Any]]) -> str:
     return result
 
 
+def _sum_volume(props: dict[str, Any], direction: str) -> int:
+    total = 0
+    for key in (
+        f"{direction}・小型交通量",
+        f"{direction}・大型交通量",
+        f"{direction}・車種判別不能交通量",
+    ):
+        value = props.get(key) or 0
+        total += int(value)
+    return total
+
+
 def register_tools(mcp: FastMCP) -> None:
     """MCP サーバーに xROAD 交通量ツールを登録する。"""
 
     @mcp.tool()
     async def logi_traffic_realtime(route_id: str, time_from: str = "") -> str:
-        """xROAD から路線別リアルタイム交通量を取得します（5分値データ、TTL=1分）。
+        """xROAD から常時観測点別リアルタイム交通量を取得します（5分値データ、TTL=1分）。
 
         Args:
-            route_id: 路線コード（JARTIC 仕様書を参照。例: "0001"）
-            time_from: 取得開始時刻（省略可。"YYYY-MM-DD HH:MM:SS" 形式）
+            route_id: 常時観測点コード（例: "3110010"）
+            time_from: 取得開始時刻（省略可。"YYYY-MM-DD HH:MM:SS" または YYYYMMDDHHMM 形式）
 
         Returns:
-            速度・交通量・混雑度の一覧
+            5分値交通量の一覧
         """
         try:
             async with XRoadClient() as client:
@@ -69,7 +87,7 @@ def register_tools(mcp: FastMCP) -> None:
             max_lat: 最大緯度（例: 35.8）
 
         Returns:
-            速度・交通量・混雑度の一覧
+            直近1時間の5分値交通量の一覧
         """
         try:
             async with XRoadClient() as client:
