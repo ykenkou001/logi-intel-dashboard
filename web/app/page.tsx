@@ -235,39 +235,6 @@ export default function HomePage() {
         </Link>
       </section>
 
-      {/* Backend info */}
-      <section className="bg-white rounded-xl border border-gray-100 p-5">
-        <h3 className="font-bold text-gray-800 text-sm mb-2">
-          バックエンド接続
-        </h3>
-        <p className="text-xs text-gray-600 leading-relaxed mb-2">
-          このダッシュボードは{" "}
-          <code
-            className="bg-gray-100 px-1 py-0.5 rounded text-xs"
-            style={{ fontFamily: "var(--font-mono)" }}
-          >
-            api.main:app
-          </code>{" "}
-          で起動した FastAPI を呼び出します。
-        </p>
-        <pre
-          className="bg-gray-900 text-emerald-400 text-xs p-3 rounded-lg overflow-x-auto"
-          style={{ fontFamily: "var(--font-mono)" }}
-        >
-          uv run uvicorn api.main:app --reload --port 8000
-        </pre>
-        <p className="mt-2 text-xs text-gray-400">
-          API 仕様:{" "}
-          <a
-            className="text-[#2E73AC] hover:underline"
-            href="http://localhost:8000/docs"
-            target="_blank"
-            rel="noreferrer"
-          >
-            http://localhost:8000/docs
-          </a>
-        </p>
-      </section>
     </div>
   );
 }
