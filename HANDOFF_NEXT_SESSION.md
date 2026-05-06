@@ -8,35 +8,79 @@
 
 ### 全体像
 
-**フェーズ5.0（段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア）は完了**（c.1-c.9 全達成）。
-次は最終フェーズ **5.5 公開・記事化** で、本プロダクトを社内・社外に届ける段階。
+**フェーズ5.0（段階 c 業種別 CLO 標準パッケージ + F2/J2 スコア）は完了**（c.1-c.9 全達成 / Codex 独立評価で「条件付き完了 → docs 整備で完了確定」）。
+次は最終フェーズ **5.5 公開・記事化** + **運用ハーデニング**。
 
-`docs/roadmap.md` §フェーズ5.5 の TODO は以下:
+### フェーズ5.0 完了の粒度（Codex 評価 2026-05-06 反映）
 
-- [ ] **README 整備** — 現行 README の更新 + 主要機能の Quick Start 化
-- [ ] **Zenn 記事執筆** — 開発過程・設計判断・Codex 協業実績を技術記事化
-- [ ] **社内デモ** — 営業・企画・経営層向けに動作デモを実施
-- [ ] **（任意）Public 化、PyPI 公開**
+完了したのは **「業種別 CLO 標準パッケージ + F2/J2 スコアの機能基盤」** であり、**「法令提出を完全保証」ではない**。フェーズ5.5 で公開・社外発信する際は以下の表現に留める:
 
-### フェーズ5.0 完了の確認
+✅ OK: 「産業別パッケージ・F2 標準化スコア・J2 罠スコアの基盤公開」「中長期計画策定の支援ツール」
+❌ NG: 「法令提出を完全保証」「全ての CLO 業務を自動化」「コンサル代行」
 
-| PR | 内容 | テスト |
-|---|---|---|
-| #11 | c.1-c.3 IndustryPackage 基盤 | +88 件 |
-| #13 | c.4 既存資産接続検証 + c.5/c.6 F2 / J2 スコア | +73 件 |
-| #15 | c.7 業種別パッケージ + F2/J2 を MCP/REST 公開 | +21 件 |
-| #16 (本セッションでマージ予定) | c.8 連鎖化強制ガード + c.9 Web 2 画面 + 統合テスト | +22 件 |
+詳細 → [docs/roadmap.md](docs/roadmap.md) §フェーズ5.0 完了の粒度
 
-**最終 pytest 結果**: 826 件全 pass / ruff クリーン / Next.js build 全 16 ページ pass
+---
+
+## 🚦 フェーズ5.5 タスク優先順位（Codex 勧告反映）
+
+### #0 [最優先] MeasureExecutionRecord 永続化（昇格課題）
+
+Codex 勧告:「**継続運用と監査証跡に直結。2026年10月31日の中長期計画提出支援では『誰が、いつ、どの施策を実行・見直したか』が弱いと実務導入で詰まる**」
+
+実装内容:
+- `core/io/measure_run_store.py` 新規 — `outputs/measure_runs/<company_id>.json` で施策実行記録を永続化（save / load / append）
+- `MeasureExecutionRecord` を `core/analytics/waste_trap.py` から共通モデル層に昇格させるか、`core/io/` 配下に移動して循環 import を回避
+- POST body / MCP 引数で受け取った run を保存し、`logi_clo_waste_traps` を呼ぶ際に永続化済みデータと merge できるようにする
+- 永続化テスト 5-10 件追加（save/load round-trip / append / 同 measure_id 複数回 / company_id 分離）
+
+**フェーズ5.5 着手の最初の PR としてこれをやる**。記事化・README 整備より先。
+
+### #1 [高] AWS 運用ハーデニング（Codex 指摘 ③）
+
+公開前に最低限揃える:
+
+- [ ] CloudWatch Logs の保管期間（現状デフォルト = 永久。30 日 or 90 日に短縮してコスト圧迫回避）
+- [ ] Lambda のエラー率アラート（5% 超で SNS → 健一のメール）
+- [ ] Lambda のレイテンシアラート（p95 > 5s 等）
+- [ ] CloudFront / Lambda のコスト急増アラート（Cost Anomaly Detection or Budget アラート $50/月で通知）
+- [ ] 公開範囲確認（CloudFront ディストリビューション / API Gateway / S3 バケットすべて意図した公開範囲か）
+- [ ] APIキー秘匿（e-Stat appId 等が Lambda 環境変数に直接書かれていないか、SSM Parameter Store 経由か再確認）
+- [ ] 障害時ロールバック手順を `docs/aws_migration_plan.md` に追記（`aws lambda update-function-code --revision-id` で前リビジョンに戻す等）
+
+### #2 README 整備
+
+- フェーズ4.5 J3 デイリーコックピット
+- フェーズ5.0 業種別 CLO 標準パッケージ + F2/J2 スコア
+- MCP / REST / Web の 3 経路一覧
+- Quick Start: `git clone` → `uv sync` → `pwsh scripts/dev_api.ps1` + `pwsh scripts/dev_web.ps1`
+
+### #3 Zenn 記事執筆
+
+健一の WIP（`docs/zenn_drafts/`）を確認してから書く。**過大なコンプライアンス保証表現を避ける**（Codex ④ ⑤）。候補:
+- 「Claude Code で CLO 計画策定支援アプリを作る — 設計・Codex 協業の記録」
+- 「物流効率化法 第46条/第65条 をコードで遵守する — 業種別 CLO 標準パッケージの実装」
+- 「F2 標準化スコア × J2 罠スコア — Codex 勧告で誤検知を抑える」
+
+### #4 社内デモ準備
+
+- AWS PoC（https://d1zei8qivkf3cr.cloudfront.net/）でデモ可能
+- 4 業種サンプル profile（sample_mfg_01 / sample_wholesale_01 / sample_retail_01 / sample_chain_01）でストーリー組立
+- デモ動線案: ホーム → 業種別 CLO 標準パッケージ → F2 標準化スコア → コックピット → 計画書ドラフト生成
+- 「経営会議で説明できる数字」が出ること、出典 URL が踏めることを必ず見せる
+
+### #5 [任意] Public 化、PyPI 公開
 
 ---
 
 ## 📋 必読ドキュメント（着手前）
 
 1. **CLAUDE.md** — プロジェクト全体方針。特に §1.5 ミッション宣言 / §6.5 dev サーバ起動ルール / §7 検証ルール / §9 Codex 協業方針
-2. **docs/roadmap.md §フェーズ5.5** — 公開・記事化の TODO リスト
-3. **README.md**（リポジトリ ルート）— 現状の説明範囲を確認し、フェーズ5.0 で追加された機能を反映する
-4. **docs/zenn_drafts/**（健一の WIP）— 既存ドラフトがあるか確認してから着手する。健一の方針に合わせて執筆する
+2. **docs/roadmap.md §フェーズ5.0 完了の粒度** — 公開時に避けるべき表現と完成範囲の明文化
+3. **docs/roadmap.md §フェーズ5.5** — 公開・記事化の TODO リスト
+4. **docs/aws_migration_plan.md** — AWS 構成と運用ハーデニング着手時の参照
+5. **README.md**（リポジトリ ルート）— 現状の説明範囲を確認し、フェーズ4.5 + 5.0 で追加された機能を反映する
+6. **docs/zenn_drafts/**（健一の WIP）— 既存ドラフトがあるか確認してから着手する
 
 ---
 
@@ -44,39 +88,7 @@
 
 - 健一は **Claude / Codex を別セッションで並行起動** することがある。本セッション開始前に「Codex 並行作業はあるか？」を確認する
 - 公開・記事化フェーズでは衝突可能性は低いが、`docs/zenn_drafts/` / `README.md` は両者が触りうるため、着手前に方針を確認する
-- **`main` への直接 push は禁止**。必ず feature ブランチ（`feature/phase-5.5-...` / `docs/...`）+ PR 経由
-
----
-
-## 🛠 推奨アクション
-
-### 1. README 整備
-
-現状の README は フェーズ4.0 までの内容に止まっている可能性が高い。以下を反映:
-
-- **フェーズ4.5 J3 デイリーコックピット** — `/dashboard/cockpit` Web / `logi_clo_today_decisions` MCP
-- **フェーズ5.0 業種別 CLO 標準パッケージ** — 4 業種マトリクス + F2/J2 スコア + Web 2 画面
-- **MCP ツール一覧** — 現状提供している全ツール（c.7 で 3 件追加済）
-- **REST エンドポイント一覧** — 同上
-- **Web ダッシュボード機能** — トップ画面の FEATURES と整合させる
-- Quick Start: `git clone` → `uv sync` → `pwsh scripts/dev_api.ps1` + `pwsh scripts/dev_web.ps1`
-
-### 2. Zenn 記事執筆
-
-健一の WIP（`docs/zenn_drafts/`）を確認してから書く。書きたい候補:
-
-- **「Claude Code で CLO 計画策定支援アプリを作る — 設計・Codex 協業の記録」**
-- **「物流効率化法 第46条/第65条 をコードで遵守する — 業種別 CLO 標準パッケージの実装」**
-- **「F2 標準化スコア × J2 罠スコア — Codex 勧告で誤検知を抑える」**
-- 各記事に出典 URL（e-Stat / 物流効率化法ポータル / JILS）を必ず付ける
-
-### 3. 社内デモ準備
-
-- AWS PoC 環境（https://d1zei8qivkf3cr.cloudfront.net/）が稼働中なので、デモ可能
-- 4 業種サンプル profile（sample_mfg_01 / sample_wholesale_01 / sample_retail_01 / sample_chain_01）でストーリー組立
-- デモ動線案:
-  1. ホーム画面 → 業種別 CLO 標準パッケージ → F2 標準化スコア → コックピット → 計画書ドラフト生成
-  2. 「経営会議で説明できる数字」が出ること、出典 URL が踏めることを必ず見せる
+- **`main` への直接 push は禁止**。必ず feature ブランチ + PR 経由
 
 ---
 
@@ -88,14 +100,14 @@
 
 ---
 
-## 🗒 c.5/c.6 + c.7 + c.8 の持ち越し課題（フェーズ5.5 以降の改善 PR で対応予定）
+## 🗒 c.5/c.6 + c.7 + c.8 の持ち越し課題
 
-1. **F2 施策実装ステータスの拡張** — `decision_log` 連動（DecisionRecord に measure_id フィールド追加が必要）
-2. **J2 actual_effect_jpy の自動逆算** — kpi_history から「コスト削減施策なら物流コスト/売上比率の改善 × 売上」で逆算する補助関数
-3. **F2 bonus 拡張** — 「全必須 KPI 実装 + 月次会議定着 → +10pt」は会議出席率データが乗らないため未実装
-4. **MeasureExecutionRecord の永続化** — `outputs/measure_runs/<company_id>.json` で永続化する `measure_run_store.py`
-
-これらはフェーズ5.5 中に「リアルな運用データが乗ってきたタイミング」で再着手する候補。
+| # | 課題 | フェーズ5.5 での扱い |
+|---|---|---|
+| 0 | **MeasureExecutionRecord の永続化** | **#0 最優先（Codex 勧告で昇格）** |
+| 1 | F2 施策実装ステータスの拡張（`decision_log` 連動） | リアルな運用データが揃った段階で再着手 |
+| 2 | J2 `actual_effect_jpy` の自動逆算 | kpi_history と紐付ける形で Phase 5.5 後半 |
+| 3 | F2 bonus 拡張（必須 KPI 全実装 + 月次会議定着） | 会議出席率データが乗った段階で再導入 |
 
 ---
 
@@ -104,6 +116,8 @@
 - README が現状機能を網羅し、新規来訪者が 10 分以内に Quick Start できる
 - Zenn 記事 1 本以上が公開されている（または社内 Confluence 等に掲載）
 - 社内デモを実施し、営業・企画・経営層からのフィードバックが集まっている
+- **MeasureExecutionRecord 永続化が完成し、施策実行履歴が monitor できる**
+- **AWS 監視・コストアラート・ロールバック手順が整備されている**
 - HANDOFF_NEXT_SESSION.md がフェーズ6 以降（あれば）に更新されている
 
 ---
@@ -111,3 +125,4 @@
 ## 📦 リポジトリ整理（2026-05-06）
 
 - untracked: `docs/notebooklm/`, `docs/overview_for_review.md`, `docs/zenn_drafts/` は健一の WIP。フェーズ5.5 で活用する候補。
+- `.gitignore` の `.mcp.json` 追加分は別途 PR で対応 or 健一が個別コミット予定。
