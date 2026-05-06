@@ -50,6 +50,18 @@ const FEATURES = [
       "保守/標準/上振れ × What-if 8 種で「燃料 +20% でも黒字維持」を検証",
   },
   {
+    href: "/dashboard/industry-package",
+    title: "🆕 業種別 CLO 標準パッケージ",
+    description:
+      "製造 / 卸 / 小売 / 連鎖化（FC本部）の 4 業種で KPI ／ 施策 ／ 会議 ／ レポート ／ データ項目を標準型として固定。Override 4 分類別件数も併記",
+  },
+  {
+    href: "/dashboard/standardization",
+    title: "🆕 F2 標準化スコア",
+    description:
+      "業種別 CLO 標準パッケージへの準拠度を 0-100 で評価。coverage + Override 4 分類の減点 / bonus を可視化、未計測 KPI と未採用施策の差分テーブル付き",
+  },
+  {
     href: "/dashboard/company",
     title: "自社プロフィール入力",
     description:

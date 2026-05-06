@@ -380,3 +380,217 @@ export function fileDownloadUrl(relativePath: string): string {
   const cleaned = relativePath.replace(/^outputs[\\/]/, "");
   return `${API_BASE}/api/v1/files/${cleaned.replace(/\\/g, "/")}`;
 }
+
+// ─── 業種別パッケージ + F2/J2 スコア（フェーズ5.0 c.7 / c.9）─────────────
+//
+// Pydantic スキーマと完全一致する型。`api/routers/clo.py` の
+// industry_package / standardization_score / waste_traps エンドポイントが返す
+// metadata 構造を厳密に反映する。
+
+export type JsicCategory =
+  | "manufacturing"
+  | "wholesale"
+  | "retail"
+  | "chain_franchise"
+  | "transport"
+  | "other";
+
+export type KpiFrequency = "daily" | "weekly" | "monthly" | "quarterly" | "annual";
+export type MeetingFrequency =
+  | "weekly"
+  | "biweekly"
+  | "monthly"
+  | "quarterly"
+  | "annual";
+export type ReportFrequency = "weekly" | "monthly" | "quarterly" | "annual";
+export type ReportAudience = "board" | "clo" | "operation" | "external_partner";
+export type OutputFormat = "ppt" | "docx" | "excel" | "markdown";
+export type DataItemSource = "tms" | "wms" | "manual" | "gps" | "pos" | "edi";
+export type RefreshCadence = "realtime" | "daily" | "weekly" | "monthly";
+
+export type OverrideCategory =
+  | "unmanaged_deviation"
+  | "approved_better_practice"
+  | "required_localization"
+  | "temporary_exception";
+
+export type OverrideTargetKind =
+  | "kpi"
+  | "measure"
+  | "meeting"
+  | "report"
+  | "data_item";
+
+export interface StandardKpiDef {
+  metric_id: string;
+  label: string;
+  target_value: number | null;
+  unit: string;
+  baseline_value: number | null;
+  frequency: KpiFrequency;
+  owner_role: string;
+  legal_basis: string | null;
+  related_measure_ids: string[];
+}
+
+export interface StandardMeetingDef {
+  meeting_id: string;
+  name: string;
+  frequency: MeetingFrequency;
+  participants: string[];
+  agenda_items: string[];
+  standard_duration_min: number;
+  output_artifact: string;
+}
+
+export interface StandardReportDef {
+  report_id: string;
+  name: string;
+  audience: ReportAudience;
+  frequency: ReportFrequency;
+  source_kpi_ids: string[];
+  output_format: OutputFormat;
+  related_meeting_ids: string[];
+}
+
+export interface StandardDataItemDef {
+  data_item_id: string;
+  label: string;
+  source: DataItemSource;
+  refresh_cadence: RefreshCadence;
+  used_by_kpi_ids: string[];
+}
+
+export interface IndustryPackage {
+  category: JsicCategory;
+  label: string;
+  version: string;
+  kpis: StandardKpiDef[];
+  measure_ids: string[];
+  meetings: StandardMeetingDef[];
+  reports: StandardReportDef[];
+  data_items: StandardDataItemDef[];
+  plan_template_paths: Record<string, string>;
+  benchmark_refs: string[];
+  notes: string[];
+}
+
+export interface OverrideEntry {
+  target_kind: OverrideTargetKind;
+  target_id: string;
+  category: OverrideCategory;
+  rationale: string;
+  approved_by: string | null;
+  expires_at: string | null;
+  diff: Record<string, unknown>;
+}
+
+export interface CompanyPackageOverride {
+  company_id: string;
+  base_industry: JsicCategory;
+  entries: OverrideEntry[];
+  last_reviewed: string;
+}
+
+export interface IndustryPackageMetadata {
+  company_id: string;
+  base_industry: JsicCategory;
+  package: IndustryPackage;
+  override: CompanyPackageOverride | null;
+}
+
+export interface StandardizationScoreResult {
+  company_id: string;
+  base_package_category: JsicCategory;
+  coverage_pct: number;
+  deviation_count_unmanaged: number;
+  deviation_count_total: number;
+  chain_franchise_loading_misuse_count: number;
+  missing_kpi_ids: string[];
+  missing_measure_ids: string[];
+  score: number;
+  rationale: string[];
+  citations: Citation[];
+  freshness_warnings: string[];
+}
+
+export type TrapSeverity = "low" | "medium" | "high";
+
+export type RootCause =
+  | "scale_misfit"
+  | "resource_missing"
+  | "governance_gap"
+  | "wrong_kpi"
+  | "external_factor"
+  | "data_quality"
+  | "adoption_resistance"
+  | "implementation_quality"
+  | "unknown";
+
+export interface WasteTrapItem {
+  measure_id: string;
+  measure_name: string;
+  invested_jpy: number | null;
+  expected_effect_jpy: number | null;
+  actual_effect_jpy: number | null;
+  months_since_start: number | null;
+  trap_severity: TrapSeverity;
+  suspected_root_cause: RootCause;
+  suggested_remediation: string;
+  investment_freeze_recommended: boolean;
+  safeguard_triggered: string[];
+}
+
+export interface WasteTrapResult {
+  company_id: string;
+  items: WasteTrapItem[];
+  high_count: number;
+  medium_count: number;
+  low_count: number;
+  investment_freeze_count: number;
+  citations: Citation[];
+  freshness_warnings: string[];
+}
+
+export interface MeasureExecutionRecord {
+  measure_id: string;
+  started_on?: string | null;
+  invested_jpy?: number | null;
+  expected_effect_jpy?: number | null;
+  actual_effect_jpy?: number | null;
+  measured_count?: number | null;
+  data_completeness?: number | null;
+  seasonal_factor_active?: boolean;
+  external_event_active?: boolean;
+  payback_months_estimated?: number | null;
+  suspected_root_cause?: RootCause;
+}
+
+export async function fetchIndustryPackage(
+  companyId: string,
+): Promise<ToolResponse> {
+  return request<ToolResponse>(
+    `/api/v1/clo/industry-package/${encodeURIComponent(companyId)}`,
+  );
+}
+
+export async function fetchStandardizationScore(
+  companyId: string,
+): Promise<ToolResponse> {
+  return request<ToolResponse>(
+    `/api/v1/clo/standardization-score/${encodeURIComponent(companyId)}`,
+  );
+}
+
+export async function fetchWasteTraps(
+  companyId: string,
+  measureRuns: MeasureExecutionRecord[] = [],
+): Promise<ToolResponse> {
+  return request<ToolResponse>(
+    `/api/v1/clo/waste-traps/${encodeURIComponent(companyId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify(measureRuns),
+    },
+  );
+}
