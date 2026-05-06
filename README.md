@@ -147,6 +147,21 @@ npm install
 
 ---
 
+## Web ダッシュボードの使い方
+
+各画面（13 機能）の入力・出力・読み方・推奨利用順は **[docs/dashboard_feature_guide.md](docs/dashboard_feature_guide.md)** にまとめている。
+本番ダッシュボード（CloudFront）からも、トップページの「機能別利用ガイド」リンクおよびアプリ内 `/guide` で同じ内容を参照できる。
+
+初見ユーザーは次の順で確認すると全体像を掴みやすい:
+
+1. ホーム（`/`） — 機能一覧
+2. 業種別 CLO 標準パッケージ（`/dashboard/industry-package`）
+3. F2 標準化スコア（`/dashboard/standardization`）
+4. 施策評価（`/dashboard/measure-eval`）
+5. 計画書生成（`/dashboard/plan-draft`）
+
+---
+
 ## ローカル起動
 
 `uvicorn` や `npm run dev` を直接叩かず、既存プロセスの kill と環境変数固定を行うヘルパーを使う。
@@ -248,6 +263,7 @@ GitHub Actions で PR と `main` へのマージ後デプロイを管理する�
 | [docs/roadmap.md](docs/roadmap.md) | フェーズ別進捗（今どこにいるか） |
 | [docs/clo_domain.md](docs/clo_domain.md) | CLO 業務ドメイン知識・法的定義 |
 | [docs/api_endpoints.md](docs/api_endpoints.md) | 利用 API 一覧・認証・TTL・制約 |
+| [docs/dashboard_feature_guide.md](docs/dashboard_feature_guide.md) | Web ダッシュボード機能別利用ガイド（初見ユーザー向け／アプリ内 `/guide` で参照可能） |
 | [docs/data_input_guide.md](docs/data_input_guide.md) | 自社データ入力ガイド（Excel/CSV） |
 | [docs/ppt_design.md](docs/ppt_design.md) | PPT デザイン方針・スライドファミリー定義 |
 | [docs/git_workflow.md](docs/git_workflow.md) | ブランチ・PR 運用 |
