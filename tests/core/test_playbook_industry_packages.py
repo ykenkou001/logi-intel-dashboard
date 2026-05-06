@@ -32,12 +32,18 @@ import pytest
 
 from core.playbook.industry_packages import (
     ALL_PACKAGES,
+    CHAIN_FRANCHISE_FORBIDDEN_FORM3_SECTIONS,
+    CHAIN_FRANCHISE_FORBIDDEN_KPI_PREFIXES,
+    CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE,
     CompanyPackageOverride,
     IndustryPackage,
     OverrideEntry,
+    StandardKpiDef,
+    StandardReportDef,
     get_package,
     list_packages,
     resolve_company_package,
+    validate_chain_franchise_constraints,
 )
 from core.playbook.measures import ALL_MEASURES, get_measure
 from core.static.industry_benchmarks import LOGISTICS_COST_RATIO
@@ -571,3 +577,100 @@ def test_all_packages_dict_keys_match_category() -> None:
         assert pkg.category == key, (
             f"ALL_PACKAGES[{key!r}].category={pkg.category!r}（不一致）"
         )
+
+
+# ---------------------------------------------------------------------------
+# 7. c.8 連鎖化事業者の強制ガード
+# ---------------------------------------------------------------------------
+
+
+def test_validate_chain_franchise_actual_package_has_no_violations() -> None:
+    """現行 chain_franchise パッケージは強制ガード違反 0 件。
+
+    モジュール load 時の sanity check と同じ判定を runtime で再確認する。
+    """
+    pkg = get_package("chain_franchise")
+    assert pkg is not None
+    assert validate_chain_franchise_constraints(pkg) == []
+
+
+@pytest.mark.parametrize("industry", ["manufacturing", "wholesale", "retail"])
+def test_validate_chain_franchise_returns_empty_for_non_chain(
+    industry: JsicCategory,
+) -> None:
+    """連鎖化以外のパッケージはバリデーション対象外（常に空）。"""
+    pkg = get_package(industry)
+    assert pkg is not None
+    assert validate_chain_franchise_constraints(pkg) == []
+
+
+def test_validate_detects_handling_prefix_kpi_in_chain() -> None:
+    """連鎖化に handling_* プレフィックス KPI が含まれると違反検出する。"""
+    base = get_package("chain_franchise")
+    assert base is not None
+    bad_kpi = StandardKpiDef(
+        metric_id="handling_time_avg_min",
+        label="禁止プレフィックス KPI",
+        target_value=30.0,
+        unit="分",
+        baseline_value=None,
+        frequency="monthly",
+        owner_role="物流部",
+        legal_basis=None,
+        related_measure_ids=[],
+    )
+    bad_pkg = base.model_copy(update={"kpis": [*base.kpis, bad_kpi]})
+    errors = validate_chain_franchise_constraints(bad_pkg)
+    assert any("handling_" in e for e in errors)
+    assert any("handling_time_avg_min" in e for e in errors)
+
+
+def test_validate_detects_loading_section_measure_in_chain() -> None:
+    """連鎖化に form3_section='loading' の施策が含まれると違反検出する。"""
+    base = get_package("chain_franchise")
+    assert base is not None
+    # warehouse_dx_wms は form3_section="loading"
+    bad_pkg = base.model_copy(
+        update={"measure_ids": [*base.measure_ids, "warehouse_dx_wms"]},
+    )
+    errors = validate_chain_franchise_constraints(bad_pkg)
+    assert any("warehouse_dx_wms" in e for e in errors)
+    assert any("loading" in e for e in errors)
+
+
+def test_validate_detects_wrong_legal_article_in_form5_report() -> None:
+    """連鎖化の様式第5 レポート name に第65条が無いと違反検出する。"""
+    base = get_package("chain_franchise")
+    assert base is not None
+    # 既存レポートの一つを「第46条」表記に書き換える
+    new_reports: list[StandardReportDef] = []
+    for r in base.reports:
+        if r.report_id == "annual_form5_chain":
+            new_reports.append(
+                r.model_copy(
+                    update={"name": "年次 様式第5（定期報告書／第46条）"},
+                ),
+            )
+        else:
+            new_reports.append(r)
+    bad_pkg = base.model_copy(update={"reports": new_reports})
+    errors = validate_chain_franchise_constraints(bad_pkg)
+    assert any("第65条" in e for e in errors)
+
+
+def test_chain_franchise_constants_are_consistent() -> None:
+    """禁止リスト系の定数が想定通りの値（c.8 仕様の自己ドキュメント）。"""
+    assert "handling_" in CHAIN_FRANCHISE_FORBIDDEN_KPI_PREFIXES
+    assert "loading" in CHAIN_FRANCHISE_FORBIDDEN_FORM3_SECTIONS
+    assert CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE == "第65条"
+
+
+def test_chain_package_form5_uses_article_65_only() -> None:
+    """連鎖化の様式第5 は第46条を含まず第65条のみ（第46条混入の事故防止）。"""
+    pkg = get_package("chain_franchise")
+    assert pkg is not None
+    form5 = [r for r in pkg.reports if "様式第5" in r.name]
+    assert len(form5) >= 1
+    for r in form5:
+        assert "第65条" in r.name
+        assert "第46条" not in r.name
