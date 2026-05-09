@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from core.export.formatter import format_jpy
 from core.legal.eligibility import EligibilityCategory, EligibilityResult
 from core.static.jsic import lookup
 
@@ -46,7 +47,7 @@ def build_eligibility_summary(
 
     inputs: list[str] = []
     if annual_revenue_jpy is not None:
-        inputs.append(f"年間売上 {annual_revenue_jpy / 1e8:.1f}億円")
+        inputs.append(f"年間売上 {format_jpy(annual_revenue_jpy)}")
     if annual_freight_tons_total is not None:
         inputs.append(f"取扱量 {annual_freight_tons_total:,.0f}トン（実測）")
     else:

@@ -22,6 +22,7 @@ from core.export.citation import (
     co2_factors_citation,
     logistics_efficiency_law_citation,
 )
+from core.export.formatter import format_jpy
 from core.static._freshness import all_warnings
 from core.static.financial_factors import (
     CARBON_PRICE,
@@ -244,45 +245,57 @@ def build_financial_translate_summary(r: FinancialTranslateResult) -> str:
         f"=== 財務翻訳: {r.company_name} ===",
         "",
         "【企業財務基準】",
-        f"  売上: {r.base_revenue_jpy / 1e8:,.1f} 億円",
-        f"  営業利益: {r.base_operating_profit_jpy / 1e8:,.2f} 億円 "
+        f"  売上: {format_jpy(r.base_revenue_jpy, thousand_sep=True)}",
+        f"  営業利益: {format_jpy(r.base_operating_profit_jpy, digits=2, thousand_sep=True)} "
         f"(営業利益率 {r.base_operating_profit_margin_pct:.2f}%)",
         "",
         "【施策別 P&L インパクト（年間ベース）】",
     ]
 
     for i in r.measures:
-        op_str = (
-            f"営業利益 +{i.operating_profit_increase_jpy_per_year / 1e8:,.2f}億円 "
-            f"(+{i.operating_profit_margin_lift_pp:.2f}pp)"
-            if i.operating_profit_increase_jpy_per_year
-            else "営業利益効果: 試算対象外"
-        )
-        carbon_str = (
-            f"炭素回避 {i.carbon_avoidance_jpy_low / 1e6:,.1f}〜"
-            f"{i.carbon_avoidance_jpy_high / 1e6:,.1f}百万円/年"
-            if i.carbon_avoidance_jpy_low and i.carbon_avoidance_jpy_high
-            else "炭素回避: なし"
-        )
+        if i.operating_profit_increase_jpy_per_year:
+            op_jpy = format_jpy(
+                i.operating_profit_increase_jpy_per_year,
+                digits=2,
+                with_sign=True,
+                thousand_sep=True,
+            )
+            op_str = f"営業利益 {op_jpy} (+{i.operating_profit_margin_lift_pp:.2f}pp)"
+        else:
+            op_str = "営業利益効果: 試算対象外"
+        if i.carbon_avoidance_jpy_low and i.carbon_avoidance_jpy_high:
+            carbon_low = format_jpy(i.carbon_avoidance_jpy_low, unit="million", thousand_sep=True)
+            carbon_high = format_jpy(i.carbon_avoidance_jpy_high, unit="million", thousand_sep=True)
+            carbon_str = f"炭素回避 {carbon_low}〜{carbon_high}/年"
+        else:
+            carbon_str = "炭素回避: なし"
         npv_str = (
-            f"5年NPV {i.five_year_npv_jpy / 1e8:,.2f}億円"
+            f"5年NPV {format_jpy(i.five_year_npv_jpy, digits=2, thousand_sep=True)}"
             if i.five_year_npv_jpy is not None
             else "5年NPV: 試算対象外"
         )
         lines.append(f"  ◆ {i.measure_name}")
         lines.append(f"    {op_str} / {carbon_str} / {npv_str}")
 
+    total_op = format_jpy(r.total_operating_profit_increase_jpy, digits=2, thousand_sep=True)
+    total_carbon_low = format_jpy(
+        r.total_carbon_avoidance_jpy_low, unit="million", digits=0, thousand_sep=True
+    )
+    total_carbon_high = format_jpy(
+        r.total_carbon_avoidance_jpy_high, unit="million", digits=0, thousand_sep=True
+    )
+    total_invest = format_jpy(r.total_investment_jpy, unit="man", digits=0, thousand_sep=True)
+    total_npv = format_jpy(r.total_5y_npv_jpy, digits=2, thousand_sep=True)
+
     lines += [
         "",
         "【施策合算（重複あり・最大値の参考）】",
-        f"  営業利益増加合計: 約 {r.total_operating_profit_increase_jpy / 1e8:,.2f} 億円/年",
+        f"  営業利益増加合計: 約 {total_op}/年",
         f"  営業利益率改善: 合算 +{r.operating_profit_margin_lift_pp_total:.2f}pp",
-        f"  炭素価格回避レンジ: {r.total_carbon_avoidance_jpy_low / 1e6:,.0f}〜"
-        f"{r.total_carbon_avoidance_jpy_high / 1e6:,.0f} 百万円/年 "
+        f"  炭素価格回避レンジ: {total_carbon_low}〜{total_carbon_high}/年 "
         f"({CARBON_PRICE.low:,.0f}〜{CARBON_PRICE.high:,.0f}円/t-CO2)",
-        f"  必要投資合計: 約 {r.total_investment_jpy / 1e4:,.0f} 万円",
-        f"  5年累積 NPV: 約 {r.total_5y_npv_jpy / 1e8:,.2f} 億円 "
-        f"(割引率 {NPV_PARAMS.discount_rate_pct:.1f}%)",
+        f"  必要投資合計: 約 {total_invest}",
+        f"  5年累積 NPV: 約 {total_npv} (割引率 {NPV_PARAMS.discount_rate_pct:.1f}%)",
         "",
         r.inaction_risk_note,
         "",

@@ -18,6 +18,7 @@ from typing import Literal
 
 from core.clients.estat import EStatApiError, EStatClient
 from core.export.citation import Citation, estat_citation
+from core.export.formatter import format_jpy
 from core.static._freshness import all_warnings
 from core.static.industry_benchmarks import (
     REVENUE_VS_AVG_LARGE_SCALE_THRESHOLD_PCT,
@@ -299,7 +300,7 @@ def build_benchmark_summary(r: BenchmarkResult) -> str:
         "=== 業界ベンチマーク分析 ===",
         f"業種: {r.jsic_name}（{r.jsic_code}）/ {_category_label(r.category)}",
         f"都道府県: {r.prefecture}",
-        f"年間売上: {r.revenue_jpy / 1e8:.1f}億円",
+        f"年間売上: {format_jpy(r.revenue_jpy)}",
         "",
         "【業界規模（経済センサス‐基礎調査 2024）】",
         (f"  ※ 産業小分類 {r.estat_minor_code}（JSIC 細分類 {r.jsic_code} の上3桁）で絞り込み"),
@@ -328,13 +329,13 @@ def build_benchmark_summary(r: BenchmarkResult) -> str:
     ]
     if r.industry_avg_revenue_jpy is not None:
         lines.append(
-            f"  業界推計平均売上: {r.industry_avg_revenue_jpy / 1e8:.1f}億円 / 事業所"
+            f"  業界推計平均売上: {format_jpy(r.industry_avg_revenue_jpy)} / 事業所"
             "（経済センサス2021公表値から算出）"
         )
     if r.revenue_vs_avg_pct is not None:
         position = "上位水準" if r.revenue_vs_avg_pct >= 100 else "平均以下"
         lines.append(
-            f"  自社売上: {r.revenue_jpy / 1e8:.1f}億円 → 業界平均の {r.revenue_vs_avg_pct:.0f}%"
+            f"  自社売上: {format_jpy(r.revenue_jpy)} → 業界平均の {r.revenue_vs_avg_pct:.0f}%"
             f"（{position}）"
         )
         if r.revenue_ratio_warning:

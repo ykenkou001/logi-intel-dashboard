@@ -20,6 +20,7 @@ from core.export.citation import (
     co2_factors_citation,
     logistics_efficiency_law_citation,
 )
+from core.export.formatter import format_jpy
 from core.static._freshness import all_warnings
 from core.static.jsic import JsicEntry, lookup
 from core.static.national_targets import LOGISTICS_CO2_TARGET, MODAL_SHIFT_TARGET
@@ -263,7 +264,7 @@ def build_target_proposal_summary(r: TargetProposalResult) -> str:
         "=== 数値目標提案（中長期計画書 様式第3別紙）===",
         f"業種: {r.jsic_name}（{r.jsic_code}）/ {category_label}",
         f"都道府県: {r.prefecture}",
-        f"年間売上: {r.revenue_jpy / 1e8:.1f}億円",
+        f"年間売上: {format_jpy(r.revenue_jpy)}",
         "",
         "【推奨数値目標】",
     ]
