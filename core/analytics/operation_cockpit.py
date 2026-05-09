@@ -44,6 +44,7 @@ from core.export.citation import (
     improvement_standards_citation,
     logistics_efficiency_law_citation,
 )
+from core.export.formatter import format_jpy
 from core.legal.improvement_check import (
     ComplianceItem,
     ComplianceReport,
@@ -533,7 +534,8 @@ def build_cockpit_summary(result: CockpitResult) -> str:
         if item.days_pending > 0:
             lines.append(f"   滞留: {item.days_pending} 日")
         if item.estimated_pnl_jpy:
-            lines.append(f"   想定インパクト: 年 約 {item.estimated_pnl_jpy / 1e8:+.2f} 億円")
+            pnl_str = format_jpy(item.estimated_pnl_jpy, digits=2, with_sign=True)
+            lines.append(f"   想定インパクト: 年 約 {pnl_str}")
         lines.append("")
 
     if result.citations:
@@ -1355,7 +1357,7 @@ def _objections_for_measure(
     return [
         ObjectionItem(
             role="cfo",
-            objection=f"投資 {score.measure.typical_investment_jpy_high / 1e8:.1f} 億円の妥当性は",
+            objection=f"投資 {format_jpy(score.measure.typical_investment_jpy_high)}の妥当性は",
             rebuttal=(
                 f"想定回収期間 {payback}。"
                 + (
