@@ -14,6 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from api.routers._helpers import publish_files, to_model
 from api.schemas.responses import ToolResponseModel
 from core.analytics.benchmark import analyze_benchmark, build_benchmark_summary
 from core.analytics.certified_match import build_certified_match_summary, find_matches
@@ -70,7 +71,6 @@ from core.static._freshness import all_warnings
 from core.static.efficiency_law_certified import IndustryCategory, MeasureType
 from core.static.jsic import category_of
 from core.static.sample_company import CompanyProfile
-from core.storage import get_storage
 from core.validators.submission_validator import (
     build_validation_summary,
     validate_submission,
@@ -86,29 +86,6 @@ def _resolve_profile_or_404(company_id: str) -> CompanyProfile:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-def _publish_files(response: ToolResponse) -> None:
-    """ToolResponse.files の各値をストレージに公開しキーで上書きする。
-
-    LocalStorage では outputs/ から見た相対パスに正規化、S3Storage では
-    アップロード後 S3 オブジェクトキーに置換される。
-    """
-    if not response.files:
-        return
-    from pathlib import Path
-
-    storage = get_storage()
-    new_files: dict[str, str] = {}
-    for key, value in response.files.items():
-        try:
-            new_files[key] = storage.publish(Path(value))
-        except Exception:
-            new_files[key] = value
-    response.files = new_files
-
-
-def _to_model(response: ToolResponse) -> ToolResponseModel:
-    _publish_files(response)
-    return ToolResponseModel.model_validate(response.to_dict())
 
 
 # ─── Step 1: 業界ベンチマーク ──────────────────────────────────────────
@@ -135,7 +112,7 @@ async def benchmark_position(
         citations=result.citations,
         freshness_warnings=result.freshness_warnings,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 2: ドライバー需給ギャップ ─────────────────────────────────────
@@ -154,7 +131,7 @@ async def driver_gap(
         citations=result.citations,
         freshness_warnings=result.freshness_warnings,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── フェーズ4.1 a.3: 経営会議 3 スライド要約 ─────────────────────
@@ -252,8 +229,8 @@ async def executive_brief(company_id: str) -> ToolResponseModel:
         data_source=profile.data_source,
         files={"pptx": str(path)},
     )
-    _publish_files(response)
-    return _to_model(response)
+    publish_files(response)
+    return to_model(response)
 
 
 # ─── フェーズ4.1 a.1: 拠点別待機時間ヒートマップ ─────────────────────
@@ -276,7 +253,7 @@ async def wait_heatmap(
         freshness_warnings=result.freshness_warnings,
         data_source=profile.data_source,
     )
-    model = _to_model(response)
+    model = to_model(response)
     # metadata に詳細データを乗せて Web フロントで可視化する
     model.metadata = {
         "company_id": result.company_id,
@@ -346,7 +323,7 @@ async def eligibility(
         citations=citations,
         freshness_warnings=all_warnings(),
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 4: 数値目標提案 ─────────────────────────────────────────────
@@ -373,7 +350,7 @@ async def target_proposal(
         citations=result.citations,
         freshness_warnings=result.freshness_warnings,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 5: 5施策効果シミュレータ ────────────────────────────────────
@@ -404,7 +381,7 @@ async def simulate_measures_endpoint(
         citations=result.citations,
         freshness_warnings=result.freshness_warnings,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── 認定事業マッチング ────────────────────────────────────────────────
@@ -429,7 +406,7 @@ async def certified_match(
         citations=result.citations,
         freshness_warnings=result.freshness_warnings,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── 計画書ドラフト統合生成 ──────────────────────────────────────────
@@ -449,7 +426,7 @@ async def plan_draft(company_id: str) -> ToolResponseModel:
         files=result.files,
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/1: プレイブック検索 ─────────────────────────────────────
@@ -479,7 +456,7 @@ async def playbook_search(
         citations=[logistics_efficiency_law_citation()],
         freshness_warnings=all_warnings(),
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/2: 施策評価エンジン ─────────────────────────────────────
@@ -502,7 +479,7 @@ async def measure_eval(
         freshness_warnings=result.freshness_warnings,
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/3: シナリオシミュレータ ────────────────────────────────
@@ -530,7 +507,7 @@ async def scenario_sim(
         freshness_warnings=result.freshness_warnings,
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/4: 財務翻訳レイヤ ───────────────────────────────────────
@@ -550,7 +527,7 @@ async def financial_translate(company_id: str) -> ToolResponseModel:
         freshness_warnings=result.freshness_warnings,
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/5: 実現可能性チェッカー ────────────────────────────────
@@ -573,7 +550,7 @@ async def feasibility_check(
         freshness_warnings=result.freshness_warnings,
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/6: 提出前バリデータ ─────────────────────────────────────
@@ -593,7 +570,7 @@ async def submission_validate(company_id: str) -> ToolResponseModel:
         files=dict(report.checked_files),
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/7: 定期報告書（様式第5）ドラフト ───────────────────────
@@ -619,7 +596,7 @@ async def periodic_report(
         files=dict(result.files),
         data_source=result.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── フェーズ4.5 b: J3 デイリーコックピット ────────────────────────────
@@ -710,7 +687,7 @@ async def today_decisions(
         freshness_warnings=result.freshness_warnings,
         data_source=result.data_source,
     )
-    model = _to_model(response)
+    model = to_model(response)
     model.metadata = _cockpit_to_metadata(result)
     return model
 
@@ -849,7 +826,7 @@ async def industry_package(company_id: str) -> ToolResponseModel:
         freshness_warnings=all_warnings(),
         data_source=profile.data_source,
     )
-    model = _to_model(response)
+    model = to_model(response)
     model.metadata = {
         "company_id": profile.company_id,
         "base_industry": base_industry,
@@ -885,7 +862,7 @@ async def standardization_score(company_id: str) -> ToolResponseModel:
         freshness_warnings=list(result.freshness_warnings),
         data_source=profile.data_source,
     )
-    model = _to_model(response)
+    model = to_model(response)
     model.metadata = result.model_dump(mode="json")
     return model
 
@@ -930,6 +907,6 @@ async def waste_traps(
         freshness_warnings=list(result.freshness_warnings),
         data_source=profile.data_source,
     )
-    model = _to_model(response)
+    model = to_model(response)
     model.metadata = result.model_dump(mode="json")
     return model
