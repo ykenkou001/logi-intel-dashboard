@@ -56,6 +56,7 @@ from core.export.citation import (
 from core.export.docx_form3_writer import PlanMeasure, PlanSection, write_form3
 from core.export.excel_writer import write_data_table
 from core.export.formatter import format_jpy
+from core.export.html_writer import write_clo_plan_draft as write_html_plan
 from core.export.markdown_writer import write_clo_plan_draft as write_md_plan
 from core.export.ppt_writer import ChartSpec, SlideContent
 from core.export.ppt_writer import write_clo_plan_draft as write_ppt_plan
@@ -208,21 +209,34 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         profile,
         submission_checklist=submission_checklist,
     )
+    executive_summary_text = _build_executive_summary_text(
+        profile,
+        benchmark,
+        eligibility,
+        simulation,
+        financial,
+    )
     md_path = write_md_plan(
         company_name=profile.name,
         company_id=profile.company_id,
         plan_period=plan_period,
-        executive_summary=_build_executive_summary_text(
-            profile,
-            benchmark,
-            eligibility,
-            simulation,
-            financial,
-        ),
+        executive_summary=executive_summary_text,
         sections=md_sections,
         citations=citations,
     )
     files["markdown"] = str(md_path)
+
+    # 1.5 HTML（経営層への詳細閲覧用・self-contained）
+    # 役割: 投影=PPT / 詳細閲覧=HTML / 提出=Word/Excel / 再編集=Markdown
+    html_path = write_html_plan(
+        company_name=profile.name,
+        company_id=profile.company_id,
+        plan_period=plan_period,
+        executive_summary=executive_summary_text,
+        sections=md_sections,
+        citations=citations,
+    )
+    files["html"] = str(html_path)
 
     # 2. PPT
     body_slides = _build_ppt_slides(

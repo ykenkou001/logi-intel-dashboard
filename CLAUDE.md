@@ -86,6 +86,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 | [docs/dashboard_feature_guide.md](docs/dashboard_feature_guide.md) | Web ダッシュボード機能別利用ガイド（初見ユーザー向け／アプリ内 `/guide` で参照可能） |
 | [docs/data_input_guide.md](docs/data_input_guide.md) | 自社データ入力ガイド（Excel/CSV テンプレ記入と取込手順） |
 | [docs/ppt_design.md](docs/ppt_design.md) | PPT デザイン方針（Logi-Intel CLO Report）・スライドファミリー定義 |
+| [docs/output_artifacts.md](docs/output_artifacts.md) | 成果物 5 形態（PPT / Word / Excel / HTML / MD）の棲み分けガイド |
 | [docs/aws_migration_plan.md](docs/aws_migration_plan.md) | AWS 移行計画（フェーズ4.0 後半・8 Step 手順書） |
 | [docs/oss_reference.md](docs/oss_reference.md) | 参考 OSS の方針・Attribution |
 | [docs/testing.md](docs/testing.md) | テストレベル・モック方針・カバレッジ目標 |
