@@ -12,23 +12,13 @@ import {
   fetchStandardizationScore,
   type IndustryPackage,
   type IndustryPackageMetadata,
-  type JsicCategory,
   type MeasureDetail,
   type SampleCompany,
   type StandardizationScoreResult,
   type StandardKpiDef,
   type ToolResponse,
 } from "@/lib/api";
-import { formatTargetValue, freqLabel } from "@/lib/labels";
-
-const INDUSTRY_LABEL: Record<JsicCategory, string> = {
-  manufacturing: "製造業",
-  wholesale: "卸売業",
-  retail: "小売業",
-  chain_franchise: "連鎖化（FC本部）",
-  transport: "運輸業",
-  other: "その他",
-};
+import { formatTargetValue, freqLabel, INDUSTRY_LABEL } from "@/lib/labels";
 
 function scoreColor(score: number): string {
   if (score >= 80) return "bg-emerald-50 border-emerald-300 text-emerald-900";

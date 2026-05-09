@@ -19,12 +19,7 @@ import {
   type ToolResponse,
   type VerdictLevel,
 } from "@/lib/api";
-
-const AXIS_LABEL: Record<DecisionAxis, string> = {
-  compliance: "軸A 法令準拠リスク",
-  kpi_reach: "軸B KPI達成見通し",
-  measure_pick: "軸C 今週決める施策",
-};
+import { DECISION_AXIS_LABEL, VERDICT_LEVEL_LABEL } from "@/lib/labels";
 
 const AXIS_ORDER: DecisionAxis[] = ["compliance", "kpi_reach", "measure_pick"];
 
@@ -38,12 +33,6 @@ const HEALTH_DOT: Record<VerdictLevel, string> = {
   green: "bg-emerald-500",
   yellow: "bg-amber-500",
   red: "bg-rose-500",
-};
-
-const HEALTH_LABEL: Record<VerdictLevel, string> = {
-  green: "全体健全",
-  yellow: "要注視",
-  red: "重大対応",
 };
 
 const STATE_BADGE: Record<CardState, { label: string; cls: string }> = {
@@ -133,7 +122,7 @@ function CockpitCard({
     <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col h-full">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-bold text-[#1F4E79]">
-          {AXIS_LABEL[item.decision_axis]}
+          {DECISION_AXIS_LABEL[item.decision_axis]}
         </span>
         <span
           className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge.cls}`}
@@ -418,7 +407,7 @@ export default function CockpitPage() {
             <div className="flex-1">
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-base font-bold uppercase">
-                  {HEALTH_LABEL[cockpit.overall_health]}
+                  {VERDICT_LEVEL_LABEL[cockpit.overall_health]}
                 </span>
                 <span className="text-xs opacity-80">
                   ({cockpit.overall_health.toUpperCase()})
