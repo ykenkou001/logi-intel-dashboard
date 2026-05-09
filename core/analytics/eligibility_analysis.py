@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from core.analytics._summary import SummaryResult
 from core.export.formatter import format_jpy
 from core.legal.eligibility import EligibilityCategory, EligibilityResult
 from core.static.jsic import lookup
@@ -34,14 +35,13 @@ def build_eligibility_summary(
     annual_revenue_jpy: int | None,
     annual_freight_tons_total: float | None,
     is_chain_franchise: bool,
-) -> str:
+) -> SummaryResult:
     """EligibilityResult から CLO 計画書用のサマリーテキストを生成する。"""
     entry = lookup(jsic_code)
     jsic_name = entry.name if entry else "（未登録業種）"
     category_label = _BUSINESS_CATEGORY_LABELS.get(entry.category if entry else "other", "不明")
 
     lines: list[str] = [
-        "=== 特定荷主3区分 適用判定（物流効率化法 第46条 / 第65条）===",
         f"業種: {jsic_name}（{jsic_code}）/ {category_label}",
     ]
 
@@ -103,4 +103,7 @@ def build_eligibility_summary(
             "  → Step 4 の数値目標提案・Step 7 の計画書ドラフト生成へ進めます",
         ]
 
-    return "\n".join(lines)
+    return SummaryResult(
+        title="=== 特定荷主3区分 適用判定（物流効率化法 第46条 / 第65条）===",
+        body=lines,
+    )

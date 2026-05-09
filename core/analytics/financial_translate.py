@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from core.analytics._summary import SummaryResult
 from core.analytics.simulator import MeasureSimulation, SimulationResult
 from core.export.citation import (
     Citation,
@@ -239,10 +240,9 @@ def _build_citations() -> list[Citation]:
     ]
 
 
-def build_financial_translate_summary(r: FinancialTranslateResult) -> str:
+def build_financial_translate_summary(r: FinancialTranslateResult) -> SummaryResult:
     """FinancialTranslateResult から CLO 向けサマリーテキストを生成する。"""
     lines: list[str] = [
-        f"=== 財務翻訳: {r.company_name} ===",
         "",
         "【企業財務基準】",
         f"  売上: {format_jpy(r.base_revenue_jpy, thousand_sep=True)}",
@@ -303,4 +303,4 @@ def build_financial_translate_summary(r: FinancialTranslateResult) -> str:
         f"  {r.esg_qualitative_note}",
     ]
 
-    return "\n".join(lines)
+    return SummaryResult(title=f"=== 財務翻訳: {r.company_name} ===", body=lines)

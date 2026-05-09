@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
+from core.analytics._summary import SummaryResult
 from core.clients.estat import EStatApiError, EStatClient
 from core.export.citation import (
     Citation,
@@ -203,10 +204,9 @@ async def analyze_driver_gap(prefecture: str) -> DriverGapResult:
     )
 
 
-def build_driver_gap_summary(r: DriverGapResult) -> str:
+def build_driver_gap_summary(r: DriverGapResult) -> SummaryResult:
     """DriverGapResult から CLO 計画書サマリーテキストを生成する。"""
     lines: list[str] = [
-        f"=== ドライバー需給ギャップ分析: {r.prefecture} ===",
         "基準: 改善基準告示（2024年4月施行・厚労省告示第367号）",
         f"  年間総拘束時間上限: 原則 {r.annual_working_hours_principle:,} 時間",
         f"  年間時間外労働上限: {r.annual_overtime_limit_hours:,} 時間",
@@ -254,4 +254,7 @@ def build_driver_gap_summary(r: DriverGapResult) -> str:
         "賃金構造基本統計調査の「貨物自動車運転者」を別途参照すること。",
     ]
 
-    return "\n".join(lines)
+    return SummaryResult(
+        title=f"=== ドライバー需給ギャップ分析: {r.prefecture} ===",
+        body=lines,
+    )

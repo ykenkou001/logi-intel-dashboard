@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from core.analytics._summary import SummaryResult
 from core.export.citation import Citation
 from core.static._freshness import all_warnings
 from core.static.efficiency_law_certified import (
@@ -162,7 +163,7 @@ _CATEGORY_LABELS: dict[str, str] = {
 }
 
 
-def build_certified_match_summary(r: CertifiedMatchResult) -> str:
+def build_certified_match_summary(r: CertifiedMatchResult) -> SummaryResult:
     """CertifiedMatchResult から CLO 計画書用サマリーを生成する。"""
     self_cat_label = _CATEGORY_LABELS.get(r.self_category, r.self_category)
     interest_label = (
@@ -171,8 +172,8 @@ def build_certified_match_summary(r: CertifiedMatchResult) -> str:
         else "未指定（業種のみで評価）"
     )
 
+    title = "=== 物流効率化法 認定事業 類似マッチング ==="
     lines: list[str] = [
-        "=== 物流効率化法 認定事業 類似マッチング ===",
         f"自社業種: {r.jsic_name}（{r.jsic_code}）/ {self_cat_label}",
         f"関心施策: {interest_label}",
         "",
@@ -184,7 +185,7 @@ def build_certified_match_summary(r: CertifiedMatchResult) -> str:
             "  該当する認定事業が見つかりませんでした。",
             "  業種カテゴリまたは関心施策を変更して再試行してください。",
         ]
-        return "\n".join(lines)
+        return SummaryResult(title=title, body=lines)
 
     lines.append(f"【マッチ上位 {len(r.matches)} 件（スコア降順）】")
     for i, m in enumerate(r.matches, start=1):
@@ -212,4 +213,4 @@ def build_certified_match_summary(r: CertifiedMatchResult) -> str:
         "  ・全件マッチング（数百件）はフェーズ3.5 で CSV 自動取込により対応予定",
     ]
 
-    return "\n".join(lines)
+    return SummaryResult(title=title, body=lines)

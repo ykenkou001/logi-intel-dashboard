@@ -16,6 +16,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Literal
 
+from core.analytics._summary import SummaryResult
 from core.clients.estat import EStatApiError, EStatClient
 from core.export.citation import Citation, estat_citation
 from core.export.formatter import format_jpy
@@ -294,10 +295,9 @@ def _classify_revenue_ratio_reliability(
     return "normal", None
 
 
-def build_benchmark_summary(r: BenchmarkResult) -> str:
+def build_benchmark_summary(r: BenchmarkResult) -> SummaryResult:
     """BenchmarkResult から CLO 計画書サマリーテキストを生成する。"""
     lines: list[str] = [
-        "=== 業界ベンチマーク分析 ===",
         f"業種: {r.jsic_name}（{r.jsic_code}）/ {_category_label(r.category)}",
         f"都道府県: {r.prefecture}",
         f"年間売上: {format_jpy(r.revenue_jpy)}",
@@ -373,7 +373,7 @@ def build_benchmark_summary(r: BenchmarkResult) -> str:
         ),
     ]
 
-    return "\n".join(lines)
+    return SummaryResult(title="=== 業界ベンチマーク分析 ===", body=lines)
 
 
 def _category_label(category: str) -> str:

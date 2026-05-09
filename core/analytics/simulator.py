@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from core.analytics._summary import SummaryResult
 from core.export.citation import Citation, co2_factors_citation
 from core.export.formatter import format_jpy
 from core.static._freshness import all_warnings
@@ -375,11 +376,10 @@ def _format_co2_kg(kg: float) -> str:
     return f"{kg:,.0f}kg-CO2"
 
 
-def build_simulation_summary(r: SimulationResult) -> str:
+def build_simulation_summary(r: SimulationResult) -> SummaryResult:
     """SimulationResult から CLO 計画書用サマリーテキストを生成する。"""
     tons_label = "推計" if r.is_estimate else "実測"
     lines: list[str] = [
-        "=== 施策効果シミュレーション（5施策同時試算）===",
         f"業種: {r.jsic_name}（{r.jsic_code}）",
         f"都道府県: {r.prefecture}",
         f"年間売上: {format_jpy(r.revenue_jpy)}",
@@ -424,4 +424,7 @@ def build_simulation_summary(r: SimulationResult) -> str:
         "  ・経営会議では「投資 vs リターン」と「CO2削減目標▲23.4%への寄与度」をセット提示",
     ]
 
-    return "\n".join(lines)
+    return SummaryResult(
+        title="=== 施策効果シミュレーション（5施策同時試算）===",
+        body=lines,
+    )

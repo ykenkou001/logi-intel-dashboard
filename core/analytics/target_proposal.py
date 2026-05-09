@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from core.analytics._summary import SummaryResult
 from core.analytics.benchmark import INDUSTRY_AVG_LOGISTICS_RATIO
 from core.export.citation import (
     Citation,
@@ -256,12 +257,11 @@ _BUSINESS_CATEGORY_LABELS: dict[str, str] = {
 }
 
 
-def build_target_proposal_summary(r: TargetProposalResult) -> str:
+def build_target_proposal_summary(r: TargetProposalResult) -> SummaryResult:
     """TargetProposalResult から CLO 計画書用サマリーテキストを生成する。"""
     category_label = _BUSINESS_CATEGORY_LABELS.get(r.category, r.category)
 
     lines: list[str] = [
-        "=== 数値目標提案（中長期計画書 様式第3別紙）===",
         f"業種: {r.jsic_name}（{r.jsic_code}）/ {category_label}",
         f"都道府県: {r.prefecture}",
         f"年間売上: {format_jpy(r.revenue_jpy)}",
@@ -300,4 +300,7 @@ def build_target_proposal_summary(r: TargetProposalResult) -> str:
         "  → Step 7 で計画書ドラフト統合生成（PPT/Word/Excel/Markdown 一括出力）",
     ]
 
-    return "\n".join(lines)
+    return SummaryResult(
+        title="=== 数値目標提案（中長期計画書 様式第3別紙）===",
+        body=lines,
+    )

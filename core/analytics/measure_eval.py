@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from core.analytics._summary import SummaryResult
 from core.analytics.benchmark import INDUSTRY_AVG_LOGISTICS_RATIO
 from core.export.citation import Citation, logistics_efficiency_law_citation
 from core.export.formatter import format_jpy
@@ -545,7 +546,7 @@ def _build_selection_reason(
     return " / ".join(parts)
 
 
-def build_eval_summary(r: MeasureEvalResult) -> str:
+def build_eval_summary(r: MeasureEvalResult) -> SummaryResult:
     """MeasureEvalResult から CLO 向けサマリーテキストを生成する。
 
     Top 3 には実行カード簡易版（主管・月次KPI・依存関係）と他施策との比較ポイント、
@@ -553,7 +554,6 @@ def build_eval_summary(r: MeasureEvalResult) -> str:
     「なぜ採用/不採用？」即答できる形で出力する。
     """
     lines: list[str] = [
-        f"=== 施策評価: {r.company_name} ===",
         f"業種: {r.industry} / 推定リソース: {', '.join(r.derived_resources) or '（なし）'}",
         f"評価対象施策: {r.eligible_count} 件（プレイブック全 10 件中）",
         "",
@@ -623,7 +623,7 @@ def build_eval_summary(r: MeasureEvalResult) -> str:
                 f"  {marker} {s.total_score:5.1f}  [{s.measure.measure_id}] {s.measure.name}"
             )
 
-    return "\n".join(lines)
+    return SummaryResult(title=f"=== 施策評価: {r.company_name} ===", body=lines)
 
 
 def _format_score_block(

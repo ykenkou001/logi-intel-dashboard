@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
+from core.analytics._summary import SummaryResult
 from core.analytics.measure_eval import _derive_available_resources
 from core.export.citation import (
     Citation,
@@ -498,10 +499,9 @@ def _fmt_tons(tons: float | None) -> str:
     return f"{tons:,.0f}トン"
 
 
-def build_feasibility_summary(r: FeasibilityResult) -> str:
+def build_feasibility_summary(r: FeasibilityResult) -> SummaryResult:
     """FeasibilityResult から CLO 向けサマリーテキストを生成する。"""
     lines: list[str] = [
-        f"=== 実現可能性チェック: {r.company_name} ===",
         f"業種: {r.industry} / 目標年: {r.target_year} / "
         f"推定リソース: {', '.join(r.derived_resources) or '（なし）'}",
         "",
@@ -549,4 +549,7 @@ def build_feasibility_summary(r: FeasibilityResult) -> str:
         )
         lines.append(f"     {k.rationale}")
 
-    return "\n".join(lines)
+    return SummaryResult(
+        title=f"=== 実現可能性チェック: {r.company_name} ===",
+        body=lines,
+    )
