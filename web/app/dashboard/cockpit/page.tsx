@@ -20,6 +20,7 @@ import {
   type VerdictLevel,
 } from "@/lib/api";
 import { DECISION_AXIS_LABEL, VERDICT_LEVEL_LABEL } from "@/lib/labels";
+import { useFetchTool } from "@/lib/useFetchTool";
 
 const AXIS_ORDER: DecisionAxis[] = ["compliance", "kpi_reach", "measure_pick"];
 
@@ -88,10 +89,12 @@ function CockpitCard({
   item,
   companyId,
   onDecisionLogged,
+  onError,
 }: {
   item: CockpitItem;
   companyId: string;
   onDecisionLogged: (axis: DecisionAxis, decision: DecisionStatus) => void;
+  onError: (message: string) => void;
 }) {
   const [submitting, setSubmitting] = useState<DecisionStatus | null>(null);
   const [logged, setLogged] = useState<DecisionStatus | null>(null);
@@ -110,9 +113,8 @@ function CockpitCard({
       setLogged(decision);
       onDecisionLogged(item.decision_axis, decision);
     } catch (e) {
-      // 失敗時は alert で通知（簡易実装）
       const msg = e instanceof Error ? e.message : "通信エラー";
-      window.alert(`意思決定ログの記録に失敗しました: ${msg}`);
+      onError(`意思決定ログの記録に失敗しました: ${msg}`);
     } finally {
       setSubmitting(null);
     }
@@ -301,9 +303,8 @@ function decisionBtnCls(d: DecisionStatus): string {
 export default function CockpitPage() {
   const [samples, setSamples] = useState<SampleCompany[]>([]);
   const [companyId, setCompanyId] = useState<string>("sample_wholesale_01");
-  const [result, setResult] = useState<ToolResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data: result, loading, error, run } = useFetchTool<ToolResponse>();
+  const [decisionError, setDecisionError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSamples()
@@ -312,17 +313,8 @@ export default function CockpitPage() {
   }, []);
 
   async function handleSubmit() {
-    setLoading(true);
-    setError(null);
-    try {
-      setResult(
-        await fetchTodayDecisions(companyId, { persistSnapshot: true }),
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "通信エラー");
-    } finally {
-      setLoading(false);
-    }
+    setDecisionError(null);
+    await run(() => fetchTodayDecisions(companyId, { persistSnapshot: true }));
   }
 
   const cockpit = useMemo<CockpitMetadata | null>(() => {
@@ -395,6 +387,7 @@ export default function CockpitPage() {
       </div>
 
       {error && <ErrorBanner message={error} />}
+      {decisionError && <ErrorBanner message={decisionError} />}
 
       {cockpit && (
         <>
@@ -455,6 +448,7 @@ export default function CockpitPage() {
                 onDecisionLogged={() => {
                   /* I2 ログ記録の即時反映は次の生成時に days_pending に出る */
                 }}
+                onError={setDecisionError}
               />
             ))}
           </div>
