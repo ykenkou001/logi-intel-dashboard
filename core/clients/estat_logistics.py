@@ -8,6 +8,7 @@
 
 参考: docs/api_endpoints.md の「statsCode と statsDataId の区別」セクション
 """
+
 from __future__ import annotations
 
 from typing import Any, ClassVar, Self
@@ -25,12 +26,12 @@ class EStatLogisticsClient:
     # 物流関連の主要統計の statsCode（省庁コード）
     # 注: ここは固定 ID。statsDataId は毎年新しい ID が発行されるため動的取得する
     STATS_CODES: ClassVar[dict[str, str]] = {
-        "auto_transport": "00600340",     # 自動車輸送統計年報（積載率・実車率）
-        "freight_census": "00600370",     # 全国貨物純流動調査（物流センサス／5年に1回）
-        "port": "00600460",               # 港湾統計（内航海運キャパ）
-        "rail_freight": "00600420",       # 鉄道輸送統計（鉄道貨物キャパ）
-        "economic_census": "00200552",    # 経済センサス‐活動調査（事業所数・売上）
-        "wage_structure": "00600310",     # 賃金構造基本統計（ドライバー賃金）
+        "auto_transport": "00600340",  # 自動車輸送統計年報（積載率・実車率）
+        "freight_census": "00600370",  # 全国貨物純流動調査（物流センサス／5年に1回）
+        "port": "00600460",  # 港湾統計（内航海運キャパ）
+        "rail_freight": "00600420",  # 鉄道輸送統計（鉄道貨物キャパ）
+        "economic_census": "00200552",  # 経済センサス‐活動調査（事業所数・売上）
+        "wage_structure": "00600310",  # 賃金構造基本統計（ドライバー賃金）
         "population_census": "00200521",  # 国勢調査（道路貨物運送業 就業者数）
     }
 
@@ -53,8 +54,7 @@ class EStatLogisticsClient:
         """データセット識別子を statsCode に変換する。"""
         if dataset not in self.STATS_CODES:
             raise EStatApiError(
-                f"未知のデータセット: '{dataset}'. "
-                f"利用可能: {sorted(self.STATS_CODES.keys())}"
+                f"未知のデータセット: '{dataset}'. 利用可能: {sorted(self.STATS_CODES.keys())}"
             )
         return self.STATS_CODES[dataset]
 

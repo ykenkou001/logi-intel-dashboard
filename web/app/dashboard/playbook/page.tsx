@@ -8,33 +8,24 @@ import {
 } from "@/components/ToolResponseDisplay";
 import { fetchPlaybook, type ToolResponse } from "@/lib/api";
 import { FORM3_SECTIONS, INDUSTRY_CATEGORIES, MEASURE_TYPES } from "@/lib/constants";
+import { useFetchTool } from "@/lib/useFetchTool";
 
 export default function PlaybookPage() {
   const [industry, setIndustry] = useState<string>("");
   const [maxDifficulty, setMaxDifficulty] = useState<string>("");
   const [form3Section, setForm3Section] = useState<string>("");
   const [measureType, setMeasureType] = useState<string>("");
-  const [result, setResult] = useState<ToolResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data: result, loading, error, run } = useFetchTool<ToolResponse>();
 
   async function handleSubmit() {
-    setLoading(true);
-    setError(null);
-    try {
-      setResult(
-        await fetchPlaybook({
-          industry: industry || undefined,
-          max_difficulty: maxDifficulty ? Number(maxDifficulty) : undefined,
-          form3_section: form3Section || undefined,
-          measure_type: measureType || undefined,
-        })
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "通信エラー");
-    } finally {
-      setLoading(false);
-    }
+    await run(() =>
+      fetchPlaybook({
+        industry: industry || undefined,
+        max_difficulty: maxDifficulty ? Number(maxDifficulty) : undefined,
+        form3_section: form3Section || undefined,
+        measure_type: measureType || undefined,
+      })
+    );
   }
 
   const fieldClass =

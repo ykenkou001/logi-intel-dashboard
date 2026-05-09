@@ -4,6 +4,7 @@
 MCP ツールと REST API でレスポンス構造を完全に一致させることで、
 Web フロント・Claude 双方が同じパーサで処理できる。
 """
+
 from __future__ import annotations
 
 from typing import Literal

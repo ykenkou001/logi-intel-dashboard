@@ -14,6 +14,7 @@ Claude Desktop 設定 (~/.claude/claude_desktop_config.json):
       }
     }
 """
+
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 

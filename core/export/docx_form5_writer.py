@@ -12,6 +12,7 @@
     - Ⅴ 中長期計画の進捗状況
     - 連鎖化事業者は荷役等項目なし（自動判別）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -36,7 +37,7 @@ class ProgressRow:
     measure_name: str
     plan_target: str
     actual_result: str
-    status_mark: str        # "☑ 達成" / "△ 継続対応" / "☒ 未達"
+    status_mark: str  # "☑ 達成" / "△ 継続対応" / "☒ 未達"
 
 
 @dataclass
@@ -95,9 +96,7 @@ def write_form5(sections: Form5Sections) -> Path:
 
     is_chain = "chain_franchise" in sections.eligibility_categories
     title_text = (
-        "定期報告書（様式第5／第65条関係）"
-        if is_chain
-        else "定期報告書（様式第5／第46条関係）"
+        "定期報告書（様式第5／第65条関係）" if is_chain else "定期報告書（様式第5／第46条関係）"
     )
     title = doc.add_heading(title_text, level=1)
     for run in title.runs:
@@ -148,9 +147,7 @@ def _write_section_basic_info(doc: Any, s: Form5Sections) -> None:
     doc.add_heading("Ⅰ 特定荷主の名称等", level=2)
     table = doc.add_table(rows=6, cols=2)
     table.style = "Table Grid"
-    cat_label = "／".join(
-        _CATEGORY_LABELS.get(c, c) for c in s.eligibility_categories
-    )
+    cat_label = "／".join(_CATEGORY_LABELS.get(c, c) for c in s.eligibility_categories)
     rows_data = [
         ("事業者の名称", s.company_name),
         ("主たる事業", s.main_business),
@@ -166,7 +163,10 @@ def _write_section_basic_info(doc: Any, s: Form5Sections) -> None:
 
 
 def _write_section_compliance(
-    doc: Any, s: Form5Sections, *, is_chain: bool,
+    doc: Any,
+    s: Form5Sections,
+    *,
+    is_chain: bool,
 ) -> None:
     """Ⅱ 判断基準の遵守状況。"""
     doc.add_heading("Ⅱ 判断基準の遵守状況", level=2)
@@ -199,10 +199,7 @@ def _write_section_additional_measures(doc: Any, s: Form5Sections) -> None:
         doc.add_paragraph("該当なし（全項目において判断基準を遵守）")
         return
 
-    violations = [
-        i for i in s.compliance.items
-        if i.status in ("violation", "not_measured")
-    ]
+    violations = [i for i in s.compliance.items if i.status in ("violation", "not_measured")]
     if not violations:
         doc.add_paragraph("追加措置の要否判定中（詳細は次回報告書で更新）")
         return
@@ -221,7 +218,10 @@ def _write_section_additional_measures(doc: Any, s: Form5Sections) -> None:
 
 
 def _write_section_wait_handling(
-    doc: Any, s: Form5Sections, *, is_chain: bool,
+    doc: Any,
+    s: Form5Sections,
+    *,
+    is_chain: bool,
 ) -> None:
     """Ⅳ 荷待ち時間等の計測データ。"""
     doc.add_heading("Ⅳ 荷待ち時間等の計測データ", level=2)
@@ -292,7 +292,8 @@ def _write_section_progress(doc: Any, s: Form5Sections) -> None:
 
 
 def _write_section_submission_checklist(
-    doc: Any, checklist: SubmissionChecklist,
+    doc: Any,
+    checklist: SubmissionChecklist,
 ) -> None:
     """Ⅵ 提出準備チェックリスト（Codex 1 取込）。"""
     doc.add_heading("Ⅵ 提出準備チェックリスト（実務）", level=2)

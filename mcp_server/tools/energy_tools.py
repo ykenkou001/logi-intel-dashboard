@@ -1,4 +1,5 @@
 """エネ庁 石油価格 向け MCP ツール群。"""
+
 from __future__ import annotations
 
 from typing import Any

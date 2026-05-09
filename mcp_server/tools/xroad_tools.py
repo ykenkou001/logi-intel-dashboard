@@ -1,4 +1,5 @@
 """xROAD 交通量 API（JARTIC）向け MCP ツール群。"""
+
 from __future__ import annotations
 
 from typing import Any
@@ -23,8 +24,7 @@ def _format_features(features: list[dict[str, Any]]) -> str:
         down = _sum_volume(props, "下り")
         total = up + down
         lines.append(
-            f"観測点={station} 時間コード={time_} "
-            f"交通量={total}台/5分（上り {up} / 下り {down}）"
+            f"観測点={station} 時間コード={time_} 交通量={total}台/5分（上り {up} / 下り {down}）"
         )
     total = len(features)
     result = "\n".join(lines)

@@ -5,6 +5,7 @@ MCP ツール（mcp_server/tools/macro_tools.py）と REST API ルーター（ap
 
 Lambda パッケージは fastmcp を含まないため、ここに切り出して両系統で再利用する。
 """
+
 from core.macro.sources import (
     ESTAT_STATS_ID,
     PREF_CODES,

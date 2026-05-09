@@ -11,7 +11,6 @@ import {
   fetchSamples,
   type IndustryPackage,
   type IndustryPackageMetadata,
-  type JsicCategory,
   type MeasureDetail,
   type OverrideCategory,
   type OverrideEntry,
@@ -23,26 +22,12 @@ import {
   DATA_SOURCE_LABEL,
   formatTargetValue,
   freqLabel,
+  INDUSTRY_LABEL,
   OUTPUT_FORMAT_LABEL,
+  OVERRIDE_CATEGORY_LABEL,
   REPORT_AUDIENCE_LABEL,
   targetValueMissingNote,
 } from "@/lib/labels";
-
-const INDUSTRY_LABEL: Record<JsicCategory, string> = {
-  manufacturing: "製造業",
-  wholesale: "卸売業",
-  retail: "小売業",
-  chain_franchise: "連鎖化（FC本部）",
-  transport: "運輸業",
-  other: "その他",
-};
-
-const OVERRIDE_LABEL: Record<OverrideCategory, string> = {
-  unmanaged_deviation: "管理外逸脱",
-  approved_better_practice: "承認済差別化",
-  required_localization: "必要ローカル",
-  temporary_exception: "期限付き例外",
-};
 
 const OVERRIDE_BADGE: Record<OverrideCategory, string> = {
   unmanaged_deviation: "bg-rose-100 text-rose-800 border-rose-200",
@@ -257,13 +242,13 @@ function PackageDetail({
             {override.last_reviewed}）
           </h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            {(Object.keys(OVERRIDE_LABEL) as OverrideCategory[]).map((cat) => (
+            {(Object.keys(OVERRIDE_CATEGORY_LABEL) as OverrideCategory[]).map((cat) => (
               <div
                 key={cat}
                 className={`rounded-lg border px-3 py-2 ${OVERRIDE_BADGE[cat]}`}
               >
                 <div className="text-[11px] font-semibold opacity-80">
-                  {OVERRIDE_LABEL[cat]}
+                  {OVERRIDE_CATEGORY_LABEL[cat]}
                 </div>
                 <div
                   className="text-xl font-bold"

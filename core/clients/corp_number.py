@@ -3,6 +3,7 @@
 認証: クエリパラメータ id（環境変数 CORP_NUMBER_APP_ID）
 エンドポイント: https://api.houjin-bangou.nta.go.jp/4/
 """
+
 from __future__ import annotations
 
 from typing import Any, cast

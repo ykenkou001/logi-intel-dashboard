@@ -10,6 +10,7 @@
     - 失敗パターン（common_pitfalls）
     - 様式第3 セクション分類（load / wait / loading）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -162,7 +163,10 @@ ALL_MEASURES: list[PlaybookMeasure] = [
         measure_type="load_factor",
         form3_section="load",
         applicable_industries=[
-            "manufacturing", "wholesale", "retail", "chain_franchise",
+            "manufacturing",
+            "wholesale",
+            "retail",
+            "chain_franchise",
         ],
         min_revenue_jpy=5_000_000_000,  # 50 億円
         min_freight_tons=20_000.0,
@@ -201,7 +205,10 @@ ALL_MEASURES: list[PlaybookMeasure] = [
         # 等の認定事例があり、industry_packages.chain_franchise でも標準採用済。
         # c.4 で逆検証テスト（ALL_MEASURES 側からの整合確認）を追加した際に検出。
         applicable_industries=[
-            "manufacturing", "wholesale", "retail", "chain_franchise",
+            "manufacturing",
+            "wholesale",
+            "retail",
+            "chain_franchise",
         ],
         min_revenue_jpy=20_000_000_000,  # 200 億円
         min_freight_tons=50_000.0,
@@ -259,7 +266,6 @@ ALL_MEASURES: list[PlaybookMeasure] = [
         ],
         citation=_EFFICIENCY_LAW_CITATION,
     ),
-
     # ---------- 荷待ち時間短縮カテゴリ（form3_section="wait"）----------
     PlaybookMeasure(
         measure_id="berth_booking_vbs",
@@ -271,7 +277,10 @@ ALL_MEASURES: list[PlaybookMeasure] = [
         measure_type="berth_booking",
         form3_section="wait",
         applicable_industries=[
-            "manufacturing", "wholesale", "retail", "chain_franchise",
+            "manufacturing",
+            "wholesale",
+            "retail",
+            "chain_franchise",
         ],
         min_revenue_jpy=3_000_000_000,
         min_freight_tons=10_000.0,
@@ -310,7 +319,10 @@ ALL_MEASURES: list[PlaybookMeasure] = [
         # 連鎖化事業者（コンビニ本部・FC 本部）の店舗納品時間帯分散は典型施策。
         # c.4 で逆検証テスト（industry_packages 側からの整合確認）を追加した際に検出。
         applicable_industries=[
-            "manufacturing", "wholesale", "retail", "chain_franchise",
+            "manufacturing",
+            "wholesale",
+            "retail",
+            "chain_franchise",
         ],
         min_revenue_jpy=1_000_000_000,
         min_freight_tons=5_000.0,
@@ -332,7 +344,6 @@ ALL_MEASURES: list[PlaybookMeasure] = [
         ],
         citation=_EFFICIENCY_LAW_CITATION,
     ),
-
     # ---------- 荷役等時間短縮カテゴリ（form3_section="loading"）----------
     PlaybookMeasure(
         measure_id="relay_transport",
@@ -377,7 +388,10 @@ ALL_MEASURES: list[PlaybookMeasure] = [
         measure_type="warehouse_dx",
         form3_section="loading",
         applicable_industries=[
-            "manufacturing", "wholesale", "retail", "chain_franchise",
+            "manufacturing",
+            "wholesale",
+            "retail",
+            "chain_franchise",
         ],
         min_revenue_jpy=5_000_000_000,
         min_freight_tons=15_000.0,
@@ -402,7 +416,6 @@ ALL_MEASURES: list[PlaybookMeasure] = [
         ],
         citation=_EFFICIENCY_LAW_CITATION,
     ),
-
     # ---------- 横断系（form3_section="load" を主とする）----------
     PlaybookMeasure(
         measure_id="visualization_baseline",
@@ -414,7 +427,10 @@ ALL_MEASURES: list[PlaybookMeasure] = [
         measure_type="warehouse_dx",
         form3_section="load",
         applicable_industries=[
-            "manufacturing", "wholesale", "retail", "chain_franchise",
+            "manufacturing",
+            "wholesale",
+            "retail",
+            "chain_franchise",
         ],
         min_revenue_jpy=None,
         min_freight_tons=None,

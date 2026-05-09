@@ -12,6 +12,7 @@ J3 デイリーコックピット（フェーズ4.5）の前提となる可視�
       （30 分以下=green / 30〜90 分=yellow / 90 分超=red / 未計測=none）
     - 計測便数が少ない場合（measurement_minimum_runs 未満）は confidence_low フラグ
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -129,9 +130,7 @@ def build_wait_time_heatmap(profile: CompanyProfile) -> HeatmapResult:
 
     # 3. 横軸：time_slot は固定順序、ただし all_day レーンは
     #    1 件以上ある場合のみ表示
-    has_all_day = any(
-        "all_day" in slots for slots in site_rows.values()
-    )
+    has_all_day = any("all_day" in slots for slots in site_rows.values())
     time_slots = [s for s in TIME_SLOT_ORDER if s != "all_day" or has_all_day]
 
     # 4. セル集計
@@ -156,9 +155,7 @@ def build_wait_time_heatmap(profile: CompanyProfile) -> HeatmapResult:
             )
 
     # 5. 全体集計（ヘッダ表示用）
-    all_rows = [
-        r for r in profile.wait_time_rows if r.site_name is not None
-    ]
+    all_rows = [r for r in profile.wait_time_rows if r.site_name is not None]
     overall_avg, overall_max, _, _ = _aggregate_rows(all_rows)
 
     # 6. 出典・鮮度

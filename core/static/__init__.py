@@ -4,6 +4,7 @@
 鮮度メタデータがレジストリに登録される。利用側は `import core.static` 1 行で
 全モジュールを有効化できる。
 """
+
 from __future__ import annotations
 
 # 副作用 import: 各モジュールロード時に _freshness.register() が走る

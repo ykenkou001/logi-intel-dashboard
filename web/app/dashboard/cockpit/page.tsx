@@ -19,12 +19,8 @@ import {
   type ToolResponse,
   type VerdictLevel,
 } from "@/lib/api";
-
-const AXIS_LABEL: Record<DecisionAxis, string> = {
-  compliance: "軸A 法令準拠リスク",
-  kpi_reach: "軸B KPI達成見通し",
-  measure_pick: "軸C 今週決める施策",
-};
+import { DECISION_AXIS_LABEL, VERDICT_LEVEL_LABEL } from "@/lib/labels";
+import { useFetchTool } from "@/lib/useFetchTool";
 
 const AXIS_ORDER: DecisionAxis[] = ["compliance", "kpi_reach", "measure_pick"];
 
@@ -38,12 +34,6 @@ const HEALTH_DOT: Record<VerdictLevel, string> = {
   green: "bg-emerald-500",
   yellow: "bg-amber-500",
   red: "bg-rose-500",
-};
-
-const HEALTH_LABEL: Record<VerdictLevel, string> = {
-  green: "全体健全",
-  yellow: "要注視",
-  red: "重大対応",
 };
 
 const STATE_BADGE: Record<CardState, { label: string; cls: string }> = {
@@ -99,10 +89,12 @@ function CockpitCard({
   item,
   companyId,
   onDecisionLogged,
+  onError,
 }: {
   item: CockpitItem;
   companyId: string;
   onDecisionLogged: (axis: DecisionAxis, decision: DecisionStatus) => void;
+  onError: (message: string) => void;
 }) {
   const [submitting, setSubmitting] = useState<DecisionStatus | null>(null);
   const [logged, setLogged] = useState<DecisionStatus | null>(null);
@@ -121,9 +113,8 @@ function CockpitCard({
       setLogged(decision);
       onDecisionLogged(item.decision_axis, decision);
     } catch (e) {
-      // 失敗時は alert で通知（簡易実装）
       const msg = e instanceof Error ? e.message : "通信エラー";
-      window.alert(`意思決定ログの記録に失敗しました: ${msg}`);
+      onError(`意思決定ログの記録に失敗しました: ${msg}`);
     } finally {
       setSubmitting(null);
     }
@@ -133,7 +124,7 @@ function CockpitCard({
     <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col h-full">
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-bold text-[#1F4E79]">
-          {AXIS_LABEL[item.decision_axis]}
+          {DECISION_AXIS_LABEL[item.decision_axis]}
         </span>
         <span
           className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${badge.cls}`}
@@ -312,9 +303,8 @@ function decisionBtnCls(d: DecisionStatus): string {
 export default function CockpitPage() {
   const [samples, setSamples] = useState<SampleCompany[]>([]);
   const [companyId, setCompanyId] = useState<string>("sample_wholesale_01");
-  const [result, setResult] = useState<ToolResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data: result, loading, error, run } = useFetchTool<ToolResponse>();
+  const [decisionError, setDecisionError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchSamples()
@@ -323,17 +313,8 @@ export default function CockpitPage() {
   }, []);
 
   async function handleSubmit() {
-    setLoading(true);
-    setError(null);
-    try {
-      setResult(
-        await fetchTodayDecisions(companyId, { persistSnapshot: true }),
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "通信エラー");
-    } finally {
-      setLoading(false);
-    }
+    setDecisionError(null);
+    await run(() => fetchTodayDecisions(companyId, { persistSnapshot: true }));
   }
 
   const cockpit = useMemo<CockpitMetadata | null>(() => {
@@ -406,6 +387,7 @@ export default function CockpitPage() {
       </div>
 
       {error && <ErrorBanner message={error} />}
+      {decisionError && <ErrorBanner message={decisionError} />}
 
       {cockpit && (
         <>
@@ -418,7 +400,7 @@ export default function CockpitPage() {
             <div className="flex-1">
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-base font-bold uppercase">
-                  {HEALTH_LABEL[cockpit.overall_health]}
+                  {VERDICT_LEVEL_LABEL[cockpit.overall_health]}
                 </span>
                 <span className="text-xs opacity-80">
                   ({cockpit.overall_health.toUpperCase()})
@@ -466,6 +448,7 @@ export default function CockpitPage() {
                 onDecisionLogged={() => {
                   /* I2 ログ記録の即時反映は次の生成時に days_pending に出る */
                 }}
+                onError={setDecisionError}
               />
             ))}
           </div>

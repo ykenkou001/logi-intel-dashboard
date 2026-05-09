@@ -20,6 +20,7 @@
     - 個別の運賃水準を厳密に評価する場合は、地方運輸局別の告示原文を参照すること
     - 改定追従: 約 4 年（2020→2024）で改定されたため、`biennial` で告示原文の改定有無を確認
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

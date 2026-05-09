@@ -8,6 +8,7 @@
 実 fetch ロジックは Lambda zip でも共有するため `core/macro/sources.py` に切り出してある。
 このモジュールは fastmcp に依存するため、Lambda パッケージには含めない。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -79,19 +80,23 @@ def register_tools(mcp: FastMCP) -> None:
             _with_source_timeout("燃料価格", _fetch_fuel()),
         )
 
-        summary = "\n".join([
-            f"=== {prefecture_name} 物流業界マクロ概況 ===",
-            estat_result,
-            corp_result,
-            weather_result,
-            fuel_result,
-        ])
+        summary = "\n".join(
+            [
+                f"=== {prefecture_name} 物流業界マクロ概況 ===",
+                estat_result,
+                corp_result,
+                weather_result,
+                fuel_result,
+            ]
+        )
 
         response = ToolResponse(summary=summary)
-        response.add_citation(estat_citation(
-            "経済センサス‐活動調査 2021 産業（大分類）別事業所数",
-            _ESTAT_STATS_ID,
-        ))
+        response.add_citation(
+            estat_citation(
+                "経済センサス‐活動調査 2021 産業（大分類）別事業所数",
+                _ESTAT_STATS_ID,
+            )
+        )
         response.add_citation(corp_number_citation())
         response.add_citation(jma_warning_citation())
         response.add_citation(fuel_price_citation())

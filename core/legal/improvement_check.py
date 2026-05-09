@@ -8,6 +8,7 @@
     厚生労働省告示「自動車運転者の労働時間等の改善のための基準」
     （詳細は core/static/improvement_standards.py 参照）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -22,17 +23,21 @@ ComplianceStatus = Literal["compliant", "violation", "borderline", "not_measured
 class ComplianceItem:
     """1 つの判断基準項目の遵守状況。"""
 
-    name: str                            # 項目名（例: "1日拘束時間"）
+    name: str  # 項目名（例: "1日拘束時間"）
     status: ComplianceStatus
-    measured_value: float | None         # 実測値
-    threshold: float                     # 告示基準値
-    unit: str                            # 単位（例: "時間", "分"）
+    measured_value: float | None  # 実測値
+    threshold: float  # 告示基準値
+    unit: str  # 単位（例: "時間", "分"）
     note: str = ""
 
     def to_form5_line(self) -> str:
         """様式第5 報告書向けの 1 行表示。"""
-        check = {"compliant": "☑ 遵守", "violation": "☒ 違反",
-                 "borderline": "△ 要注意", "not_measured": "― 未計測"}[self.status]
+        check = {
+            "compliant": "☑ 遵守",
+            "violation": "☒ 違反",
+            "borderline": "△ 要注意",
+            "not_measured": "― 未計測",
+        }[self.status]
         if self.measured_value is None:
             return f"{check}  {self.name} （基準: {self.threshold}{self.unit}）"
         return (
@@ -48,7 +53,7 @@ class ComplianceReport:
     items: list[ComplianceItem]
     overall_status: ComplianceStatus
     summary: str
-    additional_measures_required: bool   # 追加措置が必要か（様式第5 Ⅲ用）
+    additional_measures_required: bool  # 追加措置が必要か（様式第5 Ⅲ用）
     notes: list[str] = field(default_factory=list)
 
 
@@ -69,12 +74,20 @@ def _check_threshold(
         return ComplianceItem(name, "not_measured", None, threshold, unit)
     if measured > threshold:
         return ComplianceItem(
-            name, "violation", measured, threshold, unit,
+            name,
+            "violation",
+            measured,
+            threshold,
+            unit,
             note="基準超過。様式第5 Ⅲ で追加措置を記載する必要あり",
         )
     if measured >= threshold * borderline_ratio:
         return ComplianceItem(
-            name, "borderline", measured, threshold, unit,
+            name,
+            "borderline",
+            measured,
+            threshold,
+            unit,
             note="基準値ぎりぎり。改善余地を要検討",
         )
     return ComplianceItem(name, "compliant", measured, threshold, unit)
@@ -104,60 +117,90 @@ def check_truck_driver_compliance(
     std = TRUCK_DRIVER_STANDARD
     items: list[ComplianceItem] = []
 
-    items.append(_check_threshold(
-        "1日拘束時間（原則）",
-        daily_working_hours_max,
-        std.max_daily_working_hours_principle,
-        "時間",
-    ))
-    items.append(_check_threshold(
-        "年間総拘束時間",
-        annual_working_hours,
-        std.max_annual_working_hours_principle,
-        "時間",
-    ))
-    items.append(_check_threshold(
-        "年間時間外労働",
-        annual_overtime_hours,
-        std.max_annual_overtime_hours,
-        "時間",
-    ))
-    items.append(_check_threshold(
-        "荷待ち時間",
-        waiting_minutes_max,
-        120,  # 2 時間 = 120 分（物流効率化法 判断基準）
-        "分",
-    ))
-    items.append(_check_threshold(
-        "荷役等時間",
-        handling_minutes_max,
-        120,  # 2 時間 = 120 分（物流効率化法 判断基準）
-        "分",
-    ))
+    items.append(
+        _check_threshold(
+            "1日拘束時間（原則）",
+            daily_working_hours_max,
+            std.max_daily_working_hours_principle,
+            "時間",
+        )
+    )
+    items.append(
+        _check_threshold(
+            "年間総拘束時間",
+            annual_working_hours,
+            std.max_annual_working_hours_principle,
+            "時間",
+        )
+    )
+    items.append(
+        _check_threshold(
+            "年間時間外労働",
+            annual_overtime_hours,
+            std.max_annual_overtime_hours,
+            "時間",
+        )
+    )
+    items.append(
+        _check_threshold(
+            "荷待ち時間",
+            waiting_minutes_max,
+            120,  # 2 時間 = 120 分（物流効率化法 判断基準）
+            "分",
+        )
+    )
+    items.append(
+        _check_threshold(
+            "荷役等時間",
+            handling_minutes_max,
+            120,  # 2 時間 = 120 分（物流効率化法 判断基準）
+            "分",
+        )
+    )
 
     # 連続休息は「最低何時間か」なので逆向きの判定
     if rest_hours_min is None:
-        items.append(ComplianceItem(
-            "連続休息時間", "not_measured", None,
-            std.min_rest_hours_principle, "時間",
-        ))
+        items.append(
+            ComplianceItem(
+                "連続休息時間",
+                "not_measured",
+                None,
+                std.min_rest_hours_principle,
+                "時間",
+            )
+        )
     elif rest_hours_min < std.min_rest_hours_floor:
-        items.append(ComplianceItem(
-            "連続休息時間", "violation", rest_hours_min,
-            std.min_rest_hours_floor, "時間",
-            note="下限 9 時間を割っている",
-        ))
+        items.append(
+            ComplianceItem(
+                "連続休息時間",
+                "violation",
+                rest_hours_min,
+                std.min_rest_hours_floor,
+                "時間",
+                note="下限 9 時間を割っている",
+            )
+        )
     elif rest_hours_min < std.min_rest_hours_principle:
-        items.append(ComplianceItem(
-            "連続休息時間", "borderline", rest_hours_min,
-            std.min_rest_hours_principle, "時間",
-            note="原則 11 時間を満たしていない（下限 9h はクリア）",
-        ))
+        items.append(
+            ComplianceItem(
+                "連続休息時間",
+                "borderline",
+                rest_hours_min,
+                std.min_rest_hours_principle,
+                "時間",
+                note="原則 11 時間を満たしていない（下限 9h はクリア）",
+            )
+        )
     else:
-        items.append(ComplianceItem(
-            "連続休息時間", "compliant", rest_hours_min,
-            std.min_rest_hours_principle, "時間",
-        ))
+        items.append(
+            ComplianceItem(
+                "連続休息時間",
+                "compliant",
+                rest_hours_min,
+                std.min_rest_hours_principle,
+                "時間",
+            )
+        )
 
     # 総合判定
     if any(i.status == "violation" for i in items):

@@ -13,6 +13,7 @@
     - 数値型は openpyxl が float で返すケースがあるため、int フィールドは
       Pydantic v2 のデフォルト挙動（float→int の loss-less 変換）に委ねる
 """
+
 from __future__ import annotations
 
 import csv
@@ -65,20 +66,12 @@ def load_company_profile_from_excel(path: Path) -> CompanyProfile:
 
     profile_kv = _read_profile_sheet(wb[PROFILE_SHEET])
     sites_rows = _read_tabular_sheet(wb[SITES_SHEET])
-    wait_rows = (
-        _read_tabular_sheet(wb[WAIT_TIME_SHEET])
-        if WAIT_TIME_SHEET in sheet_names
-        else []
-    )
+    wait_rows = _read_tabular_sheet(wb[WAIT_TIME_SHEET]) if WAIT_TIME_SHEET in sheet_names else []
     handling_rows = (
-        _read_tabular_sheet(wb[HANDLING_TIME_SHEET])
-        if HANDLING_TIME_SHEET in sheet_names
-        else []
+        _read_tabular_sheet(wb[HANDLING_TIME_SHEET]) if HANDLING_TIME_SHEET in sheet_names else []
     )
     kpi_rows = (
-        _read_tabular_sheet(wb[KPI_HISTORY_SHEET])
-        if KPI_HISTORY_SHEET in sheet_names
-        else []
+        _read_tabular_sheet(wb[KPI_HISTORY_SHEET]) if KPI_HISTORY_SHEET in sheet_names else []
     )
 
     return _build_profile(profile_kv, sites_rows, wait_rows, handling_rows, kpi_rows)
@@ -245,9 +238,7 @@ def _build_profile(
     payload["handling_time_rows"] = _validate_list(
         HandlingTimeRow, handling_rows, sheet=HANDLING_TIME_SHEET
     )
-    payload["kpi_history"] = _validate_list(
-        KpiHistoryEntry, kpi_rows, sheet=KPI_HISTORY_SHEET
-    )
+    payload["kpi_history"] = _validate_list(KpiHistoryEntry, kpi_rows, sheet=KPI_HISTORY_SHEET)
 
     try:
         return CompanyProfile.model_validate(payload)

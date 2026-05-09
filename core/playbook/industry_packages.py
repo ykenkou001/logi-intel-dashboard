@@ -28,6 +28,7 @@ Codex レビュー反映（2026-05-06）:
 
 plan: plans/b-c-flickering-pixel.md §段階 c
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -44,7 +45,11 @@ from core.static.jsic import JsicCategory
 
 KpiFrequency = Literal["daily", "weekly", "monthly", "quarterly", "annual"]
 MeetingFrequency = Literal[
-    "weekly", "biweekly", "monthly", "quarterly", "annual",
+    "weekly",
+    "biweekly",
+    "monthly",
+    "quarterly",
+    "annual",
 ]
 ReportFrequency = Literal["weekly", "monthly", "quarterly", "annual"]
 ReportAudience = Literal["board", "clo", "operation", "external_partner"]
@@ -53,10 +58,10 @@ DataItemSource = Literal["tms", "wms", "manual", "gps", "pos", "edi"]
 RefreshCadence = Literal["realtime", "daily", "weekly", "monthly"]
 
 OverrideCategory = Literal[
-    "unmanaged_deviation",       # 管理されていない逸脱（減点対象）
+    "unmanaged_deviation",  # 管理されていない逸脱（減点対象）
     "approved_better_practice",  # 承認済の良い差別化（減点なし、bonus 候補）
-    "required_localization",     # 立地・規模特性で必要な調整（減点なし）
-    "temporary_exception",       # 期限付き例外（減点緩和、期限超過で減点）
+    "required_localization",  # 立地・規模特性で必要な調整（減点なし）
+    "temporary_exception",  # 期限付き例外（減点緩和、期限超過で減点）
 ]
 """Codex 勧告④: F2 標準化スコアの単調性破壊を避けるため、override 4 分類で
 減点対象を unmanaged のみに限定する。
@@ -179,10 +184,12 @@ class OverrideEntry(BaseModel):
     category: OverrideCategory
     rationale: str = Field(description="差分の理由（経営層への説明文）")
     approved_by: str | None = Field(
-        default=None, description="CLO 名（approved_better_practice / temporary_exception 必須）",
+        default=None,
+        description="CLO 名（approved_better_practice / temporary_exception 必須）",
     )
     expires_at: date | None = Field(
-        default=None, description="temporary_exception のみ必須",
+        default=None,
+        description="temporary_exception のみ必須",
     )
     diff: dict[str, object] = Field(
         default_factory=dict,
@@ -206,28 +213,18 @@ class CompanyPackageOverride(BaseModel):
 # ---------------------------------------------------------------------------
 
 # 出典 URL の頻出表現（DRY）
-_PORTAL_SHIPPER = (
-    "https://www.revised-logistics-act-portal.mlit.go.jp/sippers/judgment-criteria/"
-)
-_PORTAL_CHAIN = (
-    "https://www.revised-logistics-act-portal.mlit.go.jp/chained/judgment-criteria/"
-)
-_PORTAL_METHOD = (
-    "https://www.revised-logistics-act-portal.mlit.go.jp/method/"
-)
+_PORTAL_SHIPPER = "https://www.revised-logistics-act-portal.mlit.go.jp/sippers/judgment-criteria/"
+_PORTAL_CHAIN = "https://www.revised-logistics-act-portal.mlit.go.jp/chained/judgment-criteria/"
+_PORTAL_METHOD = "https://www.revised-logistics-act-portal.mlit.go.jp/method/"
 _METI_BASIC_POLICY = (
-    "https://www.meti.go.jp/shingikai/sankoshin/shomu_ryutsu/distribution/"
-    "pdf/001_02_00.pdf"
+    "https://www.meti.go.jp/shingikai/sankoshin/shomu_ryutsu/distribution/pdf/001_02_00.pdf"
 )
 _MLIT_TRANSPORT_POLICY = (
     "https://www.mlit.go.jp/sogoseisaku/transport/sosei_transport_tk_000146.html"
 )
-_GREEN_GUIDELINE = (
-    "https://www.greenpartnership.jp/co2/guidelinev3.1.pdf"
-)
+_GREEN_GUIDELINE = "https://www.greenpartnership.jp/co2/guidelinev3.1.pdf"
 _JILS_COST_SURVEY = (
-    "https://www1.logistics.or.jp/wp-content/uploads/2025/03/"
-    "3f8d0e0cf2fc5ee6bf95df2731cf078e.pdf"
+    "https://www1.logistics.or.jp/wp-content/uploads/2025/03/3f8d0e0cf2fc5ee6bf95df2731cf078e.pdf"
 )
 
 
@@ -260,7 +257,9 @@ def _common_kpis(industry: JsicCategory) -> list[StandardKpiDef]:
             owner_role="物流部・経営企画",
             legal_basis=_JILS_COST_SURVEY,
             related_measure_ids=[
-                "load_factor_tms", "joint_delivery_competitor", "warehouse_dx_wms",
+                "load_factor_tms",
+                "joint_delivery_competitor",
+                "warehouse_dx_wms",
             ],
         ),
     ]
@@ -371,7 +370,8 @@ _MANUFACTURING_PACKAGE = IndustryPackage(
             audience="board",
             frequency="quarterly",
             source_kpi_ids=[
-                "load_factor_pct", "co2_intensity_reduction_pct",
+                "load_factor_pct",
+                "co2_intensity_reduction_pct",
                 "logistics_cost_revenue_ratio_pct",
             ],
             output_format="ppt",
@@ -383,7 +383,8 @@ _MANUFACTURING_PACKAGE = IndustryPackage(
             audience="external_partner",
             frequency="annual",
             source_kpi_ids=[
-                "load_factor_pct", "wait_time_avg_minutes",
+                "load_factor_pct",
+                "wait_time_avg_minutes",
                 "co2_intensity_reduction_pct",
             ],
             output_format="docx",
@@ -537,7 +538,8 @@ _WHOLESALE_PACKAGE = IndustryPackage(
             audience="external_partner",
             frequency="annual",
             source_kpi_ids=[
-                "load_factor_pct", "wait_time_avg_minutes",
+                "load_factor_pct",
+                "wait_time_avg_minutes",
             ],
             output_format="docx",
             related_meeting_ids=[],
@@ -693,7 +695,8 @@ _RETAIL_PACKAGE = IndustryPackage(
             audience="external_partner",
             frequency="annual",
             source_kpi_ids=[
-                "load_factor_pct", "wait_handling_per_run_max_minutes",
+                "load_factor_pct",
+                "wait_handling_per_run_max_minutes",
             ],
             output_format="docx",
             related_meeting_ids=[],
@@ -980,10 +983,7 @@ def resolve_company_package(
     """
     base = get_package(base_industry)
     if base is None:
-        raise ValueError(
-            f"未対応の業種カテゴリ: {base_industry!r}。"
-            f"利用可能: {list(ALL_PACKAGES)}"
-        )
+        raise ValueError(f"未対応の業種カテゴリ: {base_industry!r}。利用可能: {list(ALL_PACKAGES)}")
     if override is None or not override.entries:
         return base
 
@@ -1070,10 +1070,7 @@ def validate_chain_franchise_constraints(
             )
 
     for report in package.reports:
-        if (
-            "様式第5" in report.name
-            and CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE not in report.name
-        ):
+        if "様式第5" in report.name and CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE not in report.name:
             errors.append(
                 f"連鎖化の様式第5 レポート {report.report_id!r} は "
                 f"{CHAIN_FRANCHISE_REQUIRED_LEGAL_ARTICLE} を name に含む必要が"
@@ -1089,8 +1086,7 @@ _chain_franchise_violations = validate_chain_franchise_constraints(
 )
 if _chain_franchise_violations:
     raise ValueError(
-        "連鎖化パッケージの c.8 強制ガード違反:\n  - "
-        + "\n  - ".join(_chain_franchise_violations),
+        "連鎖化パッケージの c.8 強制ガード違反:\n  - " + "\n  - ".join(_chain_franchise_violations),
     )
 
 

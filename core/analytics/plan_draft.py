@@ -10,6 +10,7 @@ Step 1〜6 を順次実行し、その結果を統合して
     - 連鎖化事業者は様式第3「第5条関係」、それ以外は「第46条関係」で出力
     - 全成果物のパスを ToolResponse.files に格納
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -63,7 +64,12 @@ from core.export.submission_checklist import (
 )
 from core.legal.eligibility import EligibilityResult, evaluate_eligibility
 from core.static._freshness import all_warnings
-from core.static.sample_company import CompanyProfile, DataSource, get_sample
+from core.static.sample_company import (
+    CompanyProfile,
+    DataSource,
+    format_sample_ids,
+    get_sample,
+)
 
 
 @dataclass
@@ -108,8 +114,7 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
     profile = get_sample(company_id)
     if profile is None:
         raise ValueError(
-            f"サンプル企業 '{company_id}' が見つかりません。"
-            "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
+            f"サンプル企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"
         )
 
     if not profile.sites:
@@ -193,8 +198,13 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
 
     # 1. Markdown
     md_sections = _build_markdown_sections(
-        benchmark, driver_gap, eligibility, target_proposal,
-        simulation, certified_matches, profile,
+        benchmark,
+        driver_gap,
+        eligibility,
+        target_proposal,
+        simulation,
+        certified_matches,
+        profile,
         submission_checklist=submission_checklist,
     )
     md_path = write_md_plan(
@@ -202,7 +212,11 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         company_id=profile.company_id,
         plan_period=plan_period,
         executive_summary=_build_executive_summary_text(
-            profile, benchmark, eligibility, simulation, financial,
+            profile,
+            benchmark,
+            eligibility,
+            simulation,
+            financial,
         ),
         sections=md_sections,
         citations=citations,
@@ -211,8 +225,13 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
 
     # 2. PPT
     body_slides = _build_ppt_slides(
-        benchmark, driver_gap, eligibility, target_proposal,
-        simulation, certified_matches, profile,
+        benchmark,
+        driver_gap,
+        eligibility,
+        target_proposal,
+        simulation,
+        certified_matches,
+        profile,
         submission_checklist=submission_checklist,
     )
     ppt_path = write_ppt_plan(
@@ -220,7 +239,11 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         company_id=profile.company_id,
         plan_period=plan_period,
         executive_summary=_build_executive_summary_lines(
-            profile, benchmark, eligibility, simulation, financial,
+            profile,
+            benchmark,
+            eligibility,
+            simulation,
+            financial,
         ),
         body_slides=body_slides,
         citations=citations,
@@ -263,10 +286,7 @@ def _build_article_citations(eligibility: EligibilityResult) -> list[Citation]:
     citations: list[Citation] = []
     if "chain_franchise" in eligibility.categories:
         citations.append(logistics_efficiency_law_article65_citation())
-    elif any(
-        c in eligibility.categories
-        for c in ("first_class_shipper", "second_class_shipper")
-    ):
+    elif any(c in eligibility.categories for c in ("first_class_shipper", "second_class_shipper")):
         citations.append(logistics_efficiency_law_article46_citation())
     if eligibility.must_appoint_clo:
         citations.append(logistics_efficiency_law_article66_citation())
@@ -362,8 +382,7 @@ def _build_executive_summary_lines(
         f"{financial.base_operating_profit_margin_pct:.2f}% / "
         f"取扱量 {profile.annual_freight_tons_total:,.0f}トン",
         # 末尾（PPT では右下バナーに固定文言が入るため、参考情報として保持）
-        "次のアクション: 様式第3別紙（添付Word）に署名・押印し、"
-        "2026年10月末までに国交省へ提出",
+        "次のアクション: 様式第3別紙（添付Word）に署名・押印し、2026年10月末までに国交省へ提出",
         f"必要投資 合計: 約 {simulation.total_investment_jpy / 1e4:,.0f}万円 "
         f"/ 合算最大コスト削減: 約 "
         f"{simulation.total_cost_saving_jpy / 1e8:.2f}億円/年（重複未控除・上限値）",
@@ -381,7 +400,11 @@ def _build_executive_summary_text(
     """Markdown 用エグゼクティブサマリー（複数行テキスト）。"""
     return "\n".join(
         _build_executive_summary_lines(
-            profile, benchmark, eligibility, simulation, financial,
+            profile,
+            benchmark,
+            eligibility,
+            simulation,
+            financial,
         )
     )
 
@@ -424,10 +447,12 @@ def _build_markdown_sections(
         body_lines = submission_checklist.to_markdown_lines()
         if body_lines and body_lines[0].startswith("## 提出準備チェックリスト"):
             body_lines = body_lines[2:] if len(body_lines) >= 2 else body_lines[1:]
-        sections.append((
-            "提出準備チェックリスト（実務）",
-            "\n".join(body_lines),
-        ))
+        sections.append(
+            (
+                "提出準備チェックリスト（実務）",
+                "\n".join(body_lines),
+            )
+        )
     return sections
 
 
@@ -480,10 +505,12 @@ def _build_ppt_slides(
         ),
     )
     if submission_checklist is not None:
-        slides.append(SlideContent(
-            title="提出準備チェックリスト（実務）",
-            body_lines=submission_checklist.to_text_lines(),
-        ))
+        slides.append(
+            SlideContent(
+                title="提出準備チェックリスト（実務）",
+                body_lines=submission_checklist.to_text_lines(),
+            )
+        )
     return slides
 
 
@@ -552,7 +579,8 @@ def _build_chart_slides(
 
     # ── KPI 5 ヶ年ロードマップ ──
     valid_targets = [
-        t for t in target_proposal.targets
+        t
+        for t in target_proposal.targets
         if t.current_industry_avg is not None and t.current_industry_avg != 0
     ]
     if valid_targets:
@@ -605,29 +633,31 @@ def _build_excel(
             if t.current_industry_avg is not None
             else "自社実績計測必要"
         )
-        rows.append([
-            t.name,
-            "数値目標",
-            avg,
-            f"{t.proposed_target:.1f}{t.proposed_target_unit}",
-            t.citation.label,
-        ])
+        rows.append(
+            [
+                t.name,
+                "数値目標",
+                avg,
+                f"{t.proposed_target:.1f}{t.proposed_target_unit}",
+                t.citation.label,
+            ]
+        )
 
     for m in simulation.measures:
         effect_parts: list[str] = []
         if m.co2_reduction_kg_per_year:
             effect_parts.append(f"CO2 約{m.co2_reduction_kg_per_year / 1000:,.1f}トン/年削減")
         if m.cost_saving_jpy_per_year:
-            effect_parts.append(
-                f"コスト 約{m.cost_saving_jpy_per_year / 1e4:,.0f}万円/年削減"
-            )
-        rows.append([
-            m.name,
-            "施策効果（推計）",
-            f"投資 約{m.investment_jpy / 1e4:,.0f}万円",
-            "・".join(effect_parts) if effect_parts else "効果記載なし",
-            m.citation.label,
-        ])
+            effect_parts.append(f"コスト 約{m.cost_saving_jpy_per_year / 1e4:,.0f}万円/年削減")
+        rows.append(
+            [
+                m.name,
+                "施策効果（推計）",
+                f"投資 約{m.investment_jpy / 1e4:,.0f}万円",
+                "・".join(effect_parts) if effect_parts else "効果記載なし",
+                m.citation.label,
+            ]
+        )
 
     path = write_data_table(
         title=f"{profile.name} CLO 中長期計画書 数値目標・施策効果一覧",
@@ -670,11 +700,14 @@ def _build_form3(
             continue
         measure_name, description = _split_measure_name_and_description(m, profile)
         section_buckets[theme].append(
-            (m.investment_jpy, PlanMeasure(
-                measure=measure_name,
-                description=description,
-                timing="",  # 後で段階配置で設定
-            ))
+            (
+                m.investment_jpy,
+                PlanMeasure(
+                    measure=measure_name,
+                    description=description,
+                    timing="",  # 後で段階配置で設定
+                ),
+            )
         )
 
     # 投資額の小さい順にソートし、年度を割り当て
@@ -720,7 +753,8 @@ def _build_form3(
 
 
 def _classify_form3_theme(
-    measure_name: str, is_chain_franchise: bool = False,
+    measure_name: str,
+    is_chain_franchise: bool = False,
 ) -> str | None:
     """施策名を様式第3 の必須3項目のテーマに分類する。
 
@@ -729,8 +763,7 @@ def _classify_form3_theme(
     荷待ち時間短縮（wait）に流用する。これにより、シミュレータで効果が計上されている
     施策が計画書に未記載となる脱落を防ぐ。
     """
-    if "積載率" in measure_name or "モーダルシフト" in measure_name \
-            or "共同配送" in measure_name:
+    if "積載率" in measure_name or "モーダルシフト" in measure_name or "共同配送" in measure_name:
         return "load"
     if "バース" in measure_name:
         return "wait"
@@ -897,7 +930,5 @@ def _format_revenue_ratio_line(benchmark: BenchmarkResult) -> str:
     if benchmark.revenue_vs_avg_pct is None:
         return "  業界平均比: データ不足"
     if benchmark.revenue_ratio_reliability == "low_reliability":
-        return (
-            "  業界平均売上比: 規模優位企業（業界統計の母集団と乖離大のため数値表示は省略）"
-        )
+        return "  業界平均売上比: 規模優位企業（業界統計の母集団と乖離大のため数値表示は省略）"
     return f"  業界平均売上比: {benchmark.revenue_vs_avg_pct:.0f}%"

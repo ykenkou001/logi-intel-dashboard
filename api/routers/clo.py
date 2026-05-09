@@ -4,6 +4,7 @@
 MCP ツールと REST API で出力構造が完全に一致するため、Web フロントは MCP と同じ
 スキーマで表示できる。
 """
+
 from __future__ import annotations
 
 import uuid
@@ -13,6 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from api.routers._helpers import publish_files, to_model
 from api.schemas.responses import ToolResponseModel
 from core.analytics.benchmark import analyze_benchmark, build_benchmark_summary
 from core.analytics.certified_match import build_certified_match_summary, find_matches
@@ -55,6 +57,7 @@ from core.export.ppt_writer import write_clo_executive_brief
 from core.export.response import ToolResponse
 from core.io.measure_run_store import load_runs, merge_with_stored, save_runs
 from core.io.override_store import load_override
+from core.io.profile_resolver import ProfileNotFoundError, resolve_profile
 from core.legal.eligibility import evaluate_eligibility
 from core.playbook.filters import PlaybookFilter, build_search_summary, filter_playbook
 from core.playbook.industry_packages import (
@@ -67,8 +70,7 @@ from core.playbook.measures import get_measure
 from core.static._freshness import all_warnings
 from core.static.efficiency_law_certified import IndustryCategory, MeasureType
 from core.static.jsic import category_of
-from core.static.sample_company import get_sample
-from core.storage import get_storage
+from core.static.sample_company import CompanyProfile
 from core.validators.submission_validator import (
     build_validation_summary,
     validate_submission,
@@ -76,51 +78,12 @@ from core.validators.submission_validator import (
 
 router = APIRouter(prefix="/api/v1/clo", tags=["clo"])
 
-_VALID_SAMPLE_IDS = (
-    "sample_mfg_01",
-    "sample_wholesale_01",
-    "sample_chain_01",
-    "sample_retail_01",
-)
 
-
-def _resolve_profile_or_404(company_id: str):  # type: ignore[no-untyped-def]
-    profile = get_sample(company_id)
-    if profile is None:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                f"会社 ID '{company_id}' が見つかりません。サンプルは "
-                f"{', '.join(_VALID_SAMPLE_IDS)}、または "
-                "POST /api/v1/company/load で取込済みの ID が利用可能"
-            ),
-        )
-    return profile
-
-
-def _publish_files(response: ToolResponse) -> None:
-    """ToolResponse.files の各値をストレージに公開しキーで上書きする。
-
-    LocalStorage では outputs/ から見た相対パスに正規化、S3Storage では
-    アップロード後 S3 オブジェクトキーに置換される。
-    """
-    if not response.files:
-        return
-    from pathlib import Path
-
-    storage = get_storage()
-    new_files: dict[str, str] = {}
-    for key, value in response.files.items():
-        try:
-            new_files[key] = storage.publish(Path(value))
-        except Exception:
-            new_files[key] = value
-    response.files = new_files
-
-
-def _to_model(response: ToolResponse) -> ToolResponseModel:
-    _publish_files(response)
-    return ToolResponseModel.model_validate(response.to_dict())
+def _resolve_profile_or_404(company_id: str) -> CompanyProfile:
+    try:
+        return resolve_profile(company_id)
+    except ProfileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 # ─── Step 1: 業界ベンチマーク ──────────────────────────────────────────
@@ -147,7 +110,7 @@ async def benchmark_position(
         citations=result.citations,
         freshness_warnings=result.freshness_warnings,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 2: ドライバー需給ギャップ ─────────────────────────────────────
@@ -166,7 +129,7 @@ async def driver_gap(
         citations=result.citations,
         freshness_warnings=result.freshness_warnings,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── フェーズ4.1 a.3: 経営会議 3 スライド要約 ─────────────────────
@@ -214,14 +177,10 @@ async def executive_brief(company_id: str) -> ToolResponseModel:
         )
 
     red_verdicts = [v for v in feas_result.measure_verdicts if v.level == "red"][:3]
-    actions_to_skip: list[str] = [
-        f"{v.measure.name}（{v.primary_reason}）" for v in red_verdicts
-    ]
+    actions_to_skip: list[str] = [f"{v.measure.name}（{v.primary_reason}）" for v in red_verdicts]
     if len(actions_to_skip) < 3:
         for s in eval_result.bottom_candidates[: 3 - len(actions_to_skip)]:
-            actions_to_skip.append(
-                f"{s.measure.name}（{s.comparison_note or '優先度低'}）"
-            )
+            actions_to_skip.append(f"{s.measure.name}（{s.comparison_note or '優先度低'}）")
 
     citations: list[Citation] = []
     seen_urls: set[str] = set()
@@ -252,14 +211,14 @@ async def executive_brief(company_id: str) -> ToolResponseModel:
         *[f"  ✅ {a}" for a in actions_to_pursue],
         "",
         "【やらない】",
-        *([f"  🚫 {a}" for a in actions_to_skip] if actions_to_skip
-          else ["  （除外候補なし）"]),
+        *([f"  🚫 {a}" for a in actions_to_skip] if actions_to_skip else ["  （除外候補なし）"]),
     ]
 
-    warnings = list(dict.fromkeys(
-        [*eval_result.freshness_warnings, *feas_result.freshness_warnings,
-         *all_warnings()]
-    ))
+    warnings = list(
+        dict.fromkeys(
+            [*eval_result.freshness_warnings, *feas_result.freshness_warnings, *all_warnings()]
+        )
+    )
 
     response = ToolResponse(
         summary="\n".join(summary_lines),
@@ -268,8 +227,8 @@ async def executive_brief(company_id: str) -> ToolResponseModel:
         data_source=profile.data_source,
         files={"pptx": str(path)},
     )
-    _publish_files(response)
-    return _to_model(response)
+    publish_files(response)
+    return to_model(response)
 
 
 # ─── フェーズ4.1 a.1: 拠点別待機時間ヒートマップ ─────────────────────
@@ -292,7 +251,7 @@ async def wait_heatmap(
         freshness_warnings=result.freshness_warnings,
         data_source=profile.data_source,
     )
-    model = _to_model(response)
+    model = to_model(response)
     # metadata に詳細データを乗せて Web フロントで可視化する
     model.metadata = {
         "company_id": result.company_id,
@@ -362,7 +321,7 @@ async def eligibility(
         citations=citations,
         freshness_warnings=all_warnings(),
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 4: 数値目標提案 ─────────────────────────────────────────────
@@ -389,7 +348,7 @@ async def target_proposal(
         citations=result.citations,
         freshness_warnings=result.freshness_warnings,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 5: 5施策効果シミュレータ ────────────────────────────────────
@@ -420,7 +379,7 @@ async def simulate_measures_endpoint(
         citations=result.citations,
         freshness_warnings=result.freshness_warnings,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── 認定事業マッチング ────────────────────────────────────────────────
@@ -445,7 +404,7 @@ async def certified_match(
         citations=result.citations,
         freshness_warnings=result.freshness_warnings,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── 計画書ドラフト統合生成 ──────────────────────────────────────────
@@ -465,7 +424,7 @@ async def plan_draft(company_id: str) -> ToolResponseModel:
         files=result.files,
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/1: プレイブック検索 ─────────────────────────────────────
@@ -495,7 +454,7 @@ async def playbook_search(
         citations=[logistics_efficiency_law_citation()],
         freshness_warnings=all_warnings(),
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/2: 施策評価エンジン ─────────────────────────────────────
@@ -518,7 +477,7 @@ async def measure_eval(
         freshness_warnings=result.freshness_warnings,
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/3: シナリオシミュレータ ────────────────────────────────
@@ -546,7 +505,7 @@ async def scenario_sim(
         freshness_warnings=result.freshness_warnings,
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/4: 財務翻訳レイヤ ───────────────────────────────────────
@@ -566,7 +525,7 @@ async def financial_translate(company_id: str) -> ToolResponseModel:
         freshness_warnings=result.freshness_warnings,
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/5: 実現可能性チェッカー ────────────────────────────────
@@ -589,7 +548,7 @@ async def feasibility_check(
         freshness_warnings=result.freshness_warnings,
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/6: 提出前バリデータ ─────────────────────────────────────
@@ -609,7 +568,7 @@ async def submission_validate(company_id: str) -> ToolResponseModel:
         files=dict(report.checked_files),
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── Step 3.5/7: 定期報告書（様式第5）ドラフト ───────────────────────
@@ -635,7 +594,7 @@ async def periodic_report(
         files=dict(result.files),
         data_source=result.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 # ─── フェーズ4.5 b: J3 デイリーコックピット ────────────────────────────
@@ -726,7 +685,7 @@ async def today_decisions(
         freshness_warnings=result.freshness_warnings,
         data_source=result.data_source,
     )
-    model = _to_model(response)
+    model = to_model(response)
     model.metadata = _cockpit_to_metadata(result)
     return model
 
@@ -743,13 +702,16 @@ class DecisionLogRequest(BaseModel):
     decided_by: str = Field(default="system", description="決定者（CLO 名 or 'system'）")
     rationale: str = Field(default="", description="決定の根拠（短文）")
     expected_effect_jpy: int | None = Field(
-        default=None, description="採用時の想定経営効果（円）",
+        default=None,
+        description="採用時の想定経営効果（円）",
     )
     review_due: date | None = Field(
-        default=None, description="次回レビュー期日（postpone/escalate 時）",
+        default=None,
+        description="次回レビュー期日（postpone/escalate 時）",
     )
     linked_alerts: list[str] = Field(
-        default_factory=list, description="H1 アラート ID への参照",
+        default_factory=list,
+        description="H1 アラート ID への参照",
     )
 
 
@@ -830,13 +792,15 @@ async def industry_package(company_id: str) -> ToolResponseModel:
         m = get_measure(mid)
         if m is None:
             continue
-        measure_details.append({
-            "measure_id": m.measure_id,
-            "name": m.name,
-            "description": m.description,
-            "form3_section": m.form3_section,
-            "measure_type": m.measure_type,
-        })
+        measure_details.append(
+            {
+                "measure_id": m.measure_id,
+                "name": m.name,
+                "description": m.description,
+                "form3_section": m.form3_section,
+                "measure_type": m.measure_type,
+            }
+        )
 
     chain_franchise_notice: dict[str, str] | None = None
     if base_industry == "chain_franchise":
@@ -860,7 +824,7 @@ async def industry_package(company_id: str) -> ToolResponseModel:
         freshness_warnings=all_warnings(),
         data_source=profile.data_source,
     )
-    model = _to_model(response)
+    model = to_model(response)
     model.metadata = {
         "company_id": profile.company_id,
         "base_industry": base_industry,
@@ -873,7 +837,8 @@ async def industry_package(company_id: str) -> ToolResponseModel:
 
 
 @router.get(
-    "/standardization-score/{company_id}", response_model=ToolResponseModel,
+    "/standardization-score/{company_id}",
+    response_model=ToolResponseModel,
 )
 async def standardization_score(company_id: str) -> ToolResponseModel:
     """F2 標準化スコア（業種別 CLO 標準パッケージへの準拠度 0-100）を算出する。
@@ -895,7 +860,7 @@ async def standardization_score(company_id: str) -> ToolResponseModel:
         freshness_warnings=list(result.freshness_warnings),
         data_source=profile.data_source,
     )
-    model = _to_model(response)
+    model = to_model(response)
     model.metadata = result.model_dump(mode="json")
     return model
 
@@ -940,6 +905,6 @@ async def waste_traps(
         freshness_warnings=list(result.freshness_warnings),
         data_source=profile.data_source,
     )
-    model = _to_model(response)
+    model = to_model(response)
     model.metadata = result.model_dump(mode="json")
     return model

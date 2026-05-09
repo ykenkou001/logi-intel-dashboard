@@ -14,6 +14,7 @@ import {
   type SampleCompany,
   type ToolResponse,
 } from "@/lib/api";
+import { SEVERITY_EMOJI } from "@/lib/labels";
 
 const TIME_SLOT_LABEL_JP: Record<string, string> = {
   morning: "朝便（6-10時）",
@@ -30,12 +31,6 @@ const SEVERITY_BG: Record<string, string> = {
   none: "bg-gray-50 border-gray-200",
 };
 
-const SEVERITY_LABEL: Record<string, string> = {
-  green: "🟢",
-  yellow: "🟡",
-  red: "🔴",
-  none: "⚪",
-};
 
 function findCell(
   cells: HeatmapCell[],
@@ -208,7 +203,7 @@ export default function WaitHeatmapPage() {
                             : "未計測"}
                         </div>
                         <div className="mt-1 flex items-center justify-center gap-1 text-[10px] text-gray-600">
-                          <span>{SEVERITY_LABEL[cell.severity]}</span>
+                          <span>{SEVERITY_EMOJI[cell.severity as keyof typeof SEVERITY_EMOJI] ?? "⚪"}</span>
                           <span>{cell.measured_count} 便</span>
                           {cell.over_2h_count > 0 && (
                             <span className="text-rose-700 font-semibold">

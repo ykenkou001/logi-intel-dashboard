@@ -9,6 +9,7 @@
     - フォーマッタ（PPT 脚注・Excel シート行・Markdown 引用）を分離
     - `fetched_at` は取得時刻を ISO 8601 文字列で記録
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

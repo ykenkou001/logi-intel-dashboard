@@ -14,6 +14,7 @@
     - 本モジュールで全モジュールを集約し、起動時/MCP 呼出時に一括チェック
     - 鮮度警告は MCP ツールの戻り値 `freshness_warnings` フィールドに含める
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -22,8 +23,8 @@ from typing import Literal
 
 # 推奨更新間隔のプリセット
 _DEFAULT_INTERVALS: dict[str, timedelta] = {
-    "annual": timedelta(days=365),       # 年次データ
-    "biennial": timedelta(days=730),     # 2年ごと
+    "annual": timedelta(days=365),  # 年次データ
+    "biennial": timedelta(days=730),  # 2年ごと
     "quinquennial": timedelta(days=1825),  # 5年ごと（物流センサス等）
     "as_needed": timedelta(days=10000),  # 改正時のみ更新（告示・省令等）
 }

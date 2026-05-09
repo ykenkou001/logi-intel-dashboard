@@ -1114,8 +1114,7 @@ def _add_waterfall_chart_body(slide: Any, spec: ChartSpec) -> None:
     after = max(baseline - total_saving, 0)
 
     default_note = (
-        f"基準 {baseline:,.0f} 万円 → 削減後 {after:,.0f} 万円"
-        f"（年間 ▲{total_saving:,.0f} 万円）"
+        f"基準 {baseline:,.0f} 万円 → 削減後 {after:,.0f} 万円（年間 ▲{total_saving:,.0f} 万円）"
     )
     _draw_chart_intro(slide, headline, spec.note or default_note)
 
@@ -1177,8 +1176,7 @@ def _add_roadmap_chart_body(slide: Any, spec: ChartSpec) -> None:
     headline = str(spec.data.get("headline", "KPI 5 ヶ年ロードマップ"))
 
     default_note = (
-        "業界平均値を基準（100）として相対化"
-        "（積載率は高いほど良い／CO2 原単位は低いほど良い）"
+        "業界平均値を基準（100）として相対化（積載率は高いほど良い／CO2 原単位は低いほど良い）"
     )
     _draw_chart_intro(slide, headline, spec.note or default_note)
 
@@ -1383,62 +1381,121 @@ def _add_decision_brief_body(
 
     # 左：やる
     _add_text(
-        slide, "やる（採用施策）", Inches(0.52), Inches(1.78),
-        Inches(6.0), Inches(0.32), size=14, color=_POSITIVE, bold=True,
+        slide,
+        "やる（採用施策）",
+        Inches(0.52),
+        Inches(1.78),
+        Inches(6.0),
+        Inches(0.32),
+        size=14,
+        color=_POSITIVE,
+        bold=True,
     )
     for i, line in enumerate(pursue_items):
         y = 2.22 + i * 1.10
         _add_rect(
-            slide, Inches(0.52), Inches(y),
-            Inches(6.05), Inches(0.95), fill=_WHITE, line=_POSITIVE,
+            slide,
+            Inches(0.52),
+            Inches(y),
+            Inches(6.05),
+            Inches(0.95),
+            fill=_WHITE,
+            line=_POSITIVE,
         )
-        _add_rect(slide, Inches(0.52), Inches(y),
-                  Inches(0.5), Inches(0.95), fill=_POSITIVE)
+        _add_rect(slide, Inches(0.52), Inches(y), Inches(0.5), Inches(0.95), fill=_POSITIVE)
         _add_text(
-            slide, f"{i + 1}", Inches(0.55), Inches(y + 0.30),
-            Inches(0.4), Inches(0.4), size=18,
-            color=_ON_PRIMARY, bold=True, alignment=PP_ALIGN.CENTER,
+            slide,
+            f"{i + 1}",
+            Inches(0.55),
+            Inches(y + 0.30),
+            Inches(0.4),
+            Inches(0.4),
+            size=18,
+            color=_ON_PRIMARY,
+            bold=True,
+            alignment=PP_ALIGN.CENTER,
         )
         _add_text(
-            slide, line, Inches(1.15), Inches(y + 0.18),
-            Inches(5.35), Inches(0.65),
-            size=11, color=_PRIMARY, bold=True,
+            slide,
+            line,
+            Inches(1.15),
+            Inches(y + 0.18),
+            Inches(5.35),
+            Inches(0.65),
+            size=11,
+            color=_PRIMARY,
+            bold=True,
         )
 
     # 右：やらない
     _add_text(
-        slide, "やらない（除外・先送り）", Inches(6.78), Inches(1.78),
-        Inches(6.0), Inches(0.32), size=14, color=_MUTED, bold=True,
+        slide,
+        "やらない（除外・先送り）",
+        Inches(6.78),
+        Inches(1.78),
+        Inches(6.0),
+        Inches(0.32),
+        size=14,
+        color=_MUTED,
+        bold=True,
     )
     for i, line in enumerate(skip_items):
         y = 2.22 + i * 1.10
         _add_rect(
-            slide, Inches(6.78), Inches(y),
-            Inches(6.05), Inches(0.95), fill=_WHITE, line=_BORDER,
+            slide,
+            Inches(6.78),
+            Inches(y),
+            Inches(6.05),
+            Inches(0.95),
+            fill=_WHITE,
+            line=_BORDER,
         )
-        _add_rect(slide, Inches(6.78), Inches(y),
-                  Inches(0.5), Inches(0.95), fill=_MUTED)
+        _add_rect(slide, Inches(6.78), Inches(y), Inches(0.5), Inches(0.95), fill=_MUTED)
         _add_text(
-            slide, f"{i + 1}", Inches(6.81), Inches(y + 0.30),
-            Inches(0.4), Inches(0.4), size=18,
-            color=_ON_PRIMARY, bold=True, alignment=PP_ALIGN.CENTER,
+            slide,
+            f"{i + 1}",
+            Inches(6.81),
+            Inches(y + 0.30),
+            Inches(0.4),
+            Inches(0.4),
+            size=18,
+            color=_ON_PRIMARY,
+            bold=True,
+            alignment=PP_ALIGN.CENTER,
         )
         _add_text(
-            slide, line, Inches(7.41), Inches(y + 0.18),
-            Inches(5.35), Inches(0.65),
-            size=11, color=_MUTED, bold=True,
+            slide,
+            line,
+            Inches(7.41),
+            Inches(y + 0.18),
+            Inches(5.35),
+            Inches(0.65),
+            size=11,
+            color=_MUTED,
+            bold=True,
         )
 
     # 下部：次の意思決定期日
     _add_rect(
-        slide, Inches(0.52), Inches(5.65),
-        Inches(12.31), Inches(0.65), fill=_PRIMARY, line=_PRIMARY,
+        slide,
+        Inches(0.52),
+        Inches(5.65),
+        Inches(12.31),
+        Inches(0.65),
+        fill=_PRIMARY,
+        line=_PRIMARY,
     )
     _add_text(
-        slide, f"📅 次回意思決定期日: {next_decision_due}",
-        Inches(0.72), Inches(5.78),
-        Inches(11.91), Inches(0.4),
-        size=14, color=_ON_PRIMARY, bold=True, alignment=PP_ALIGN.CENTER,
+        slide,
+        f"📅 次回意思決定期日: {next_decision_due}",
+        Inches(0.72),
+        Inches(5.78),
+        Inches(11.91),
+        Inches(0.4),
+        size=14,
+        color=_ON_PRIMARY,
+        bold=True,
+        alignment=PP_ALIGN.CENTER,
     )
 
 
@@ -1484,9 +1541,7 @@ def write_clo_executive_brief(
     prs = _new_presentation()
     total_slides = 3
 
-    _add_title_slide(
-        prs, company_name, f"経営会議向け 3 分要約  {plan_period}"
-    )
+    _add_title_slide(prs, company_name, f"経営会議向け 3 分要約  {plan_period}")
 
     _add_content_slide(
         prs,
@@ -1504,12 +1559,21 @@ def write_clo_executive_brief(
     _set_background(slide, _WHITE)
     _add_header(slide, "やる／やらない 結論", 3, total_slides)
     _add_text(
-        slide, "やる／やらない 結論",
-        Inches(0.52), Inches(1.12), Inches(8.0), Inches(0.5),
-        size=25, color=_PRIMARY, bold=True,
+        slide,
+        "やる／やらない 結論",
+        Inches(0.52),
+        Inches(1.12),
+        Inches(8.0),
+        Inches(0.5),
+        size=25,
+        color=_PRIMARY,
+        bold=True,
     )
     _add_decision_brief_body(
-        slide, actions_to_pursue, actions_to_skip, next_decision_due,
+        slide,
+        actions_to_pursue,
+        actions_to_skip,
+        next_decision_due,
     )
     _add_footer(prs, slide, 3, total_slides)
 

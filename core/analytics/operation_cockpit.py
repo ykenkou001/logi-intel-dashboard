@@ -22,6 +22,7 @@ Public API:
                          persist_snapshot=True) -> CockpitResult
     build_cockpit_summary(result: CockpitResult) -> str
 """
+
 from __future__ import annotations
 
 import os
@@ -115,14 +116,17 @@ _SUBMISSION_RISK_DAYS: int = 30
 _MAX_MEASURE_ITEMS: int = 2
 
 # 軸 A の必須化セベリティ（plan §b.5 Codex 勧告 Q2）
-_HIGH_SEVERITY_ITEMS: frozenset[str] = frozenset({
-    "1日拘束時間（原則）",
-    "年間総拘束時間",
-    "年間時間外労働",
-    "連続休息時間",
-    "荷待ち時間",
-    "荷役等時間",
-})
+_HIGH_SEVERITY_ITEMS: frozenset[str] = frozenset(
+    {
+        "1日拘束時間（原則）",
+        "年間総拘束時間",
+        "年間時間外労働",
+        "連続休息時間",
+        "荷待ち時間",
+        "荷役等時間",
+    }
+)
+
 
 def _outputs_root() -> Path:
     """LOGI_OUTPUTS_DIR を実行時に解決する（pytest tmp_path への差替対応）。"""
@@ -167,19 +171,23 @@ class CockpitItem(BaseModel):
     impact_score: float = Field(ge=0, le=100, description="経営インパクト（0-100）")
     confidence_score: float = Field(ge=0, le=100, description="自信度（0-100）")
     total_score: float = Field(
-        ge=0, le=100,
+        ge=0,
+        le=100,
         description="加重合計（urgency 0.4 + impact 0.4 + confidence 0.2）",
     )
 
     # 軸別の参照先（使う軸のみ非 None）
     related_measure_id: str | None = Field(
-        default=None, description="軸 C の措置 ID（measure_pick 時）",
+        default=None,
+        description="軸 C の措置 ID（measure_pick 時）",
     )
     related_kpi_name: str | None = Field(
-        default=None, description="軸 B の KPI 名（kpi_reach 時）",
+        default=None,
+        description="軸 B の KPI 名（kpi_reach 時）",
     )
     related_compliance_item: str | None = Field(
-        default=None, description="軸 A の compliance item 名（compliance 時）",
+        default=None,
+        description="軸 A の compliance item 名（compliance 時）",
     )
 
     suggested_action: str = Field(
@@ -189,10 +197,12 @@ class CockpitItem(BaseModel):
         description="表示用期限ラベル（例: '即時' / '今週金曜' / '8月末'）",
     )
     next_review_due: date | None = Field(
-        default=None, description="次回レビュー期日（日付）",
+        default=None,
+        description="次回レビュー期日（日付）",
     )
     days_pending: int = Field(
-        default=0, ge=0,
+        default=0,
+        ge=0,
         description="この判断が pending のまま滞留している日数",
     )
     delta_from_last: str | None = Field(
@@ -226,22 +236,35 @@ class OperationKpiSnapshot(BaseModel):
     snapshot_date: date
 
     load_factor_pct: float | None = Field(
-        default=None, ge=0, le=100, description="積載率（%）",
+        default=None,
+        ge=0,
+        le=100,
+        description="積載率（%）",
     )
     wait_time_avg_min: float | None = Field(
-        default=None, ge=0, description="荷待ち時間 平均（分）",
+        default=None,
+        ge=0,
+        description="荷待ち時間 平均（分）",
     )
     wait_time_max_min: float | None = Field(
-        default=None, ge=0, description="荷待ち時間 最大（分）",
+        default=None,
+        ge=0,
+        description="荷待ち時間 最大（分）",
     )
     handling_time_avg_min: float | None = Field(
-        default=None, ge=0, description="荷役等時間 平均（分）",
+        default=None,
+        ge=0,
+        description="荷役等時間 平均（分）",
     )
     co2_intensity_g_per_tonkm: float | None = Field(
-        default=None, ge=0, description="CO2 原単位（g/トンキロ）",
+        default=None,
+        ge=0,
+        description="CO2 原単位（g/トンキロ）",
     )
     over_2h_count_total: int = Field(
-        default=0, ge=0, description="2 時間超過便数（合計）",
+        default=0,
+        ge=0,
+        description="2 時間超過便数（合計）",
     )
 
     compliance_overall: ComplianceStatus = Field(
@@ -274,10 +297,12 @@ class DecisionRecord(BaseModel):
 
     rationale: str = Field(default="", description="決定の根拠（短文）")
     expected_effect_jpy: int | None = Field(
-        default=None, description="採用時の想定経営効果（円）",
+        default=None,
+        description="採用時の想定経営効果（円）",
     )
     review_due: date | None = Field(
-        default=None, description="次回レビュー期日（postpone/escalate 時）",
+        default=None,
+        description="次回レビュー期日（postpone/escalate 時）",
     )
     linked_alerts: list[str] = Field(
         default_factory=list,
@@ -300,7 +325,8 @@ class CockpitResult(BaseModel):
     data_source: DataSource
 
     items: list[CockpitItem] = Field(
-        min_length=3, max_length=3,
+        min_length=3,
+        max_length=3,
         description="3 枠ちょうど。順序は軸 A → B → C 優先で並べる",
     )
     snapshot: OperationKpiSnapshot
@@ -378,18 +404,32 @@ def build_daily_cockpit(
 
     # 5. 候補生成
     candidates: list[CockpitItem] = []
-    candidates.extend(_collect_compliance_items(
-        compliance=compliance, profile=profile,
-        today=today_d, prior=prior, pending=pending,
-    ))
-    candidates.extend(_collect_kpi_reach_items(
-        feasibility=feasibility, profile=profile,
-        today=today_d, prior=prior, pending=pending,
-    ))
-    candidates.extend(_collect_measure_items(
-        measure_eval=measure_eval, profile=profile,
-        today=today_d, pending=pending,
-    ))
+    candidates.extend(
+        _collect_compliance_items(
+            compliance=compliance,
+            profile=profile,
+            today=today_d,
+            prior=prior,
+            pending=pending,
+        )
+    )
+    candidates.extend(
+        _collect_kpi_reach_items(
+            feasibility=feasibility,
+            profile=profile,
+            today=today_d,
+            prior=prior,
+            pending=pending,
+        )
+    )
+    candidates.extend(
+        _collect_measure_items(
+            measure_eval=measure_eval,
+            profile=profile,
+            today=today_d,
+            pending=pending,
+        )
+    )
 
     # 6. Top 3 抽出（軸 A 必須化条件 + 軸 C 上限 + 重複排除 + state card 補填）
     selected = _select_top_three(
@@ -400,10 +440,13 @@ def build_daily_cockpit(
     )
 
     # 7. open_items を確定して snapshot を作り直す（item_id の循環依存を回避）
-    snapshot = snapshot.model_copy(update={
-        "open_items": [item.item_id for item in selected
-                       if item.card_state == "attention_needed"],
-    })
+    snapshot = snapshot.model_copy(
+        update={
+            "open_items": [
+                item.item_id for item in selected if item.card_state == "attention_needed"
+            ],
+        }
+    )
 
     # 8. 永続化（テストでは persist_snapshot=False で抑止）
     if persist_snapshot:
@@ -416,9 +459,7 @@ def build_daily_cockpit(
     # 10. citations 和集合（OrderedDict で順序保持・重複排除）
     citation_pool: OrderedDict[str, Citation] = OrderedDict()
     citation_pool[improvement_standards_citation().label] = improvement_standards_citation()
-    citation_pool[logistics_efficiency_law_citation().label] = (
-        logistics_efficiency_law_citation()
-    )
+    citation_pool[logistics_efficiency_law_citation().label] = logistics_efficiency_law_citation()
     for c in feasibility.citations:
         citation_pool.setdefault(c.label, c)
     for c in measure_eval.citations:
@@ -464,8 +505,7 @@ def build_cockpit_summary(result: CockpitResult) -> str:
 
     if result.delta_from_yesterday:
         delta_parts = [
-            f"{k}: {v:+.1f}" for k, v in result.delta_from_yesterday.items()
-            if v is not None
+            f"{k}: {v:+.1f}" for k, v in result.delta_from_yesterday.items() if v is not None
         ]
         if delta_parts:
             lines.append("【前日比】 " + " / ".join(delta_parts))
@@ -525,10 +565,12 @@ def _run_compliance(profile: CompanyProfile) -> ComplianceReport:
     not_measured カードとして可視化され、計測体制整備のアクションに繋がる。
     """
     waiting_max = max(
-        (w.max_minutes for w in profile.wait_time_rows), default=None,
+        (w.max_minutes for w in profile.wait_time_rows),
+        default=None,
     )
     handling_max = max(
-        (h.max_minutes for h in profile.handling_time_rows), default=None,
+        (h.max_minutes for h in profile.handling_time_rows),
+        default=None,
     )
     return check_truck_driver_compliance(
         daily_working_hours_max=None,
@@ -582,9 +624,7 @@ def _collect_compliance_items(
             continue  # compliant は候補化しない
 
         confidence = _compliance_confidence(profile, ci)
-        item_id = (
-            f"compl_{_slug(ci.name)}_{ci.status}_{today.strftime('%Y%m%d')}"
-        )
+        item_id = f"compl_{_slug(ci.name)}_{ci.status}_{today.strftime('%Y%m%d')}"
         days_pending = _days_pending_of(pending, item_id, today)
         delta = _delta_from_prior_compliance(ci, prior)
 
@@ -595,26 +635,28 @@ def _collect_compliance_items(
         if ci.note:
             rationale += f" — {ci.note}"
 
-        items.append(CockpitItem(
-            item_id=item_id,
-            decision_axis="compliance",
-            card_state="attention_needed",
-            headline=f"【法令】{ci.name} {_status_label(ci.status)}",
-            rationale=rationale,
-            urgency_score=urgency,
-            impact_score=impact,
-            confidence_score=confidence,
-            total_score=_weighted_total(urgency, impact, confidence),
-            related_compliance_item=ci.name,
-            suggested_action=action,
-            deadline_label=deadline_label,
-            next_review_due=review_due,
-            days_pending=days_pending,
-            delta_from_last=delta,
-            estimated_pnl_jpy=None,
-            citation_keys=[improvement_standards_citation().label],
-            anticipated_objections=_objections_for_compliance(ci, profile),
-        ))
+        items.append(
+            CockpitItem(
+                item_id=item_id,
+                decision_axis="compliance",
+                card_state="attention_needed",
+                headline=f"【法令】{ci.name} {_status_label(ci.status)}",
+                rationale=rationale,
+                urgency_score=urgency,
+                impact_score=impact,
+                confidence_score=confidence,
+                total_score=_weighted_total(urgency, impact, confidence),
+                related_compliance_item=ci.name,
+                suggested_action=action,
+                deadline_label=deadline_label,
+                next_review_due=review_due,
+                days_pending=days_pending,
+                delta_from_last=delta,
+                estimated_pnl_jpy=None,
+                citation_keys=[improvement_standards_citation().label],
+                anticipated_objections=_objections_for_compliance(ci, profile),
+            )
+        )
 
     return items
 
@@ -644,16 +686,12 @@ def _collect_kpi_reach_items(
             if kpi.feasibility_level == "red"
             else "複数施策の同時実施計画を策定し、月次モニタリング体制を整備"
         )
-        deadline_label = (
-            "次回経営会議" if kpi.feasibility_level == "red" else "今四半期"
-        )
+        deadline_label = "次回経営会議" if kpi.feasibility_level == "red" else "今四半期"
         review_due = _add_days(
-            today, 7 if kpi.feasibility_level == "red" else 30,
+            today,
+            7 if kpi.feasibility_level == "red" else 30,
         )
-        item_id = (
-            f"kpi_{_slug(kpi.kpi_name)}_{kpi.feasibility_level}"
-            f"_{today.strftime('%Y%m%d')}"
-        )
+        item_id = f"kpi_{_slug(kpi.kpi_name)}_{kpi.feasibility_level}_{today.strftime('%Y%m%d')}"
         days_pending = _days_pending_of(pending, item_id, today)
         delta = _delta_from_prior_kpi(kpi, prior)
 
@@ -663,26 +701,28 @@ def _collect_kpi_reach_items(
             f"業界実績 {kpi.industry_typical_improvement:.1f}pp/年。{kpi.rationale}"
         )
 
-        items.append(CockpitItem(
-            item_id=item_id,
-            decision_axis="kpi_reach",
-            card_state="attention_needed",
-            headline=f"【KPI】{kpi.kpi_name} {kpi.feasibility_level} 判定",
-            rationale=rationale,
-            urgency_score=urgency,
-            impact_score=impact,
-            confidence_score=confidence,
-            total_score=_weighted_total(urgency, impact, confidence),
-            related_kpi_name=kpi.kpi_name,
-            suggested_action=action,
-            deadline_label=deadline_label,
-            next_review_due=review_due,
-            days_pending=days_pending,
-            delta_from_last=delta,
-            estimated_pnl_jpy=None,
-            citation_keys=[logistics_efficiency_law_citation().label],
-            anticipated_objections=_objections_for_kpi(kpi, profile),
-        ))
+        items.append(
+            CockpitItem(
+                item_id=item_id,
+                decision_axis="kpi_reach",
+                card_state="attention_needed",
+                headline=f"【KPI】{kpi.kpi_name} {kpi.feasibility_level} 判定",
+                rationale=rationale,
+                urgency_score=urgency,
+                impact_score=impact,
+                confidence_score=confidence,
+                total_score=_weighted_total(urgency, impact, confidence),
+                related_kpi_name=kpi.kpi_name,
+                suggested_action=action,
+                deadline_label=deadline_label,
+                next_review_due=review_due,
+                days_pending=days_pending,
+                delta_from_last=delta,
+                estimated_pnl_jpy=None,
+                citation_keys=[logistics_efficiency_law_citation().label],
+                anticipated_objections=_objections_for_kpi(kpi, profile),
+            )
+        )
 
     return items
 
@@ -705,47 +745,45 @@ def _collect_measure_items(
         impact = _measure_impact(score, operating_profit)
         confidence = _measure_confidence(profile, score)
 
-        item_id = (
-            f"measure_{score.measure.measure_id}_{today.strftime('%Y%m%d')}"
-        )
+        item_id = f"measure_{score.measure.measure_id}_{today.strftime('%Y%m%d')}"
         days_pending = _days_pending_of(pending, item_id, today)
 
         action = (
-            f"{score.measure.name} の実行可否を経営会議で承認"
-            f"（主管 {score.responsible_dept}）"
-        ) if score.responsible_dept else f"{score.measure.name} の実行可否を経営会議で承認"
+            (f"{score.measure.name} の実行可否を経営会議で承認（主管 {score.responsible_dept}）")
+            if score.responsible_dept
+            else f"{score.measure.name} の実行可否を経営会議で承認"
+        )
         deadline_label = "今週金曜"
         review_due = _add_days(today, 7)
 
-        rationale = (
-            f"Top{rank} 推薦（総合 {score.total_score:.1f}/100）: "
-            f"{score.selection_reason}"
-        )
+        rationale = f"Top{rank} 推薦（総合 {score.total_score:.1f}/100）: {score.selection_reason}"
 
-        items.append(CockpitItem(
-            item_id=item_id,
-            decision_axis="measure_pick",
-            card_state="attention_needed",
-            headline=f"【施策】{score.measure.name} を今週決める",
-            rationale=rationale,
-            urgency_score=urgency,
-            impact_score=impact,
-            confidence_score=confidence,
-            total_score=_weighted_total(urgency, impact, confidence),
-            related_measure_id=score.measure.measure_id,
-            suggested_action=action,
-            deadline_label=deadline_label,
-            next_review_due=review_due,
-            days_pending=days_pending,
-            delta_from_last=None,
-            estimated_pnl_jpy=(
-                int(score.estimated_annual_cost_saving_jpy)
-                if score.estimated_annual_cost_saving_jpy
-                else None
-            ),
-            citation_keys=[logistics_efficiency_law_citation().label],
-            anticipated_objections=_objections_for_measure(score, profile),
-        ))
+        items.append(
+            CockpitItem(
+                item_id=item_id,
+                decision_axis="measure_pick",
+                card_state="attention_needed",
+                headline=f"【施策】{score.measure.name} を今週決める",
+                rationale=rationale,
+                urgency_score=urgency,
+                impact_score=impact,
+                confidence_score=confidence,
+                total_score=_weighted_total(urgency, impact, confidence),
+                related_measure_id=score.measure.measure_id,
+                suggested_action=action,
+                deadline_label=deadline_label,
+                next_review_due=review_due,
+                days_pending=days_pending,
+                delta_from_last=None,
+                estimated_pnl_jpy=(
+                    int(score.estimated_annual_cost_saving_jpy)
+                    if score.estimated_annual_cost_saving_jpy
+                    else None
+                ),
+                citation_keys=[logistics_efficiency_law_citation().label],
+                anticipated_objections=_objections_for_measure(score, profile),
+            )
+        )
 
     return items
 
@@ -757,11 +795,7 @@ def _collect_measure_items(
 
 def _weighted_total(urgency: float, impact: float, confidence: float) -> float:
     """加重合計を 0-100 にクリップして返す。"""
-    raw = (
-        urgency * _WEIGHT_URGENCY
-        + impact * _WEIGHT_IMPACT
-        + confidence * _WEIGHT_CONFIDENCE
-    )
+    raw = urgency * _WEIGHT_URGENCY + impact * _WEIGHT_IMPACT + confidence * _WEIGHT_CONFIDENCE
     return max(0.0, min(100.0, raw))
 
 
@@ -849,7 +883,9 @@ def _select_top_three(
 
     selected: list[CockpitItem] = []
     used_axes: dict[DecisionAxis, int] = {
-        "compliance": 0, "kpi_reach": 0, "measure_pick": 0,
+        "compliance": 0,
+        "kpi_reach": 0,
+        "measure_pick": 0,
     }
     used_keys: set[str] = set()
 
@@ -867,9 +903,7 @@ def _select_top_three(
             break
         if c in selected:
             continue
-        if c.decision_axis == "measure_pick" and (
-            used_axes["measure_pick"] >= _MAX_MEASURE_ITEMS
-        ):
+        if c.decision_axis == "measure_pick" and (used_axes["measure_pick"] >= _MAX_MEASURE_ITEMS):
             continue
         key = _dedup_key(c)
         if key in used_keys:
@@ -879,9 +913,13 @@ def _select_top_three(
         used_keys.add(key)
 
     while len(selected) < 3:
-        selected.append(_make_state_card(
-            existing=selected, profile=profile, today=today,
-        ))
+        selected.append(
+            _make_state_card(
+                existing=selected,
+                profile=profile,
+                today=today,
+            )
+        )
 
     selected.sort(key=_axis_order)
     return selected
@@ -894,8 +932,7 @@ def _must_include_compliance(report: ComplianceReport, today: date) -> bool:
     提出期限 30 日以内なら True。
     """
     has_severe = any(
-        i.status == "violation" and i.name in _HIGH_SEVERITY_ITEMS
-        for i in report.items
+        i.status == "violation" and i.name in _HIGH_SEVERITY_ITEMS for i in report.items
     )
     return has_severe or _has_submission_risk(today)
 
@@ -941,7 +978,9 @@ def _make_state_card(
     }[target_axis]
 
     state, headline, rationale = _infer_state_card_text(
-        target_axis, profile, axis_label,
+        target_axis,
+        profile,
+        axis_label,
     )
 
     item_id = f"state_{target_axis}_{state}_{today.strftime('%Y%m%d')}"
@@ -971,7 +1010,9 @@ def _make_state_card(
 
 
 def _infer_state_card_text(
-    axis: DecisionAxis, profile: CompanyProfile, axis_label: str,
+    axis: DecisionAxis,
+    profile: CompanyProfile,
+    axis_label: str,
 ) -> tuple[CardState, str, str]:
     """空き軸の card_state と表示文を推定する。"""
     if axis == "compliance":
@@ -1070,7 +1111,8 @@ def _persist_snapshot(snapshot: OperationKpiSnapshot) -> Path:
 
 
 def _load_prior_snapshot(
-    company_id: str, today: date,
+    company_id: str,
+    today: date,
 ) -> OperationKpiSnapshot | None:
     """直近 7 日以内で today より古い snapshot を 1 件返す。
 
@@ -1134,7 +1176,9 @@ def append_decision(record: DecisionRecord) -> Path:
 
 
 def _days_pending_of(
-    pending: list[DecisionRecord], item_id: str, today: date,
+    pending: list[DecisionRecord],
+    item_id: str,
+    today: date,
 ) -> int:
     """pending リストから指定 item_id の滞留日数を返す。未登録なら 0。"""
     for r in pending:
@@ -1149,7 +1193,8 @@ def _days_pending_of(
 
 
 def _compute_delta(
-    current: OperationKpiSnapshot, prior: OperationKpiSnapshot | None,
+    current: OperationKpiSnapshot,
+    prior: OperationKpiSnapshot | None,
 ) -> dict[str, float | None]:
     """前日 snapshot との数値差分を返す。prior が None なら全 None。"""
     keys = (
@@ -1184,15 +1229,11 @@ def _compute_overall_health(
     """
     if compliance.overall_status == "violation":
         return "red"
-    if any(
-        k.feasibility_level == "red" for k in feasibility.kpi_reachability
-    ):
+    if any(k.feasibility_level == "red" for k in feasibility.kpi_reachability):
         return "red"
     if compliance.overall_status == "borderline":
         return "yellow"
-    if any(
-        k.feasibility_level == "yellow" for k in feasibility.kpi_reachability
-    ):
+    if any(k.feasibility_level == "yellow" for k in feasibility.kpi_reachability):
         return "yellow"
     if all(item.card_state != "attention_needed" for item in selected):
         return "green"
@@ -1229,16 +1270,14 @@ def _build_one_line_summary(
 
 
 def _objections_for_compliance(
-    ci: ComplianceItem, profile: CompanyProfile,
+    ci: ComplianceItem,
+    profile: CompanyProfile,
 ) -> list[ObjectionItem]:
     """軸 A 用の想定反論 3 件。CFO / 現場 / 取締役会 の典型反論。"""
     return [
         ObjectionItem(
             role="cfo",
-            objection=(
-                f"{ci.name} 改善のコストインパクトは？"
-                "改善投資より違反継続の方が経済的では"
-            ),
+            objection=(f"{ci.name} 改善のコストインパクトは？改善投資より違反継続の方が経済的では"),
             rebuttal=(
                 "勧告→命令→企業名公表の段階制で長期ブランド毀損が上回る。"
                 "違反継続による荷主からの取引見直しリスクが顕在化する"
@@ -1267,16 +1306,14 @@ def _objections_for_compliance(
 
 
 def _objections_for_kpi(
-    kpi: TargetReachability, profile: CompanyProfile,
+    kpi: TargetReachability,
+    profile: CompanyProfile,
 ) -> list[ObjectionItem]:
     """軸 B 用の想定反論。"""
     return [
         ObjectionItem(
             role="cfo",
-            objection=(
-                f"目標値 {kpi.target_value:.0f} は本当に必要か。"
-                "業界平均で十分では"
-            ),
+            objection=(f"目標値 {kpi.target_value:.0f} は本当に必要か。業界平均で十分では"),
             rebuttal=(
                 "国交省「目指すべき水準」として設定された値で、"
                 "未達のままでは排出量取引・カーボンクレジット経済化の機会損失が大きい"
@@ -1306,11 +1343,13 @@ def _objections_for_kpi(
 
 
 def _objections_for_measure(
-    score: MeasureScore, profile: CompanyProfile,
+    score: MeasureScore,
+    profile: CompanyProfile,
 ) -> list[ObjectionItem]:
     """軸 C 用の想定反論。"""
     payback = (
-        f"{score.estimated_payback_years:.1f} 年" if score.estimated_payback_years
+        f"{score.estimated_payback_years:.1f} 年"
+        if score.estimated_payback_years
         else "投資回収不明"
     )
     return [
@@ -1318,7 +1357,8 @@ def _objections_for_measure(
             role="cfo",
             objection=f"投資 {score.measure.typical_investment_jpy_high / 1e8:.1f} 億円の妥当性は",
             rebuttal=(
-                f"想定回収期間 {payback}。" + (
+                f"想定回収期間 {payback}。"
+                + (
                     f"補助金 {score.measure.eligible_subsidies[0]} で実質投資が圧縮可能"
                     if score.measure.eligible_subsidies
                     else "ROI ベースで主要施策の中で最も高効率"
@@ -1406,7 +1446,8 @@ def _status_label(status: ComplianceStatus) -> str:
 
 
 def _delta_from_prior_compliance(
-    ci: ComplianceItem, prior: OperationKpiSnapshot | None,
+    ci: ComplianceItem,
+    prior: OperationKpiSnapshot | None,
 ) -> str | None:
     """軸 A の delta_from_last 文字列を生成する。"""
     if prior is None or ci.measured_value is None:
@@ -1421,7 +1462,8 @@ def _delta_from_prior_compliance(
 
 
 def _delta_from_prior_kpi(
-    kpi: TargetReachability, prior: OperationKpiSnapshot | None,
+    kpi: TargetReachability,
+    prior: OperationKpiSnapshot | None,
 ) -> str | None:
     """軸 B の delta_from_last 文字列を生成する。"""
     if prior is None or prior.load_factor_pct is None:

@@ -3,6 +3,7 @@
 フェーズ3: core/analytics/ を活用した CLO 計画書策定支援 MCP ツール。
 全ツールの戻り値は ToolResponse 構造（summary/files/citations/freshness_warnings）。
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -91,6 +92,7 @@ from core.io.company_loader import (
 from core.io.company_store import save_company_profile
 from core.io.measure_run_store import load_runs, merge_with_stored, save_runs
 from core.io.override_store import load_override
+from core.io.profile_resolver import ProfileNotFoundError, resolve_profile
 from core.io.template_writer import (
     DEFAULT_TEMPLATE_PATH,
     VALID_PURPOSES,
@@ -185,15 +187,10 @@ def register_tools(mcp: FastMCP) -> None:
         Returns:
             ToolResponse 構造（files["pptx"] に生成パス、summary に Top3/Bottom3 概要）
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_retail_01 / sample_chain_01"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         eval_result = evaluate_measures(profile=profile)
         feas_result = check_feasibility(profile=profile)
@@ -234,18 +231,14 @@ def register_tools(mcp: FastMCP) -> None:
             )
 
         # 「やらない」3 件: feasibility=red を優先、次に bottom_candidates
-        red_verdicts = [
-            v for v in feas_result.measure_verdicts if v.level == "red"
-        ][:3]
+        red_verdicts = [v for v in feas_result.measure_verdicts if v.level == "red"][:3]
         actions_to_skip: list[str] = [
             f"{v.measure.name}（{v.primary_reason}）" for v in red_verdicts
         ]
         # red が 3 件未満なら bottom_candidates で埋める
         if len(actions_to_skip) < 3:
             for s in eval_result.bottom_candidates[: 3 - len(actions_to_skip)]:
-                actions_to_skip.append(
-                    f"{s.measure.name}（{s.comparison_note or '優先度低'}）"
-                )
+                actions_to_skip.append(f"{s.measure.name}（{s.comparison_note or '優先度低'}）")
 
         # 次回意思決定期日（簡易: 計画期間の半年後を仮置き）
         # 実運用ではコックピット側から渡す予定
@@ -259,9 +252,7 @@ def register_tools(mcp: FastMCP) -> None:
                 citations.append(c)
                 seen_urls.add(c.url)
 
-        plan_period = (
-            f"FY{profile.plan_period_start_fy}〜FY{profile.plan_period_end_fy}"
-        )
+        plan_period = f"FY{profile.plan_period_start_fy}〜FY{profile.plan_period_end_fy}"
         path = write_clo_executive_brief(
             company_name=profile.name,
             company_id=profile.company_id,
@@ -274,9 +265,7 @@ def register_tools(mcp: FastMCP) -> None:
         )
 
         skip_lines = (
-            [f"  🚫 {a}" for a in actions_to_skip]
-            if actions_to_skip
-            else ["  （除外候補なし）"]
+            [f"  🚫 {a}" for a in actions_to_skip] if actions_to_skip else ["  （除外候補なし）"]
         )
         summary_lines = [
             f"📄 経営会議向け 3 分要約 PPT を生成: {path.name}",
@@ -331,15 +320,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 改善基準告示・WaitTimeStandard の根拠
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_retail_01 / sample_chain_01"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         result: HeatmapResult = build_wait_time_heatmap(profile)
         # detail テキストを summary に追加
@@ -355,8 +339,11 @@ def register_tools(mcp: FastMCP) -> None:
             detail_lines.append("")
             detail_lines.append("拠点 × 時間帯 平均待機時間（分）:")
             time_label_short = {
-                "morning": "朝", "midday": "昼", "evening": "夕",
-                "night": "夜", "all_day": "全日",
+                "morning": "朝",
+                "midday": "昼",
+                "evening": "夕",
+                "night": "夜",
+                "all_day": "全日",
             }
             # 拠点ごとに 1 行
             for site in result.site_names:
@@ -465,10 +452,7 @@ def register_tools(mcp: FastMCP) -> None:
             citations.append(
                 Citation(
                     label="業種別物流原単位（売上→取扱量推計／物流センサス2021ベース）",
-                    url=(
-                        "https://www.mlit.go.jp/sogoseisaku/transport/"
-                        "butsuryu06100.html"
-                    ),
+                    url=("https://www.mlit.go.jp/sogoseisaku/transport/butsuryu06100.html"),
                     accessed_via="国交省 物流センサス（静的参照）",
                 )
             )
@@ -589,6 +573,7 @@ def register_tools(mcp: FastMCP) -> None:
                 - "sample_mfg_01": 製造業（電子部品メーカー・愛知県・売上850億）
                 - "sample_wholesale_01": 卸売業（インテリア・千葉県・売上420億）
                 - "sample_chain_01": 連鎖化事業者（コンビニ本部・埼玉県・売上3,200億）
+                - "sample_retail_01": 小売業（ヒートマップ対応サンプル）
                 ※ フェーズ4 で実データアップロード対応予定
 
         Returns:
@@ -647,14 +632,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 物流効率化法・CO2ガイドライン
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。"
-                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         result = check_feasibility(
             profile=profile,
@@ -691,7 +672,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
-                "sample_chain_01"）
+                "sample_chain_01" / "sample_retail_01"）
             max_difficulty: 許容実装難易度の上限（1-5）。None で制約なし
             available_resources: 自社が保有するリソース。
                 未指定なら CompanyProfile から自動推定（拠点数・自社保有車両・拠点跨ぎ等）
@@ -702,14 +683,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 物流効率化法・プレイブック出典
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。"
-                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         result = evaluate_measures(
             profile=profile,
@@ -797,7 +774,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
-                "sample_chain_01"）。内部で logi_clo_plan_draft を再実行する。
+                "sample_chain_01" / "sample_retail_01"）。内部で logi_clo_plan_draft を再実行する。
 
         Returns:
             ToolResponse 構造:
@@ -805,14 +782,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 共同ガイドライン Ver.3.2・J-クレジット・GX-ETS・物流効率化法
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。"
-                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         try:
             plan = await generate_plan_draft(company_id)
@@ -845,7 +818,8 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
-                "sample_chain_01"）。内部で logi_clo_plan_draft を再実行してから検査する。
+                "sample_chain_01" / "sample_retail_01"）。内部で logi_clo_plan_draft を再実行
+                してから検査する。
 
         Returns:
             ToolResponse 構造:
@@ -892,7 +866,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
-                "sample_chain_01"）
+                "sample_chain_01" / "sample_retail_01"）
             selected_measure_ids: 評価対象施策の measure_id リスト。
                 None なら logi_clo_measure_eval の Top 3 を自動採用
 
@@ -902,14 +876,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 物流効率化法・共同ガイドライン Ver.3.2
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。"
-                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         try:
             result = simulate_scenarios(
@@ -952,7 +922,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
-                "sample_chain_01"）
+                "sample_chain_01" / "sample_retail_01"）
             report_fy: 報告対象年度（西暦・デフォルト 2026）
 
         Returns:
@@ -1053,8 +1023,7 @@ def register_tools(mcp: FastMCP) -> None:
         if purpose not in VALID_PURPOSES:
             return ToolResponse(
                 summary=(
-                    f"purpose は {list(VALID_PURPOSES)} のいずれかを指定してください: "
-                    f"'{purpose}'"
+                    f"purpose は {list(VALID_PURPOSES)} のいずれかを指定してください: '{purpose}'"
                 ),
             ).to_dict()
         purpose_typed: TemplatePurpose = purpose  # type: ignore[assignment]
@@ -1091,7 +1060,7 @@ def register_tools(mcp: FastMCP) -> None:
             "  1. このファイルを開き、各シートを記入\n"
             "  2. 必須項目（[必須] と表記）はすべて埋める\n"
             "  3. 連鎖化事業者は handling_time シートを空にしてよい\n"
-            "  4. 記入後 logi_clo_load_company(file_path=\"...\") で取込\n"
+            '  4. 記入後 logi_clo_load_company(file_path="...") で取込\n'
             "  5. 取込が成功すると logi_clo_plan_draft(company_id) で実データ計画書を生成可能\n\n"
             "詳細記入ガイド: docs/data_input_guide.md"
         )
@@ -1155,8 +1124,8 @@ def register_tools(mcp: FastMCP) -> None:
             f"data_source: {profile.data_source}\n\n"
             f"永続化先: {json_path}\n\n"
             "次のアクション:\n"
-            f"  - logi_clo_plan_draft(company_id=\"{profile.company_id}\") で計画書ドラフト生成\n"
-            f"  - logi_clo_periodic_report_draft(company_id=\"{profile.company_id}\") で"
+            f'  - logi_clo_plan_draft(company_id="{profile.company_id}") で計画書ドラフト生成\n'
+            f'  - logi_clo_periodic_report_draft(company_id="{profile.company_id}") で'
             "様式第5 ドラフト生成"
         )
         return ToolResponse(
@@ -1201,15 +1170,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 改善基準告示・物流効率化法等の出典の和集合
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_chain_01 / sample_retail_01"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         result: CockpitResult = build_daily_cockpit(
             profile,
@@ -1247,15 +1211,10 @@ def register_tools(mcp: FastMCP) -> None:
             ToolResponse 構造（KPI / 施策 / 会議 / レポート / データ項目の総数 +
             Override 4 分類別件数の要約。詳細は REST API 経由で metadata 取得可能）
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_chain_01 / sample_retail_01"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         base_industry = category_of(profile.jsic_code)
         if base_industry is None or base_industry == "other":
@@ -1311,22 +1270,18 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 物流効率化法
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_chain_01 / sample_retail_01"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         override = load_override(profile.company_id)
         try:
             result = compute_standardization_score(profile, override)
         except ValueError as exc:
             return ToolResponse(
-                summary=str(exc), data_source=profile.data_source,
+                summary=str(exc),
+                data_source=profile.data_source,
             ).to_dict()
 
         return ToolResponse(
@@ -1368,15 +1323,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 物流効率化法
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_chain_01 / sample_retail_01"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         incoming = list(measure_runs) if measure_runs else []
         if incoming:

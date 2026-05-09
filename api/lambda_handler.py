@@ -20,6 +20,7 @@ Lambda 関数設定:
     LOGI_API_CORS_ORIGINS=https://<cloudfront-domain>
     （+ シークレットは SSM Parameter Store 経由で取得するため env 直接は不要）
 """
+
 from __future__ import annotations
 
 from mangum import Mangum

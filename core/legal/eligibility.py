@@ -16,6 +16,7 @@
 判定の出力:
     EligibilityResult — 該当区分の集合と、判定根拠の説明
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -33,10 +34,10 @@ SHIPPER_THRESHOLD_TONS: int = 90_000
 CHAIN_FRANCHISE_THRESHOLD_JPY: int = 100_000_000_000  # 1,000 億円（暫定値）
 
 EligibilityCategory = Literal[
-    "first_class_shipper",      # 特定第一種荷主（発荷主）
-    "second_class_shipper",     # 特定第二種荷主（着荷主）
-    "chain_franchise",          # 特定連鎖化事業者
-    "none",                     # 該当なし
+    "first_class_shipper",  # 特定第一種荷主（発荷主）
+    "second_class_shipper",  # 特定第二種荷主（着荷主）
+    "chain_franchise",  # 特定連鎖化事業者
+    "none",  # 該当なし
 ]
 
 
@@ -44,9 +45,9 @@ EligibilityCategory = Literal[
 class EligibilityResult:
     """適用判定の結果。"""
 
-    categories: list[EligibilityCategory]   # 該当区分（複数該当あり得る）
+    categories: list[EligibilityCategory]  # 該当区分（複数該当あり得る）
     annual_freight_tons_used: float | None  # 判定に使用した取扱量（実測 or 推計値）
-    is_estimate: bool                       # 取扱量が推計値か
+    is_estimate: bool  # 取扱量が推計値か
     reasons: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
 

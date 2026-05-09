@@ -4,6 +4,7 @@
 Web UI からは「テンプレート DL → 記入 → アップロード → JSON 永続化」のフローで
 使用する。
 """
+
 from __future__ import annotations
 
 import shutil
@@ -12,7 +13,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
-from api.routers.clo import _publish_files
+from api.routers._helpers import to_model
 from api.schemas.responses import ToolResponseModel
 from core.export.response import ToolResponse
 from core.io.company_loader import load_company_profile_from_excel
@@ -29,11 +30,6 @@ _LOAD_FILE_DESCRIPTION = (
     "記入済み Excel ファイル（.xlsx）。CSV ディレクトリは MCP ツール経由でのみ対応"
 )
 _UPLOAD_FILE = File(..., description=_LOAD_FILE_DESCRIPTION)
-
-
-def _to_model(response: ToolResponse) -> ToolResponseModel:
-    _publish_files(response)
-    return ToolResponseModel.model_validate(response.to_dict())
 
 
 _PURPOSE_QUERY = Query(
@@ -53,12 +49,10 @@ _PURPOSE_LABEL: dict[TemplatePurpose, str] = {
 
 _PURPOSE_SHEETS: dict[TemplatePurpose, str] = {
     "annual": (
-        "profile / sites / wait_time(年集計) / handling_time / "
-        "kpi_history / _jsic_reference"
+        "profile / sites / wait_time(年集計) / handling_time / kpi_history / _jsic_reference"
     ),
     "monthly": (
-        "profile / sites / wait_time(月集計) / handling_time / "
-        "kpi_history / _jsic_reference"
+        "profile / sites / wait_time(月集計) / handling_time / kpi_history / _jsic_reference"
     ),
     "daily": "profile / sites / wait_time(日次・site×slot) / _jsic_reference",
 }
@@ -100,7 +94,7 @@ async def generate_template(
         files={"template_xlsx": str(written)},
         data_source="actual",
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 @router.post("/load", response_model=ToolResponseModel)
@@ -156,7 +150,7 @@ async def load_company(file: UploadFile = _UPLOAD_FILE) -> ToolResponseModel:
         files={"profile_json": str(json_path)},
         data_source=profile.data_source,
     )
-    return _to_model(response)
+    return to_model(response)
 
 
 @router.get("/samples", response_model=list[dict[str, str]])

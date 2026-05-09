@@ -6,6 +6,7 @@ TTL: 1 分（5分値リアルタイムデータ）。
 
 注意: 必ず CQL_FILTER で範囲を絞ること（過剰取得禁止）。
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -78,9 +79,7 @@ class XRoadClient(AsyncHTTPClient):
         try:
             data = await self.get_json("geoserver", self._wfs_params(cql_filter))
         except HttpClientError as exc:
-            raise XRoadApiError(
-                f"xROAD 観測点取得エラー (route_id={route_id}): {exc}"
-            ) from exc
+            raise XRoadApiError(f"xROAD 観測点取得エラー (route_id={route_id}): {exc}") from exc
 
         features = data.get("features", [])
         cache.store(cache_key, features, _TTL_SECONDS)

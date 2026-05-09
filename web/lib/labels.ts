@@ -10,13 +10,17 @@
  */
 import type {
   DataItemSource,
+  DecisionAxis,
+  JsicCategory,
   KpiFrequency,
   MeetingFrequency,
   OutputFormat,
+  OverrideCategory,
   OverrideTargetKind,
   RefreshCadence,
   ReportAudience,
   ReportFrequency,
+  VerdictLevel,
 } from "./api";
 
 // ─── 頻度系（KPI / 会議 / レポート / データ更新を統合） ──────────────
@@ -73,6 +77,46 @@ export const OVERRIDE_TARGET_KIND_LABEL: Record<OverrideTargetKind, string> = {
   meeting: "会議体",
   report: "レポート",
   data_item: "データ項目",
+};
+
+// ─── Override 4 分類 ──────────────────────────────────────────────
+export const OVERRIDE_CATEGORY_LABEL: Record<OverrideCategory, string> = {
+  unmanaged_deviation: "管理外逸脱",
+  approved_better_practice: "承認済差別化",
+  required_localization: "必要ローカル",
+  temporary_exception: "期限付き例外",
+};
+
+// ─── 業種カテゴリ（JSIC ベース） ──────────────────────────────────
+export const INDUSTRY_LABEL: Record<JsicCategory, string> = {
+  manufacturing: "製造業",
+  wholesale: "卸売業",
+  retail: "小売業",
+  chain_franchise: "連鎖化（FC本部）",
+  transport: "運輸業",
+  other: "その他",
+};
+
+// ─── 意思決定 3 軸（J3 デイリーコックピット） ──────────────────────
+export const DECISION_AXIS_LABEL: Record<DecisionAxis, string> = {
+  compliance: "軸A 法令準拠リスク",
+  kpi_reach: "軸B KPI達成見通し",
+  measure_pick: "軸C 今週決める施策",
+};
+
+// ─── 全体健全度 / 緑黄赤 判定 ───────────────────────────────────
+export const VERDICT_LEVEL_LABEL: Record<VerdictLevel, string> = {
+  green: "全体健全",
+  yellow: "要注視",
+  red: "重大対応",
+};
+
+// ─── 重大度（絵文字インジケータ） ────────────────────────────────
+export const SEVERITY_EMOJI: Record<"green" | "yellow" | "red" | "none", string> = {
+  green: "🟢",
+  yellow: "🟡",
+  red: "🔴",
+  none: "⚪",
 };
 
 // ─── KPI 表示ヘルパ ──────────────────────────────────────────────

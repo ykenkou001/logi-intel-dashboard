@@ -16,6 +16,7 @@ CLO 計画書「実施措置／計画内容」セクションに記載する施�
     - 各施策の出典を明示（経営会議「出典は？」即答用）
     - 合算注意（施策間で対象が重複するため単純合算は過大）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -28,21 +29,21 @@ from core.static.jsic import lookup
 
 # 施策効果の標準ファクター（業界統計から）
 _DEFAULT_LONG_DISTANCE_SHARE_PCT = 30.0  # 中長距離輸送比率（業界平均）
-_DEFAULT_AVG_DISTANCE_KM = 500.0          # モーダルシフト対象の平均距離
-_TARGET_LOAD_FACTOR_PCT = 50.0            # 目指す積載率
-_BASELINE_LOAD_FACTOR_PCT = 38.0          # 業界平均積載率
+_DEFAULT_AVG_DISTANCE_KM = 500.0  # モーダルシフト対象の平均距離
+_TARGET_LOAD_FACTOR_PCT = 50.0  # 目指す積載率
+_BASELINE_LOAD_FACTOR_PCT = 38.0  # 業界平均積載率
 _JOINT_DELIVERY_TRIP_REDUCTION_PCT = 30.0  # 共同配送の便数削減率
 _JOINT_DELIVERY_COST_REDUCTION_PCT = 20.0  # 共同配送のコスト削減率
 _RELAY_DRIVER_HOURS_SAVING_PER_TRIP = 2.5  # 中継輸送 1運行あたり拘束時間削減（h）
-_BERTH_WAIT_TIME_REDUCTION_PCT = 50.0     # バース予約による荷待ち時間削減率
-_AVG_DAILY_WAIT_HOURS_BEFORE = 1.5         # 改善前の平均荷待ち時間（h/日）
-_DRIVER_HOURLY_COST_JPY = 3500.0           # ドライバー時給換算（業界平均）
+_BERTH_WAIT_TIME_REDUCTION_PCT = 50.0  # バース予約による荷待ち時間削減率
+_AVG_DAILY_WAIT_HOURS_BEFORE = 1.5  # 改善前の平均荷待ち時間（h/日）
+_DRIVER_HOURLY_COST_JPY = 3500.0  # ドライバー時給換算（業界平均）
 
 # 投資額の概算（中小規模目安）
-_MODAL_SHIFT_INVESTMENT_JPY = 5_000_000   # 鉄道コンテナ初期費用
-_LOAD_FACTOR_INVESTMENT_JPY = 3_000_000   # TMS 導入
+_MODAL_SHIFT_INVESTMENT_JPY = 5_000_000  # 鉄道コンテナ初期費用
+_LOAD_FACTOR_INVESTMENT_JPY = 3_000_000  # TMS 導入
 _JOINT_DELIVERY_INVESTMENT_JPY = 5_000_000  # WMS 連携・運用調整
-_RELAY_INVESTMENT_JPY = 8_000_000         # 中継拠点準備（リース・人員配置）
+_RELAY_INVESTMENT_JPY = 8_000_000  # 中継拠点準備（リース・人員配置）
 _BERTH_BOOKING_INVESTMENT_JPY = 2_000_000  # バース予約システム
 
 # 出典 URL
@@ -50,27 +51,23 @@ _AUTO_TRANSPORT_STATS_URL = "https://www.mlit.go.jp/k-toukei/jidousyayusou.html"
 _LOGISTICS_EFFICIENCY_CASES_URL = (
     "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
 )
-_RELAY_TRANSPORT_GUIDE_URL = (
-    "https://www.mlit.go.jp/jidosha/jidosha_tk1_000007.html"
-)
-_BERTH_BOOKING_REPORT_URL = (
-    "https://www.mlit.go.jp/jidosha/jidosha_tk1_000219.html"
-)
+_RELAY_TRANSPORT_GUIDE_URL = "https://www.mlit.go.jp/jidosha/jidosha_tk1_000007.html"
+_BERTH_BOOKING_REPORT_URL = "https://www.mlit.go.jp/jidosha/jidosha_tk1_000219.html"
 
 
 @dataclass(frozen=True)
 class MeasureSimulation:
     """単一施策のシミュレーション結果。"""
 
-    name: str                                  # 施策名
-    description: str                           # 施策概要
-    co2_reduction_kg_per_year: float | None    # 年間CO2削減量（kg）
-    cost_saving_jpy_per_year: float | None     # 年間コスト削減額（円）
+    name: str  # 施策名
+    description: str  # 施策概要
+    co2_reduction_kg_per_year: float | None  # 年間CO2削減量（kg）
+    cost_saving_jpy_per_year: float | None  # 年間コスト削減額（円）
     driver_hours_saving_per_year: float | None  # 年間ドライバー時間削減（h）
-    investment_jpy: float                       # 必要投資額（円・概算）
-    payback_years: float | None                 # 単純回収期間（年）
-    rationale: str                              # 計算根拠
-    citation: Citation                          # 出典
+    investment_jpy: float  # 必要投資額（円・概算）
+    payback_years: float | None  # 単純回収期間（年）
+    rationale: str  # 計算根拠
+    citation: Citation  # 出典
 
 
 @dataclass
@@ -81,10 +78,10 @@ class SimulationResult:
     jsic_name: str
     prefecture: str
     revenue_jpy: int
-    annual_freight_tons: float                # 年間取扱量（実測 or 推計）
-    is_estimate: bool                          # 取扱量が推計値か
-    avg_distance_km: float                     # 想定平均輸送距離
-    long_distance_share_pct: float             # 中長距離輸送比率
+    annual_freight_tons: float  # 年間取扱量（実測 or 推計）
+    is_estimate: bool  # 取扱量が推計値か
+    avg_distance_km: float  # 想定平均輸送距離
+    long_distance_share_pct: float  # 中長距離輸送比率
 
     measures: list[MeasureSimulation] = field(default_factory=list)
 
@@ -94,16 +91,12 @@ class SimulationResult:
     @property
     def total_co2_reduction_kg(self) -> float:
         """全施策の合算CO2削減量（重複あり・最大値の参考）。"""
-        return sum(
-            m.co2_reduction_kg_per_year or 0.0 for m in self.measures
-        )
+        return sum(m.co2_reduction_kg_per_year or 0.0 for m in self.measures)
 
     @property
     def total_cost_saving_jpy(self) -> float:
         """全施策の合算コスト削減（重複あり・最大値の参考）。"""
-        return sum(
-            m.cost_saving_jpy_per_year or 0.0 for m in self.measures
-        )
+        return sum(m.cost_saving_jpy_per_year or 0.0 for m in self.measures)
 
     @property
     def total_investment_jpy(self) -> float:
@@ -122,20 +115,14 @@ def _simulate_modal_shift(
     target_tonkm = target_tons * avg_distance_km
 
     # CO2削減: 営業用大型トラック 76 → 鉄道貨物 21 g-CO2/トンキロ
-    co2_diff_g_per_tonkm = (
-        CO2_FACTORS.truck_large_commercial - CO2_FACTORS.rail_freight
-    )
+    co2_diff_g_per_tonkm = CO2_FACTORS.truck_large_commercial - CO2_FACTORS.rail_freight
     co2_reduction_kg = target_tonkm * co2_diff_g_per_tonkm / 1000.0
 
     # コスト削減: 鉄道シフトで燃料費 + 人件費 を約 15% 削減（業界事例）
     # トラック輸送コストの概算: 25円/トンキロ → 鉄道で約 21円/トンキロ
     cost_saving_jpy = target_tonkm * 4.0  # 4円/トンキロ削減 × トンキロ
 
-    payback = (
-        _MODAL_SHIFT_INVESTMENT_JPY / cost_saving_jpy
-        if cost_saving_jpy > 0
-        else None
-    )
+    payback = _MODAL_SHIFT_INVESTMENT_JPY / cost_saving_jpy if cost_saving_jpy > 0 else None
 
     return MeasureSimulation(
         name="モーダルシフト（トラック→鉄道貨物）",
@@ -149,8 +136,7 @@ def _simulate_modal_shift(
         investment_jpy=float(_MODAL_SHIFT_INVESTMENT_JPY),
         payback_years=payback,
         rationale=(
-            f"対象トンキロ {target_tonkm:,.0f}トンキロ × "
-            f"CO2差 {co2_diff_g_per_tonkm}g/トンキロ"
+            f"対象トンキロ {target_tonkm:,.0f}トンキロ × CO2差 {co2_diff_g_per_tonkm}g/トンキロ"
         ),
         citation=co2_factors_citation(),
     )
@@ -162,9 +148,7 @@ def _simulate_load_factor(annual_freight_tons: float, avg_distance_km: float) ->
     reduction_ratio = 1.0 - (_BASELINE_LOAD_FACTOR_PCT / _TARGET_LOAD_FACTOR_PCT)
     # CO2削減: 全自動車輸送量 × 営業用大型トラック原単位 × 削減率
     total_tonkm = annual_freight_tons * avg_distance_km
-    co2_reduction_kg = (
-        total_tonkm * CO2_FACTORS.truck_large_commercial * reduction_ratio / 1000.0
-    )
+    co2_reduction_kg = total_tonkm * CO2_FACTORS.truck_large_commercial * reduction_ratio / 1000.0
 
     # コスト削減: 燃料費・傭車費・人件費が同比率で削減
     # トラック輸送コスト 約 25円/トンキロ × 削減率
@@ -175,11 +159,7 @@ def _simulate_load_factor(annual_freight_tons: float, avg_distance_km: float) ->
     annual_driver_hours = total_tonkm / 100.0 * 1.0  # 1h/100km
     driver_hours_saving = annual_driver_hours * reduction_ratio
 
-    payback = (
-        _LOAD_FACTOR_INVESTMENT_JPY / cost_saving_jpy
-        if cost_saving_jpy > 0
-        else None
-    )
+    payback = _LOAD_FACTOR_INVESTMENT_JPY / cost_saving_jpy if cost_saving_jpy > 0 else None
 
     return MeasureSimulation(
         name="積載率向上（38% → 50%）",
@@ -211,17 +191,9 @@ def _simulate_joint_delivery(
     """共同配送（同一エリア競合連携）。"""
     total_tonkm = annual_freight_tons * avg_distance_km
     reduction_ratio = _JOINT_DELIVERY_TRIP_REDUCTION_PCT / 100.0
-    co2_reduction_kg = (
-        total_tonkm * CO2_FACTORS.truck_large_commercial * reduction_ratio / 1000.0
-    )
-    cost_saving_jpy = total_tonkm * 25.0 * (
-        _JOINT_DELIVERY_COST_REDUCTION_PCT / 100.0
-    )
-    payback = (
-        _JOINT_DELIVERY_INVESTMENT_JPY / cost_saving_jpy
-        if cost_saving_jpy > 0
-        else None
-    )
+    co2_reduction_kg = total_tonkm * CO2_FACTORS.truck_large_commercial * reduction_ratio / 1000.0
+    cost_saving_jpy = total_tonkm * 25.0 * (_JOINT_DELIVERY_COST_REDUCTION_PCT / 100.0)
+    payback = _JOINT_DELIVERY_INVESTMENT_JPY / cost_saving_jpy if cost_saving_jpy > 0 else None
 
     return MeasureSimulation(
         name="共同配送（同一エリア競合連携）",
@@ -235,9 +207,7 @@ def _simulate_joint_delivery(
         driver_hours_saving_per_year=None,
         investment_jpy=float(_JOINT_DELIVERY_INVESTMENT_JPY),
         payback_years=payback,
-        rationale=(
-            "国交省 物流効率化法 認定事例の業界平均削減率を取扱量に乗じて算出"
-        ),
+        rationale=("国交省 物流効率化法 認定事例の業界平均削減率を取扱量に乗じて算出"),
         citation=Citation(
             label="物流効率化法 認定事業 公表事例（国土交通省）",
             url=_LOGISTICS_EFFICIENCY_CASES_URL,
@@ -259,11 +229,7 @@ def _simulate_relay_transport(
     driver_hours_saving = annual_trips * _RELAY_DRIVER_HOURS_SAVING_PER_TRIP
     # 拘束時間削減の半分が直接的な人件費削減に寄与
     cost_saving_jpy = driver_hours_saving * _DRIVER_HOURLY_COST_JPY * 0.5
-    payback = (
-        _RELAY_INVESTMENT_JPY / cost_saving_jpy
-        if cost_saving_jpy > 0
-        else None
-    )
+    payback = _RELAY_INVESTMENT_JPY / cost_saving_jpy if cost_saving_jpy > 0 else None
 
     return MeasureSimulation(
         name="中継輸送（長距離運行の分割）",
@@ -276,9 +242,7 @@ def _simulate_relay_transport(
         driver_hours_saving_per_year=driver_hours_saving,
         investment_jpy=float(_RELAY_INVESTMENT_JPY),
         payback_years=payback,
-        rationale=(
-            "国交省「中継輸送に関する手引き」の標準的削減効果を運行回数に乗算"
-        ),
+        rationale=("国交省「中継輸送に関する手引き」の標準的削減効果を運行回数に乗算"),
         citation=Citation(
             label="中継輸送に関する手引き（国土交通省）",
             url=_RELAY_TRANSPORT_GUIDE_URL,
@@ -294,11 +258,7 @@ def _simulate_berth_booking(annual_freight_tons: float) -> MeasureSimulation:
     annual_wait_hours_before = annual_trips * _AVG_DAILY_WAIT_HOURS_BEFORE
     driver_hours_saving = annual_wait_hours_before * _BERTH_WAIT_TIME_REDUCTION_PCT / 100.0
     cost_saving_jpy = driver_hours_saving * _DRIVER_HOURLY_COST_JPY
-    payback = (
-        _BERTH_BOOKING_INVESTMENT_JPY / cost_saving_jpy
-        if cost_saving_jpy > 0
-        else None
-    )
+    payback = _BERTH_BOOKING_INVESTMENT_JPY / cost_saving_jpy if cost_saving_jpy > 0 else None
 
     return MeasureSimulation(
         name="バース予約システム（荷待ち時間削減）",
@@ -311,9 +271,7 @@ def _simulate_berth_booking(annual_freight_tons: float) -> MeasureSimulation:
         driver_hours_saving_per_year=driver_hours_saving,
         investment_jpy=float(_BERTH_BOOKING_INVESTMENT_JPY),
         payback_years=payback,
-        rationale=(
-            "国交省 トラック予約システム導入効果調査の標準値を運行回数に乗算"
-        ),
+        rationale=("国交省 トラック予約システム導入効果調査の標準値を運行回数に乗算"),
         citation=Citation(
             label="トラック予約システム導入効果調査（国土交通省）",
             url=_BERTH_BOOKING_REPORT_URL,
@@ -349,8 +307,7 @@ def simulate_measures(
     entry = lookup(jsic_code)
     if entry is None:
         raise ValueError(
-            f"JSIC コード '{jsic_code}' は未収録です。"
-            "Step 1-4 と同じコードを指定してください。"
+            f"JSIC コード '{jsic_code}' は未収録です。Step 1-4 と同じコードを指定してください。"
         )
 
     # 取扱量の確定
@@ -437,17 +394,11 @@ def build_simulation_summary(r: SimulationResult) -> str:
             f"  概要: {m.description}",
         ]
         if m.co2_reduction_kg_per_year is not None:
-            lines.append(
-                f"  CO2削減: 約 {_format_co2_kg(m.co2_reduction_kg_per_year)}/年"
-            )
+            lines.append(f"  CO2削減: 約 {_format_co2_kg(m.co2_reduction_kg_per_year)}/年")
         if m.cost_saving_jpy_per_year is not None:
-            lines.append(
-                f"  コスト削減: 約 {_format_yen(m.cost_saving_jpy_per_year)}/年"
-            )
+            lines.append(f"  コスト削減: 約 {_format_yen(m.cost_saving_jpy_per_year)}/年")
         if m.driver_hours_saving_per_year is not None:
-            lines.append(
-                f"  ドライバー時間削減: 約 {m.driver_hours_saving_per_year:,.0f} h/年"
-            )
+            lines.append(f"  ドライバー時間削減: 約 {m.driver_hours_saving_per_year:,.0f} h/年")
         lines.append(f"  必要投資（概算）: 約 {_format_yen(m.investment_jpy)}")
         if m.payback_years is not None:
             lines.append(f"  単純回収期間: 約 {m.payback_years:.1f} 年")

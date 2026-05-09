@@ -10,6 +10,7 @@ MeasureExecutionRecord を waste_trap.py から共通 I/O 層に昇格させ、
       経緯を全件追跡するため、重複除去は呼出側の判断に委ねる。
     - LOGI_STORAGE_BACKEND=s3 のときは S3 への複製も行う（Lambda 対応）。
 """
+
 from __future__ import annotations
 
 import json
@@ -29,13 +30,13 @@ DEFAULT_RUNS_DIR = Path(os.environ.get("LOGI_OUTPUTS_DIR", "outputs")) / "measur
 TrapSeverity = Literal["low", "medium", "high"]
 
 RootCause = Literal[
-    "scale_misfit",            # 規模不適合
-    "resource_missing",        # 必要リソース不足
-    "governance_gap",          # ガバナンス未整備
-    "wrong_kpi",               # KPI 設計の誤り
-    "external_factor",         # 燃料急騰等の外部要因
-    "data_quality",            # データ品質問題
-    "adoption_resistance",     # 現場の抵抗
+    "scale_misfit",  # 規模不適合
+    "resource_missing",  # 必要リソース不足
+    "governance_gap",  # ガバナンス未整備
+    "wrong_kpi",  # KPI 設計の誤り
+    "external_factor",  # 燃料急騰等の外部要因
+    "data_quality",  # データ品質問題
+    "adoption_resistance",  # 現場の抵抗
     "implementation_quality",  # 実装品質
     "unknown",
 ]
@@ -57,10 +58,13 @@ class MeasureExecutionRecord(BaseModel):
 
     measure_id: str = Field(description="ALL_MEASURES の measure_id を参照")
     started_on: date | None = Field(
-        default=None, description="開始日（months_since_start 計算用）",
+        default=None,
+        description="開始日（months_since_start 計算用）",
     )
     invested_jpy: int | None = Field(
-        default=None, ge=0, description="投資実績（円）",
+        default=None,
+        ge=0,
+        description="投資実績（円）",
     )
     expected_effect_jpy: int | None = Field(
         default=None,
@@ -71,21 +75,27 @@ class MeasureExecutionRecord(BaseModel):
         description="実績効果（年・円）。未計測なら None で判定保留",
     )
     measured_count: int | None = Field(
-        default=None, ge=0,
+        default=None,
+        ge=0,
         description="計測サンプル数。<30 なら判定保留",
     )
     data_completeness: float | None = Field(
-        default=None, ge=0.0, le=1.0,
+        default=None,
+        ge=0.0,
+        le=1.0,
         description="データ完全度（0.0〜1.0）。<0.5 なら判定保留",
     )
     seasonal_factor_active: bool = Field(
-        default=False, description="季節性影響中（夏需要・年末等）",
+        default=False,
+        description="季節性影響中（夏需要・年末等）",
     )
     external_event_active: bool = Field(
-        default=False, description="外部要因（燃料急騰・災害等）の影響中",
+        default=False,
+        description="外部要因（燃料急騰・災害等）の影響中",
     )
     payback_months_estimated: int | None = Field(
-        default=None, ge=0,
+        default=None,
+        ge=0,
         description="想定回収月数。経過月数 < この値なら判定保留",
     )
     suspected_root_cause: RootCause = Field(

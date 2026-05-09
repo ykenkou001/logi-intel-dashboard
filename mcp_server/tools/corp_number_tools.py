@@ -1,4 +1,5 @@
 """国税庁 法人番号 API 向け MCP ツール群。"""
+
 from __future__ import annotations
 
 from typing import Any

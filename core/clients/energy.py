@@ -1,4 +1,5 @@
 """gogo.gs 全国平均燃料価格スクレイパー。"""
+
 from __future__ import annotations
 
 import datetime as _dt

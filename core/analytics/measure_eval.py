@@ -10,6 +10,7 @@ CLO 計画書の意思決定支援の核心: 「どの施策を選ぶべきか�
     - 連鎖化事業者は荷役等セクションを必須から除外
     - 各推薦に「選定根拠テキスト」を付与（経営会議で「なぜこれを選んだのか」即答用）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -39,12 +40,12 @@ _REQUIRED_SECTIONS_CHAIN = ("load", "wait")
 
 # 措置タイプ別の対象コスト割合（物流コスト全体の何割を addressable と見るか）
 _ADDRESSABLE_SHARE: dict[str, float] = {
-    "modal_shift": 0.30,        # 中長距離輸送が対象
-    "load_factor": 0.80,        # ほぼ全輸送
-    "joint_delivery": 0.40,     # 共同化可能エリア
-    "relay_transport": 0.25,    # 長距離運行のみ
-    "berth_booking": 0.50,      # 拘束時間関連
-    "warehouse_dx": 0.60,       # 倉庫オペ全般
+    "modal_shift": 0.30,  # 中長距離輸送が対象
+    "load_factor": 0.80,  # ほぼ全輸送
+    "joint_delivery": 0.40,  # 共同化可能エリア
+    "relay_transport": 0.25,  # 長距離運行のみ
+    "berth_booking": 0.50,  # 拘束時間関連
+    "warehouse_dx": 0.60,  # 倉庫オペ全般
 }
 
 # 実行カード簡易版（Codex 2 軽量取込）— 各施策の主管部門・想定月次 KPI・依存関係。
@@ -201,29 +202,25 @@ def evaluate_measures(
 
     is_chain = profile.is_chain_franchise
     logistics_ratio = INDUSTRY_AVG_LOGISTICS_RATIO.get(industry) or 0.030
-    estimated_annual_logistics_cost = (
-        profile.cost_of_goods_sold_jpy * logistics_ratio
-    )
+    estimated_annual_logistics_cost = profile.cost_of_goods_sold_jpy * logistics_ratio
 
     scored: list[MeasureScore] = []
     for m in eligible:
-        scored.append(_score_measure(
-            m,
-            profile=profile,
-            available_resources=resources,
-            estimated_annual_logistics_cost=estimated_annual_logistics_cost,
-            is_chain=is_chain,
-        ))
+        scored.append(
+            _score_measure(
+                m,
+                profile=profile,
+                available_resources=resources,
+                estimated_annual_logistics_cost=estimated_annual_logistics_cost,
+                is_chain=is_chain,
+            )
+        )
 
     # 合計スコア降順
     scored.sort(key=lambda s: s.total_score, reverse=True)
 
     top = scored[:_TOP_N]
-    bottom = (
-        list(reversed(scored[-_BOTTOM_N:]))
-        if len(scored) >= _BOTTOM_MIN_TOTAL
-        else []
-    )
+    bottom = list(reversed(scored[-_BOTTOM_N:])) if len(scored) >= _BOTTOM_MIN_TOTAL else []
 
     # judgment trail: Top と Bottom それぞれに比較ノートを付与
     # 経営会議「なぜ採用/不採用？」に即答できる形にする
@@ -247,7 +244,8 @@ def evaluate_measures(
 
 
 def _annotate_comparison_notes(
-    top: list[MeasureScore], bottom: list[MeasureScore],
+    top: list[MeasureScore],
+    bottom: list[MeasureScore],
 ) -> None:
     """Top/Bottom 双方に「なぜ採用/不採用か」の比較テキストを付与する。
 
@@ -262,17 +260,26 @@ def _annotate_comparison_notes(
 
     for s in top:
         s.comparison_note = _build_top_comparison(
-            s, top_avg_roi, top_avg_feas, top_avg_comp,
+            s,
+            top_avg_roi,
+            top_avg_feas,
+            top_avg_comp,
         )
 
     for s in bottom:
         s.comparison_note = _build_bottom_comparison(
-            s, top_avg_roi, top_avg_feas, top_avg_comp,
+            s,
+            top_avg_roi,
+            top_avg_feas,
+            top_avg_comp,
         )
 
 
 def _build_top_comparison(
-    s: MeasureScore, avg_roi: float, avg_feas: float, avg_comp: float,
+    s: MeasureScore,
+    avg_roi: float,
+    avg_feas: float,
+    avg_comp: float,
 ) -> str:
     """Top 推薦施策の「他施策との比較ポイント」を生成する。"""
     diffs = [
@@ -288,7 +295,10 @@ def _build_top_comparison(
 
 
 def _build_bottom_comparison(
-    s: MeasureScore, avg_roi: float, avg_feas: float, avg_comp: float,
+    s: MeasureScore,
+    avg_roi: float,
+    avg_feas: float,
+    avg_comp: float,
 ) -> str:
     """Bottom（不採用）施策の不採用理由を生成する。"""
     deltas = [
@@ -344,16 +354,12 @@ def _score_measure(
     est_co2_reduction = _estimate_annual_co2_reduction(m, estimated_annual_logistics_cost)
     est_investment = (m.typical_investment_jpy_low + m.typical_investment_jpy_high) / 2.0
     est_payback = (
-        est_investment / est_cost_saving
-        if est_cost_saving and est_cost_saving > 0
-        else None
+        est_investment / est_cost_saving if est_cost_saving and est_cost_saving > 0 else None
     )
 
     # リソース充足判定
     available_set = set(available_resources)
-    missing = [
-        r for r in m.required_resources if r not in available_set
-    ]
+    missing = [r for r in m.required_resources if r not in available_set]
 
     # 4 軸スコア
     roi = _score_roi(est_cost_saving, est_investment)
@@ -369,12 +375,19 @@ def _score_measure(
     )
 
     reason = _build_selection_reason(
-        m, roi, feasibility, compliance, subsidy,
-        est_cost_saving, est_payback, missing,
+        m,
+        roi,
+        feasibility,
+        compliance,
+        subsidy,
+        est_cost_saving,
+        est_payback,
+        missing,
     )
 
     responsible_dept, monthly_kpi, dependencies = _EXECUTION_CARDS.get(
-        m.measure_id, _DEFAULT_EXECUTION_CARD,
+        m.measure_id,
+        _DEFAULT_EXECUTION_CARD,
     )
 
     return MeasureScore(
@@ -396,7 +409,8 @@ def _score_measure(
 
 
 def _estimate_annual_cost_saving(
-    m: PlaybookMeasure, estimated_annual_logistics_cost: float,
+    m: PlaybookMeasure,
+    estimated_annual_logistics_cost: float,
 ) -> float | None:
     """施策の期待コスト削減額を年間ベースで試算する。"""
     if m.expected_cost_reduction_pct is None:
@@ -407,7 +421,8 @@ def _estimate_annual_cost_saving(
 
 
 def _estimate_annual_co2_reduction(
-    m: PlaybookMeasure, estimated_annual_logistics_cost: float,
+    m: PlaybookMeasure,
+    estimated_annual_logistics_cost: float,
 ) -> float | None:
     """CO2 削減量の概算（kg/年）。
 
@@ -446,7 +461,8 @@ def _score_roi(est_cost_saving: float | None, investment: float) -> float:
 
 
 def _score_feasibility(
-    difficulty: int, missing_resources: list[RequiredResource],
+    difficulty: int,
+    missing_resources: list[RequiredResource],
 ) -> float:
     """実装可能性スコア（0-100）。難易度ベース + リソース欠如ペナルティ。"""
     base = 120.0 - difficulty * 20.0  # 難易度1→100, 5→20
@@ -460,9 +476,7 @@ def _score_compliance(m: PlaybookMeasure, is_chain: bool) -> float:
     様式第3 の必須セクション該当 +80 / 法令条文紐付き +20。
     連鎖化事業者は荷役等セクションを必須から除外。
     """
-    required_sections = (
-        _REQUIRED_SECTIONS_CHAIN if is_chain else _REQUIRED_SECTIONS_NON_CHAIN
-    )
+    required_sections = _REQUIRED_SECTIONS_CHAIN if is_chain else _REQUIRED_SECTIONS_NON_CHAIN
     score = 0.0
     if m.form3_section in required_sections:
         score += 80.0
@@ -485,7 +499,10 @@ def _score_subsidy(eligible_subsidies: list[str]) -> float:
 
 def _build_selection_reason(
     m: PlaybookMeasure,
-    roi: float, feasibility: float, compliance: float, subsidy: float,
+    roi: float,
+    feasibility: float,
+    compliance: float,
+    subsidy: float,
     est_cost_saving: float | None,
     est_payback: float | None,
     missing_resources: list[RequiredResource],
@@ -495,13 +512,9 @@ def _build_selection_reason(
 
     if roi >= 80:
         if est_cost_saving and est_payback is not None:
-            payback_str = (
-                "回収 1年未満" if est_payback < 0.1
-                else f"回収 約{est_payback:.1f}年"
-            )
+            payback_str = "回収 1年未満" if est_payback < 0.1 else f"回収 約{est_payback:.1f}年"
             parts.append(
-                f"投資対効果が高い（年 約{est_cost_saving / 1e8:.2f}億円削減・"
-                f"{payback_str}）"
+                f"投資対効果が高い（年 約{est_cost_saving / 1e8:.2f}億円削減・{payback_str}）"
             )
         else:
             parts.append("投資対効果が高い")
@@ -513,9 +526,7 @@ def _build_selection_reason(
     if feasibility >= 80:
         parts.append(f"実装難易度が低い（{m.implementation_difficulty}/5）")
     elif feasibility <= 40:
-        parts.append(
-            f"実装難易度が高い（{m.implementation_difficulty}/5）"
-        )
+        parts.append(f"実装難易度が高い（{m.implementation_difficulty}/5）")
 
     if missing_resources:
         parts.append(f"前提リソース不足: {', '.join(missing_resources)}")
@@ -566,8 +577,7 @@ def build_eval_summary(r: MeasureEvalResult) -> str:
         lines.append("【不採用候補（Bottom 3 / judgment trail）】")
         for s in r.bottom_candidates:
             lines.append(
-                f"  ✗ [{s.measure.measure_id}] {s.measure.name}"
-                f"  総合 {s.total_score:.1f}/100"
+                f"  ✗ [{s.measure.measure_id}] {s.measure.name}  総合 {s.total_score:.1f}/100"
             )
             lines.append(
                 f"     スコア: ROI {s.roi_score:.0f} / 実装可能性 {s.feasibility_score:.0f}"
@@ -594,8 +604,7 @@ def build_eval_summary(r: MeasureEvalResult) -> str:
                 r.bottom_candidates,
             )
             lines.append(
-                f"  {axis}    {top_avg:5.1f}        {bot_avg:5.1f}     "
-                f"+{top_avg - bot_avg:.1f}pt"
+                f"  {axis}    {top_avg:5.1f}        {bot_avg:5.1f}     +{top_avg - bot_avg:.1f}pt"
             )
         lines.append("")
 
@@ -609,22 +618,20 @@ def build_eval_summary(r: MeasureEvalResult) -> str:
             else:
                 marker = "  "
             lines.append(
-                f"  {marker} {s.total_score:5.1f}  [{s.measure.measure_id}]"
-                f" {s.measure.name}"
+                f"  {marker} {s.total_score:5.1f}  [{s.measure.measure_id}] {s.measure.name}"
             )
 
     return "\n".join(lines)
 
 
 def _format_score_block(
-    s: MeasureScore, rank: int, section_labels: dict[str, str],
+    s: MeasureScore,
+    rank: int,
+    section_labels: dict[str, str],
 ) -> list[str]:
     """単一スコアの基本ブロック（ランキング・分類・スコア・期待効果）を返す。"""
     block: list[str] = [
-        (
-            f"  {rank}. [{s.measure.measure_id}] {s.measure.name}"
-            f"  総合 {s.total_score:.1f}/100"
-        ),
+        (f"  {rank}. [{s.measure.measure_id}] {s.measure.name}  総合 {s.total_score:.1f}/100"),
         (
             f"     分類: {section_labels.get(s.measure.form3_section, s.measure.form3_section)}"
             f" / 難易度 {s.measure.implementation_difficulty}/5"
@@ -635,9 +642,7 @@ def _format_score_block(
         ),
     ]
     if s.estimated_annual_cost_saving_jpy:
-        line = (
-            f"     期待効果: 年 約{s.estimated_annual_cost_saving_jpy / 1e8:.2f}億円削減"
-        )
+        line = f"     期待効果: 年 約{s.estimated_annual_cost_saving_jpy / 1e8:.2f}億円削減"
         if s.estimated_payback_years is not None:
             if s.estimated_payback_years < 0.1:
                 line += " / 回収 1年未満"

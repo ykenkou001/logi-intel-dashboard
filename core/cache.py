@@ -1,4 +1,5 @@
 """SQLite ベースの API レスポンスキャッシュ。"""
+
 from __future__ import annotations
 
 import hashlib
@@ -152,6 +153,7 @@ def get_fuel_price_history(
         # ISO 日付文字列の比較で直近 N 日
         from datetime import date as _date
         from datetime import timedelta as _timedelta
+
         cutoff = (_date.today() - _timedelta(days=days)).isoformat()
         conditions.append("date >= ?")
         params.append(cutoff)

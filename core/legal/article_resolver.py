@@ -12,6 +12,7 @@ CLO 計画書出力（PPT / Word / Markdown / Excel）で会社区分（特定�
     - eligibility（既存ロジック）を入力に取り、文字列ラベルを返す純粋関数のみ
     - 連鎖化事業者と荷主の重複該当はあり得ないが、両方該当しても安全な順序で判定
 """
+
 from __future__ import annotations
 
 from core.legal.eligibility import EligibilityResult
@@ -29,10 +30,7 @@ def resolve_plan_law_article_label(eligibility: EligibilityResult) -> str:
     """
     if "chain_franchise" in eligibility.categories:
         return "物流効率化法 第65条（特定連鎖化事業者の中長期計画作成義務）"
-    if any(
-        c in eligibility.categories
-        for c in ("first_class_shipper", "second_class_shipper")
-    ):
+    if any(c in eligibility.categories for c in ("first_class_shipper", "second_class_shipper")):
         return "物流効率化法 第46条（特定荷主の中長期計画作成義務）"
     return "物流効率化法（該当条文なし — CLO 選任義務なし）"
 
@@ -54,9 +52,6 @@ def expected_plan_article_number(eligibility: EligibilityResult) -> int | None:
     """
     if "chain_franchise" in eligibility.categories:
         return 65
-    if any(
-        c in eligibility.categories
-        for c in ("first_class_shipper", "second_class_shipper")
-    ):
+    if any(c in eligibility.categories for c in ("first_class_shipper", "second_class_shipper")):
         return 46
     return None

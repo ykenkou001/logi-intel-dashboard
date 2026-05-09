@@ -3,6 +3,7 @@
 自社プロフィールや絞り込み条件から適用候補施策を抽出する。
 Step 2（評価エンジン）と Step 5（実現可能性チェッカー）で利用される。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -93,10 +94,7 @@ def filter_playbook(
             continue
         if filter_.measure_type is not None and m.measure_type != filter_.measure_type:
             continue
-        if (
-            filter_.form3_section is not None
-            and m.form3_section != filter_.form3_section
-        ):
+        if filter_.form3_section is not None and m.form3_section != filter_.form3_section:
             continue
         result.append(m)
     return result
@@ -123,7 +121,8 @@ def build_filter_from_profile(
 
 
 def build_search_summary(
-    measures: list[PlaybookMeasure], filter_: PlaybookFilter | None = None,
+    measures: list[PlaybookMeasure],
+    filter_: PlaybookFilter | None = None,
 ) -> str:
     """検索結果のサマリーテキストを生成する（MCP ツール向け）。"""
     if not measures:

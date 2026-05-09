@@ -9,6 +9,7 @@ CLO 計画書の物流 KPI（CO2 削減・コスト削減・荷待ち時間）�
     - 不作為コストは罰則金額 + ブランド毀損リスクを併記
     - 全係数に出典を付与（経営会議「出典は？」即答用）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -50,9 +51,7 @@ class PenaltyAmounts:
     notification_failure_max_fine_jpy: int = 200_000
     """届出怠慢の過料上限。"""
 
-    plan_failure_consequence: str = (
-        "計画未達の場合: 国交大臣による勧告 → 命令 → 企業名公表"
-    )
+    plan_failure_consequence: str = "計画未達の場合: 国交大臣による勧告 → 命令 → 企業名公表"
     """計画未達時の段階的措置（金銭罰ではないがブランド毀損リスク大）。"""
 
 
@@ -107,8 +106,7 @@ FRESHNESS = Freshness(
     last_updated=date(2026, 5, 3),
     update_cadence="annual",
     source_url=(
-        "https://www.meti.go.jp/policy/energy_environment/global_warming/"
-        "JCM/about_jcm.html"
+        "https://www.meti.go.jp/policy/energy_environment/global_warming/JCM/about_jcm.html"
     ),
     notes=(
         "J-クレジット実勢価格・GX-ETS 想定価格は年次でチェック。"

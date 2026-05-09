@@ -13,6 +13,7 @@
     - 各事例には認定年・主体企業・取組内容・効果の概要・出典URLを保持
     - 数値効果は公表値ベース（推計値ではない）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,12 +24,12 @@ from core.static._freshness import Freshness, register
 
 # 取組タイプ（マッチング・分析で利用）
 MeasureType = Literal[
-    "modal_shift",      # モーダルシフト（鉄道・内航）
-    "joint_delivery",   # 共同配送
+    "modal_shift",  # モーダルシフト（鉄道・内航）
+    "joint_delivery",  # 共同配送
     "relay_transport",  # 中継輸送
-    "berth_booking",    # バース予約・荷待ち時間削減
-    "warehouse_dx",     # 倉庫・配送センター高度化
-    "load_factor",      # 積載率向上・パレット標準化
+    "berth_booking",  # バース予約・荷待ち時間削減
+    "warehouse_dx",  # 倉庫・配送センター高度化
+    "load_factor",  # 積載率向上・パレット標準化
 ]
 
 # 業種カテゴリ（jsic.JsicCategory と整合）
@@ -46,17 +47,17 @@ IndustryCategory = Literal[
 class CertifiedCase:
     """物流効率化法 認定事業 1件。"""
 
-    case_id: str               # 内部識別子（例: "MLIT2024-001"）
-    title: str                 # 事業名（公表名）
+    case_id: str  # 内部識別子（例: "MLIT2024-001"）
+    title: str  # 事業名（公表名）
     main_companies: list[str]  # 主体企業（公表分のみ）
     industry_categories: list[IndustryCategory]  # 関連業種カテゴリ
-    measure_types: list[MeasureType]             # 取組タイプ
-    summary: str               # 取組内容の要約
-    headline_effect: str       # 効果のヘッドライン（公表値ベース）
-    certified_year: int        # 認定年
-    source_url: str            # 公表ページ URL
+    measure_types: list[MeasureType]  # 取組タイプ
+    summary: str  # 取組内容の要約
+    headline_effect: str  # 効果のヘッドライン（公表値ベース）
+    certified_year: int  # 認定年
+    source_url: str  # 公表ページ URL
     before_description: str = ""  # 改修前のオペ・KPI状態
-    after_description: str = ""   # 改修後のオペ・KPI状態
+    after_description: str = ""  # 改修後のオペ・KPI状態
     case_source: Literal[
         "mlit_certified",
         "meti_clo_handbook",
@@ -85,8 +86,7 @@ CERTIFIED_CASES: list[CertifiedCase] = [
         headline_effect="配送便数 約30%削減・年間CO2排出 約3,200トン削減（公表値）",
         certified_year=2017,
         source_url=(
-            "https://www.mlit.go.jp/seisakutokatsu/freight/"
-            "seisakutokatsu_freight_fr2_000018.html"
+            "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
         ),
     ),
     CertifiedCase(
@@ -102,8 +102,7 @@ CERTIFIED_CASES: list[CertifiedCase] = [
         headline_effect="長距離輸送の鉄道シフト率 約60%・年間CO2 約8,500トン削減（公表値）",
         certified_year=2018,
         source_url=(
-            "https://www.mlit.go.jp/seisakutokatsu/freight/"
-            "seisakutokatsu_freight_fr2_000018.html"
+            "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
         ),
     ),
     CertifiedCase(
@@ -119,8 +118,7 @@ CERTIFIED_CASES: list[CertifiedCase] = [
         headline_effect="納品便数 約25%削減・荷下ろし時間 約30%短縮（公表値）",
         certified_year=2019,
         source_url=(
-            "https://www.mlit.go.jp/seisakutokatsu/freight/"
-            "seisakutokatsu_freight_fr2_000018.html"
+            "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
         ),
     ),
     CertifiedCase(
@@ -136,8 +134,7 @@ CERTIFIED_CASES: list[CertifiedCase] = [
         headline_effect="ドライバー1日拘束時間 約3時間削減・年間運行回数同数を維持（公表値）",
         certified_year=2022,
         source_url=(
-            "https://www.mlit.go.jp/seisakutokatsu/freight/"
-            "seisakutokatsu_freight_fr2_000018.html"
+            "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
         ),
     ),
     CertifiedCase(
@@ -147,14 +144,12 @@ CERTIFIED_CASES: list[CertifiedCase] = [
         industry_categories=["retail", "chain_franchise"],
         measure_types=["berth_booking"],
         summary=(
-            "全国DCで納品トラックの到着時間を予約制に変更。"
-            "事前のスロット割当で荷待ち時間を大幅削減"
+            "全国DCで納品トラックの到着時間を予約制に変更。事前のスロット割当で荷待ち時間を大幅削減"
         ),
         headline_effect="平均荷待ち時間 約60%削減・回転数向上（公表値）",
         certified_year=2021,
         source_url=(
-            "https://www.mlit.go.jp/seisakutokatsu/freight/"
-            "seisakutokatsu_freight_fr2_000018.html"
+            "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
         ),
     ),
     CertifiedCase(
@@ -163,15 +158,11 @@ CERTIFIED_CASES: list[CertifiedCase] = [
         main_companies=["メディパルHD", "アルフレッサ"],
         industry_categories=["wholesale"],
         measure_types=["joint_delivery"],
-        summary=(
-            "競合する医薬品卸2社で同一医療機関への配送を共同化。"
-            "緊急配送以外の定期配送を集約"
-        ),
+        summary=("競合する医薬品卸2社で同一医療機関への配送を共同化。緊急配送以外の定期配送を集約"),
         headline_effect="配送便数 約20%削減・CO2排出 約1,100トン/年削減（公表値）",
         certified_year=2020,
         source_url=(
-            "https://www.mlit.go.jp/seisakutokatsu/freight/"
-            "seisakutokatsu_freight_fr2_000018.html"
+            "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
         ),
     ),
     CertifiedCase(
@@ -187,8 +178,7 @@ CERTIFIED_CASES: list[CertifiedCase] = [
         headline_effect="長距離輸送のフェリーシフト率 約45%・年間CO2 約2,800トン削減（公表値）",
         certified_year=2019,
         source_url=(
-            "https://www.mlit.go.jp/seisakutokatsu/freight/"
-            "seisakutokatsu_freight_fr2_000018.html"
+            "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
         ),
     ),
     CertifiedCase(
@@ -204,8 +194,7 @@ CERTIFIED_CASES: list[CertifiedCase] = [
         headline_effect="ピッキング作業 約40%効率化・庫内人員 約30%削減（公表値）",
         certified_year=2023,
         source_url=(
-            "https://www.mlit.go.jp/seisakutokatsu/freight/"
-            "seisakutokatsu_freight_fr2_000018.html"
+            "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
         ),
     ),
     CertifiedCase(
@@ -221,8 +210,7 @@ CERTIFIED_CASES: list[CertifiedCase] = [
         headline_effect="積載率 38%→52%・配送便数 約15%削減（公表値）",
         certified_year=2022,
         source_url=(
-            "https://www.mlit.go.jp/seisakutokatsu/freight/"
-            "seisakutokatsu_freight_fr2_000018.html"
+            "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
         ),
     ),
     CertifiedCase(
@@ -232,14 +220,12 @@ CERTIFIED_CASES: list[CertifiedCase] = [
         industry_categories=["manufacturing", "wholesale"],
         measure_types=["joint_delivery", "relay_transport"],
         summary=(
-            "建設現場向けの建材搬入を競合間で共同化。"
-            "現場の搬入時間スロットも調整して荷待ち削減"
+            "建設現場向けの建材搬入を競合間で共同化。現場の搬入時間スロットも調整して荷待ち削減"
         ),
         headline_effect="現場での荷待ち時間 約50%削減・配送便数 約20%削減（公表値）",
         certified_year=2023,
         source_url=(
-            "https://www.mlit.go.jp/seisakutokatsu/freight/"
-            "seisakutokatsu_freight_fr2_000018.html"
+            "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
         ),
     ),
     # 経産省 CLO 取組事例集の発行年が md 内で未確定のため certified_year=2024 で仮置き。
@@ -406,8 +392,7 @@ FRESHNESS = Freshness(
     last_updated=date(2026, 5, 2),
     update_cadence="annual",
     source_url=(
-        "https://www.mlit.go.jp/seisakutokatsu/freight/"
-        "seisakutokatsu_freight_fr2_000018.html"
+        "https://www.mlit.go.jp/seisakutokatsu/freight/seisakutokatsu_freight_fr2_000018.html"
     ),
     notes=(
         "公表認定事業から代表 10 件を抽出した暫定サンプル。"

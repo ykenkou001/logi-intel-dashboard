@@ -13,6 +13,7 @@ verify-clo-step スキル + submission_validator が共通参照する。
     - 厚労省告示第367号（改善基準告示）
     - 国交省「物流2024年問題」資料
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -76,7 +77,9 @@ LOAD_FACTOR_ANNUAL_IMPROVEMENT_PP: float = 1.5
 # ---- ドライバー需給（改善基準告示 + 国交省2030年試算） ---------------------
 
 NATIONAL_DRIVER_WORKERS_RANGE: Range = Range(
-    low=1_000_000, median=1_700_000, high=3_000_000,
+    low=1_000_000,
+    median=1_700_000,
+    high=3_000_000,
 )
 """全国 道路貨物運送業の従業者数レンジ。verify_driver_gap で異常値検出に使う。"""
 
@@ -106,6 +109,7 @@ REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT: float = 1000.0
 
 # ---- 数値妥当性判定しきい値（提出前バリデータ用） -------------------------
 
+
 @dataclass(frozen=True)
 class PlanDraftSanityThresholds:
     """提出前バリデータが「業界感覚から外れすぎた値」を検出するしきい値。
@@ -133,6 +137,7 @@ SANITY = PlanDraftSanityThresholds()
 
 # ---- KPI 到達可能性のしきい値 ---------------------------------------------
 
+
 @dataclass(frozen=True)
 class KpiReachabilityThresholds:
     """feasibility_check が「目標年に届くか」判定する年次改善ペース基準。"""
@@ -149,8 +154,10 @@ KPI_REACHABILITY = KpiReachabilityThresholds()
 
 # ---- 業界感覚チェックのヘルパー --------------------------------------------
 
+
 def is_operating_profit_margin_in_range(
-    category: str, margin_pct: float,
+    category: str,
+    margin_pct: float,
 ) -> tuple[bool, Range | None]:
     """営業利益率が業界レンジ内に収まっているかを判定する。
 

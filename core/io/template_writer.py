@@ -22,6 +22,7 @@ annual は既定値のため、引数を渡さない既存呼び出しの挙動�
     2 行目: 各列の説明
     3 行目以降: サンプル記入値（薄いグレーで参考）
 """
+
 from __future__ import annotations
 
 import os
@@ -334,9 +335,7 @@ def _build_jsic_reference_sheet(wb: Workbook) -> None:
     ws.column_dimensions["A"].width = 12
     ws.column_dimensions["B"].width = 50
     note_cell = ws.cell(row=len(rows) + 3, column=1)
-    note_cell.value = (
-        "※ 上記は代表例。完全な JSIC コードは総務省「日本標準産業分類」を参照。"
-    )
+    note_cell.value = "※ 上記は代表例。完全な JSIC コードは総務省「日本標準産業分類」を参照。"
     note_cell.font = _DESCRIPTION_FONT
 
 
