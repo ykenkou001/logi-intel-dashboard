@@ -8,23 +8,14 @@ import {
 } from "@/components/ToolResponseDisplay";
 import { fetchDriverGap, type ToolResponse } from "@/lib/api";
 import { PREFECTURES } from "@/lib/constants";
+import { useFetchTool } from "@/lib/useFetchTool";
 
 export default function DriverGapPage() {
   const [prefecture, setPrefecture] = useState("東京都");
-  const [result, setResult] = useState<ToolResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data: result, loading, error, run } = useFetchTool<ToolResponse>();
 
   async function handleSubmit() {
-    setLoading(true);
-    setError(null);
-    try {
-      setResult(await fetchDriverGap(prefecture));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "通信エラー");
-    } finally {
-      setLoading(false);
-    }
+    await run(() => fetchDriverGap(prefecture));
   }
 
   return (

@@ -8,35 +8,26 @@ import {
 } from "@/components/ToolResponseDisplay";
 import { fetchBenchmark, type ToolResponse } from "@/lib/api";
 import { JSIC_PRESETS, PREFECTURES } from "@/lib/constants";
+import { useFetchTool } from "@/lib/useFetchTool";
 
 export default function BenchmarkPage() {
   const [jsicCode, setJsicCode] = useState("5411");
   const [prefecture, setPrefecture] = useState("東京都");
   const [revenueOku, setRevenueOku] = useState(50);
   const [logisticsCostOku, setLogisticsCostOku] = useState<string>("");
-  const [result, setResult] = useState<ToolResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data: result, loading, error, run } = useFetchTool<ToolResponse>();
 
   async function handleSubmit() {
-    setLoading(true);
-    setError(null);
-    try {
-      setResult(
-        await fetchBenchmark({
-          jsic_code: jsicCode,
-          prefecture,
-          revenue_jpy: Math.round(revenueOku * 1e8),
-          logistics_cost_jpy: logisticsCostOku
-            ? Math.round(Number(logisticsCostOku) * 1e8)
-            : undefined,
-        })
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "通信エラー");
-    } finally {
-      setLoading(false);
-    }
+    await run(() =>
+      fetchBenchmark({
+        jsic_code: jsicCode,
+        prefecture,
+        revenue_jpy: Math.round(revenueOku * 1e8),
+        logistics_cost_jpy: logisticsCostOku
+          ? Math.round(Number(logisticsCostOku) * 1e8)
+          : undefined,
+      })
+    );
   }
 
   const fieldClass =
