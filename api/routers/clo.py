@@ -86,8 +86,6 @@ def _resolve_profile_or_404(company_id: str) -> CompanyProfile:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-
-
 # ─── Step 1: 業界ベンチマーク ──────────────────────────────────────────
 @router.get("/benchmark", response_model=ToolResponseModel)
 async def benchmark_position(
