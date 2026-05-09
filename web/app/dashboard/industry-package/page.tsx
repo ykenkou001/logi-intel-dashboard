@@ -28,6 +28,7 @@ import {
   REPORT_AUDIENCE_LABEL,
   targetValueMissingNote,
 } from "@/lib/labels";
+import { useFetchTool } from "@/lib/useFetchTool";
 
 const OVERRIDE_BADGE: Record<OverrideCategory, string> = {
   unmanaged_deviation: "bg-rose-100 text-rose-800 border-rose-200",
@@ -371,9 +372,7 @@ function Section({
 export default function IndustryPackagePage() {
   const [samples, setSamples] = useState<SampleCompany[]>([]);
   const [companyId, setCompanyId] = useState<string>("sample_mfg_01");
-  const [result, setResult] = useState<ToolResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data: result, loading, error, run } = useFetchTool<ToolResponse>();
 
   useEffect(() => {
     fetchSamples()
@@ -382,15 +381,7 @@ export default function IndustryPackagePage() {
   }, []);
 
   async function handleSubmit() {
-    setLoading(true);
-    setError(null);
-    try {
-      setResult(await fetchIndustryPackage(companyId));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "通信エラー");
-    } finally {
-      setLoading(false);
-    }
+    await run(() => fetchIndustryPackage(companyId));
   }
 
   const metadata = useMemo<IndustryPackageMetadata | null>(() => {
