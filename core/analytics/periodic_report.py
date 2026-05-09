@@ -45,6 +45,7 @@ from core.static.sample_company import (
     DataSource,
     HandlingTimeRow,
     WaitTimeRow,
+    format_sample_ids,
     get_sample,
 )
 
@@ -91,7 +92,7 @@ async def generate_periodic_report(
     if profile is None:
         raise ValueError(
             f"企業プロフィール '{company_id}' が見つかりません。"
-            "サンプル: sample_mfg_01 / sample_wholesale_01 / sample_chain_01。"
+            f"サンプル: {format_sample_ids()}。"
             "実データを使う場合は logi_clo_load_company で取込してください。"
         )
 

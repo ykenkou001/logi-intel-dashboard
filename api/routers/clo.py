@@ -68,7 +68,11 @@ from core.playbook.measures import get_measure
 from core.static._freshness import all_warnings
 from core.static.efficiency_law_certified import IndustryCategory, MeasureType
 from core.static.jsic import category_of
-from core.static.sample_company import get_sample
+from core.static.sample_company import (
+    CompanyProfile,
+    format_sample_ids,
+    get_sample,
+)
 from core.storage import get_storage
 from core.validators.submission_validator import (
     build_validation_summary,
@@ -77,22 +81,15 @@ from core.validators.submission_validator import (
 
 router = APIRouter(prefix="/api/v1/clo", tags=["clo"])
 
-_VALID_SAMPLE_IDS = (
-    "sample_mfg_01",
-    "sample_wholesale_01",
-    "sample_chain_01",
-    "sample_retail_01",
-)
 
-
-def _resolve_profile_or_404(company_id: str):  # type: ignore[no-untyped-def]
+def _resolve_profile_or_404(company_id: str) -> CompanyProfile:
     profile = get_sample(company_id)
     if profile is None:
         raise HTTPException(
             status_code=404,
             detail=(
                 f"会社 ID '{company_id}' が見つかりません。サンプルは "
-                f"{', '.join(_VALID_SAMPLE_IDS)}、または "
+                f"{format_sample_ids(separator=', ')}、または "
                 "POST /api/v1/company/load で取込済みの ID が利用可能"
             ),
         )

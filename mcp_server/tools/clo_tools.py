@@ -111,7 +111,7 @@ from core.playbook.industry_packages import (
 )
 from core.static._freshness import all_warnings
 from core.static.jsic import category_of
-from core.static.sample_company import get_sample
+from core.static.sample_company import format_sample_ids, get_sample
 from core.validators.submission_validator import (
     build_validation_summary,
     validate_submission,
@@ -189,11 +189,7 @@ def register_tools(mcp: FastMCP) -> None:
         profile = get_sample(company_id)
         if profile is None:
             return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_retail_01 / sample_chain_01"
-                ),
+                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
             ).to_dict()
 
         eval_result = evaluate_measures(profile=profile)
@@ -327,11 +323,7 @@ def register_tools(mcp: FastMCP) -> None:
         profile = get_sample(company_id)
         if profile is None:
             return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_retail_01 / sample_chain_01"
-                ),
+                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
             ).to_dict()
 
         result: HeatmapResult = build_wait_time_heatmap(profile)
@@ -582,6 +574,7 @@ def register_tools(mcp: FastMCP) -> None:
                 - "sample_mfg_01": 製造業（電子部品メーカー・愛知県・売上850億）
                 - "sample_wholesale_01": 卸売業（インテリア・千葉県・売上420億）
                 - "sample_chain_01": 連鎖化事業者（コンビニ本部・埼玉県・売上3,200億）
+                - "sample_retail_01": 小売業（ヒートマップ対応サンプル）
                 ※ フェーズ4 で実データアップロード対応予定
 
         Returns:
@@ -644,8 +637,7 @@ def register_tools(mcp: FastMCP) -> None:
         if profile is None:
             return ToolResponse(
                 summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。"
-                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
+                    f"サンプル企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"
                 ),
             ).to_dict()
 
@@ -684,7 +676,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
-                "sample_chain_01"）
+                "sample_chain_01" / "sample_retail_01"）
             max_difficulty: 許容実装難易度の上限（1-5）。None で制約なし
             available_resources: 自社が保有するリソース。
                 未指定なら CompanyProfile から自動推定（拠点数・自社保有車両・拠点跨ぎ等）
@@ -699,8 +691,7 @@ def register_tools(mcp: FastMCP) -> None:
         if profile is None:
             return ToolResponse(
                 summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。"
-                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
+                    f"サンプル企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"
                 ),
             ).to_dict()
 
@@ -790,7 +781,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
-                "sample_chain_01"）。内部で logi_clo_plan_draft を再実行する。
+                "sample_chain_01" / "sample_retail_01"）。内部で logi_clo_plan_draft を再実行する。
 
         Returns:
             ToolResponse 構造:
@@ -802,8 +793,7 @@ def register_tools(mcp: FastMCP) -> None:
         if profile is None:
             return ToolResponse(
                 summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。"
-                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
+                    f"サンプル企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"
                 ),
             ).to_dict()
 
@@ -838,7 +828,8 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
-                "sample_chain_01"）。内部で logi_clo_plan_draft を再実行してから検査する。
+                "sample_chain_01" / "sample_retail_01"）。内部で logi_clo_plan_draft を再実行
+                してから検査する。
 
         Returns:
             ToolResponse 構造:
@@ -885,7 +876,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
-                "sample_chain_01"）
+                "sample_chain_01" / "sample_retail_01"）
             selected_measure_ids: 評価対象施策の measure_id リスト。
                 None なら logi_clo_measure_eval の Top 3 を自動採用
 
@@ -899,8 +890,7 @@ def register_tools(mcp: FastMCP) -> None:
         if profile is None:
             return ToolResponse(
                 summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。"
-                    "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
+                    f"サンプル企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"
                 ),
             ).to_dict()
 
@@ -945,7 +935,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Args:
             company_id: サンプル企業ID（"sample_mfg_01" / "sample_wholesale_01" /
-                "sample_chain_01"）
+                "sample_chain_01" / "sample_retail_01"）
             report_fy: 報告対象年度（西暦・デフォルト 2026）
 
         Returns:
@@ -1196,11 +1186,7 @@ def register_tools(mcp: FastMCP) -> None:
         profile = get_sample(company_id)
         if profile is None:
             return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_chain_01 / sample_retail_01"
-                ),
+                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
             ).to_dict()
 
         result: CockpitResult = build_daily_cockpit(
@@ -1242,11 +1228,7 @@ def register_tools(mcp: FastMCP) -> None:
         profile = get_sample(company_id)
         if profile is None:
             return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_chain_01 / sample_retail_01"
-                ),
+                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
             ).to_dict()
 
         base_industry = category_of(profile.jsic_code)
@@ -1306,11 +1288,7 @@ def register_tools(mcp: FastMCP) -> None:
         profile = get_sample(company_id)
         if profile is None:
             return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_chain_01 / sample_retail_01"
-                ),
+                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
             ).to_dict()
 
         override = load_override(profile.company_id)
@@ -1364,11 +1342,7 @@ def register_tools(mcp: FastMCP) -> None:
         profile = get_sample(company_id)
         if profile is None:
             return ToolResponse(
-                summary=(
-                    f"企業 '{company_id}' が見つかりません。利用可能: "
-                    "sample_mfg_01 / sample_wholesale_01 / "
-                    "sample_chain_01 / sample_retail_01"
-                ),
+                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
             ).to_dict()
 
         incoming = list(measure_runs) if measure_runs else []

@@ -64,7 +64,12 @@ from core.export.submission_checklist import (
 )
 from core.legal.eligibility import EligibilityResult, evaluate_eligibility
 from core.static._freshness import all_warnings
-from core.static.sample_company import CompanyProfile, DataSource, get_sample
+from core.static.sample_company import (
+    CompanyProfile,
+    DataSource,
+    format_sample_ids,
+    get_sample,
+)
 
 
 @dataclass
@@ -109,8 +114,7 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
     profile = get_sample(company_id)
     if profile is None:
         raise ValueError(
-            f"サンプル企業 '{company_id}' が見つかりません。"
-            "利用可能: sample_mfg_01 / sample_wholesale_01 / sample_chain_01"
+            f"サンプル企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"
         )
 
     if not profile.sites:

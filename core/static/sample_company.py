@@ -611,6 +611,19 @@ ALL_SAMPLES: dict[str, CompanyProfile] = {
 }
 
 
+def list_sample_ids() -> tuple[str, ...]:
+    """登録済みサンプル企業 ID をタプルで返す。
+
+    エラーメッセージや API バリデーションで参照する単一情報源。
+    """
+    return tuple(ALL_SAMPLES.keys())
+
+
+def format_sample_ids(separator: str = " / ") -> str:
+    """サンプル企業 ID を separator で連結して返す（エラーメッセージ用）。"""
+    return separator.join(ALL_SAMPLES.keys())
+
+
 def get_sample(company_id: str) -> CompanyProfile | None:
     """企業プロフィールを ID で取得する。
 
