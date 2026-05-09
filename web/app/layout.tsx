@@ -24,9 +24,13 @@ export const metadata: Metadata = {
 
 const NAV = [
   { href: "/guide", label: "ガイド" },
-  { href: "/dashboard/plan-draft", label: "計画書生成" },
+  { href: "/dashboard/cockpit", label: "コックピット" },
+  { href: "/dashboard/industry-package", label: "業種別パッケージ" },
+  { href: "/dashboard/standardization", label: "標準化スコア" },
+  { href: "/dashboard/waste-traps", label: "罠スコア" },
   { href: "/dashboard/measure-eval", label: "施策評価" },
   { href: "/dashboard/scenario-sim", label: "シナリオ" },
+  { href: "/dashboard/plan-draft", label: "計画書生成" },
   { href: "/dashboard/company", label: "自社情報" },
 ];
 

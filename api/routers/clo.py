@@ -25,7 +25,12 @@ from core.analytics.financial_translate import (
     build_financial_translate_summary,
     translate_to_pnl_impact,
 )
-from core.analytics.measure_eval import build_eval_summary, evaluate_measures
+from core.analytics.measure_eval import (
+    MeasureEvalResult,
+    MeasureScore,
+    build_eval_summary,
+    evaluate_measures,
+)
 from core.analytics.operation_cockpit import (
     CockpitResult,
     DecisionRecord,
@@ -463,13 +468,72 @@ async def playbook_search(
 
 
 # ─── Step 3.5/2: 施策評価エンジン ─────────────────────────────────────
+def _measure_score_to_dict(s: MeasureScore) -> dict[str, object]:
+    """MeasureScore を Web フロントが描画する dict に直列化する。
+
+    judgment trail（α-2）で Top 3 / Bottom 3 を比較表示するために使う。
+    PlaybookMeasure からは Web で必要な主要フィールドのみ抜き出す。
+    """
+    m = s.measure
+    return {
+        "measure": {
+            "measure_id": m.measure_id,
+            "name": m.name,
+            "description": m.description,
+            "form3_section": m.form3_section,
+            "measure_type": m.measure_type,
+            "implementation_difficulty": m.implementation_difficulty,
+            "typical_investment_jpy_low": m.typical_investment_jpy_low,
+            "typical_investment_jpy_high": m.typical_investment_jpy_high,
+            "typical_payback_years": m.typical_payback_years,
+        },
+        "roi_score": s.roi_score,
+        "feasibility_score": s.feasibility_score,
+        "compliance_score": s.compliance_score,
+        "subsidy_score": s.subsidy_score,
+        "total_score": s.total_score,
+        "estimated_annual_cost_saving_jpy": s.estimated_annual_cost_saving_jpy,
+        "estimated_annual_co2_reduction_kg": s.estimated_annual_co2_reduction_kg,
+        "estimated_payback_years": s.estimated_payback_years,
+        "selection_reason": s.selection_reason,
+        "missing_resources": list(s.missing_resources),
+        "responsible_dept": s.responsible_dept,
+        "monthly_kpi": s.monthly_kpi,
+        "dependencies": list(s.dependencies),
+        "comparison_note": s.comparison_note,
+    }
+
+
+def _measure_eval_to_metadata(result: MeasureEvalResult) -> dict[str, object]:
+    """MeasureEvalResult を Web フロントの metadata dict に直列化する。"""
+    return {
+        "company_id": result.company_id,
+        "company_name": result.company_name,
+        "industry": result.industry,
+        "derived_resources": list(result.derived_resources),
+        "eligible_count": result.eligible_count,
+        "scored_count": result.scored_count,
+        "top_recommendations": [
+            _measure_score_to_dict(s) for s in result.top_recommendations
+        ],
+        "bottom_candidates": [
+            _measure_score_to_dict(s) for s in result.bottom_candidates
+        ],
+    }
+
+
 @router.get("/measure-eval/{company_id}", response_model=ToolResponseModel)
 async def measure_eval(
     company_id: str,
     max_difficulty: Annotated[int | None, Query(ge=1, le=5)] = None,
     available_resources: Annotated[list[str] | None, Query()] = None,
 ) -> ToolResponseModel:
-    """自社プロフィール × プレイブック施策のスコアリング Top 3。"""
+    """自社プロフィール × プレイブック施策のスコアリング Top 3。
+
+    Web フロント (web/app/dashboard/measure-eval/page.tsx) は metadata 経由で
+    Top 3 / Bottom 3 を構造化データとして受け取り、judgment trail（α-2）の
+    対比表を描画する。
+    """
     profile = _resolve_profile_or_404(company_id)
     result = evaluate_measures(
         profile=profile,
@@ -482,7 +546,9 @@ async def measure_eval(
         freshness_warnings=result.freshness_warnings,
         data_source=profile.data_source,
     )
-    return to_model(response)
+    model = to_model(response)
+    model.metadata = _measure_eval_to_metadata(result)
+    return model
 
 
 # ─── Step 3.5/3: シナリオシミュレータ ────────────────────────────────

@@ -285,7 +285,52 @@ export async function fetchPlaybook(params: {
   return request<ToolResponse>("/api/v1/clo/playbook", { searchParams: params });
 }
 
-// ─── 施策評価エンジン（Top 3 推薦）─────────────────────────────
+// ─── 施策評価エンジン（Top 3 推薦 + Bottom 3 judgment trail）─────────
+//
+// Pydantic / dataclass スキーマと一致する型。`api/routers/clo.py` の
+// `_measure_eval_to_metadata` が返す metadata 構造を厳密に反映する。
+
+export interface PlaybookMeasureSummary {
+  measure_id: string;
+  name: string;
+  description: string;
+  form3_section: string;
+  measure_type: string;
+  implementation_difficulty: number;
+  typical_investment_jpy_low: number;
+  typical_investment_jpy_high: number;
+  typical_payback_years: number | null;
+}
+
+export interface MeasureScoreSummary {
+  measure: PlaybookMeasureSummary;
+  roi_score: number;
+  feasibility_score: number;
+  compliance_score: number;
+  subsidy_score: number;
+  total_score: number;
+  estimated_annual_cost_saving_jpy: number | null;
+  estimated_annual_co2_reduction_kg: number | null;
+  estimated_payback_years: number | null;
+  selection_reason: string;
+  missing_resources: string[];
+  responsible_dept: string;
+  monthly_kpi: string;
+  dependencies: string[];
+  comparison_note: string;
+}
+
+export interface MeasureEvalMetadata {
+  company_id: string;
+  company_name: string;
+  industry: string;
+  derived_resources: string[];
+  eligible_count: number;
+  scored_count: number;
+  top_recommendations: MeasureScoreSummary[];
+  bottom_candidates: MeasureScoreSummary[];
+}
+
 export async function fetchMeasureEval(companyId: string): Promise<ToolResponse> {
   return request<ToolResponse>(`/api/v1/clo/measure-eval/${companyId}`);
 }

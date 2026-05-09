@@ -20,6 +20,8 @@ import type {
   RefreshCadence,
   ReportAudience,
   ReportFrequency,
+  RootCause,
+  TrapSeverity,
   VerdictLevel,
 } from "./api";
 
@@ -142,4 +144,66 @@ export function targetValueMissingNote(legalBasis: string | null): string {
     return "標準目標値は未設定（公的根拠未確定）。Override で挑戦値設定可。";
   }
   return "標準目標値なし。自社前年比で管理。";
+}
+
+// ─── J2 罠スコア（waste_trap）系 — フェーズ5.5 α-1 ────────────────────
+//
+// 経営会議で「なぜこの施策が罠候補と判定されたか」を即答するための日本語化層。
+// 識別子は core/analytics/waste_trap.py の RootCause 9 種 / 6 軸セーフガードに準拠。
+
+export const TRAP_SEVERITY_LABEL: Record<TrapSeverity, string> = {
+  high: "重大",
+  medium: "要注意",
+  low: "軽微 / 判定保留",
+};
+
+export const TRAP_SEVERITY_TONE: Record<
+  TrapSeverity,
+  { card: string; dot: string; badge: string }
+> = {
+  high: {
+    card: "bg-rose-50 border-rose-300",
+    dot: "bg-rose-500",
+    badge: "bg-rose-100 text-rose-900 border-rose-300",
+  },
+  medium: {
+    card: "bg-amber-50 border-amber-300",
+    dot: "bg-amber-500",
+    badge: "bg-amber-100 text-amber-900 border-amber-300",
+  },
+  low: {
+    card: "bg-emerald-50 border-emerald-200",
+    dot: "bg-emerald-500",
+    badge: "bg-emerald-100 text-emerald-900 border-emerald-300",
+  },
+};
+
+export const ROOT_CAUSE_LABEL: Record<RootCause, string> = {
+  scale_misfit: "規模不適合",
+  resource_missing: "必要リソース不足",
+  governance_gap: "ガバナンス不足",
+  wrong_kpi: "KPI 設計の誤り",
+  external_factor: "外部要因の影響",
+  data_quality: "計測データの品質",
+  adoption_resistance: "現場への定着不足",
+  implementation_quality: "実装品質の問題",
+  unknown: "原因未特定",
+};
+
+/**
+ * 6 軸セーフガード識別子（core/analytics/waste_trap.py の _check_safeguards）の
+ * 日本語ラベル。発火した識別子をユーザーに見せる際に使う。
+ */
+export const SAFEGUARD_LABEL: Record<string, string> = {
+  ramp_up_period: "立ち上げ期間中（6 ヶ月未満）",
+  data_incomplete: "データ欠損 50% 超",
+  insufficient_samples: "サンプル数不足（< 30）",
+  seasonal_factor: "季節性影響中",
+  external_event: "外部要因（燃料急騰等）影響中",
+  before_payback: "想定回収期間内",
+  actual_not_measured: "実績未計測",
+};
+
+export function safeguardLabel(value: string): string {
+  return SAFEGUARD_LABEL[value] ?? value;
 }
