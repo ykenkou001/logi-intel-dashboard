@@ -92,6 +92,7 @@ from core.io.company_loader import (
 from core.io.company_store import save_company_profile
 from core.io.measure_run_store import load_runs, merge_with_stored, save_runs
 from core.io.override_store import load_override
+from core.io.profile_resolver import ProfileNotFoundError, resolve_profile
 from core.io.template_writer import (
     DEFAULT_TEMPLATE_PATH,
     VALID_PURPOSES,
@@ -111,7 +112,7 @@ from core.playbook.industry_packages import (
 )
 from core.static._freshness import all_warnings
 from core.static.jsic import category_of
-from core.static.sample_company import format_sample_ids, get_sample
+from core.static.sample_company import get_sample
 from core.validators.submission_validator import (
     build_validation_summary,
     validate_submission,
@@ -186,11 +187,10 @@ def register_tools(mcp: FastMCP) -> None:
         Returns:
             ToolResponse 構造（files["pptx"] に生成パス、summary に Top3/Bottom3 概要）
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         eval_result = evaluate_measures(profile=profile)
         feas_result = check_feasibility(profile=profile)
@@ -320,11 +320,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 改善基準告示・WaitTimeStandard の根拠
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         result: HeatmapResult = build_wait_time_heatmap(profile)
         # detail テキストを summary に追加
@@ -633,13 +632,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 物流効率化法・CO2ガイドライン
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         result = check_feasibility(
             profile=profile,
@@ -687,13 +683,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 物流効率化法・プレイブック出典
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         result = evaluate_measures(
             profile=profile,
@@ -789,13 +782,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 共同ガイドライン Ver.3.2・J-クレジット・GX-ETS・物流効率化法
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         try:
             plan = await generate_plan_draft(company_id)
@@ -886,13 +876,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 物流効率化法・共同ガイドライン Ver.3.2
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(
-                    f"サンプル企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"
-                ),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         try:
             result = simulate_scenarios(
@@ -1183,11 +1170,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 改善基準告示・物流効率化法等の出典の和集合
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         result: CockpitResult = build_daily_cockpit(
             profile,
@@ -1225,11 +1211,10 @@ def register_tools(mcp: FastMCP) -> None:
             ToolResponse 構造（KPI / 施策 / 会議 / レポート / データ項目の総数 +
             Override 4 分類別件数の要約。詳細は REST API 経由で metadata 取得可能）
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         base_industry = category_of(profile.jsic_code)
         if base_industry is None or base_industry == "other":
@@ -1285,11 +1270,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 物流効率化法
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         override = load_override(profile.company_id)
         try:
@@ -1339,11 +1323,10 @@ def register_tools(mcp: FastMCP) -> None:
             - citations: 物流効率化法
             - freshness_warnings: 静的データの鮮度警告
         """
-        profile = get_sample(company_id)
-        if profile is None:
-            return ToolResponse(
-                summary=(f"企業 '{company_id}' が見つかりません。利用可能: {format_sample_ids()}"),
-            ).to_dict()
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
 
         incoming = list(measure_runs) if measure_runs else []
         if incoming:

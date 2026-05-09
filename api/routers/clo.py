@@ -56,6 +56,7 @@ from core.export.ppt_writer import write_clo_executive_brief
 from core.export.response import ToolResponse
 from core.io.measure_run_store import load_runs, merge_with_stored, save_runs
 from core.io.override_store import load_override
+from core.io.profile_resolver import ProfileNotFoundError, resolve_profile
 from core.legal.eligibility import evaluate_eligibility
 from core.playbook.filters import PlaybookFilter, build_search_summary, filter_playbook
 from core.playbook.industry_packages import (
@@ -68,11 +69,7 @@ from core.playbook.measures import get_measure
 from core.static._freshness import all_warnings
 from core.static.efficiency_law_certified import IndustryCategory, MeasureType
 from core.static.jsic import category_of
-from core.static.sample_company import (
-    CompanyProfile,
-    format_sample_ids,
-    get_sample,
-)
+from core.static.sample_company import CompanyProfile
 from core.storage import get_storage
 from core.validators.submission_validator import (
     build_validation_summary,
@@ -83,17 +80,10 @@ router = APIRouter(prefix="/api/v1/clo", tags=["clo"])
 
 
 def _resolve_profile_or_404(company_id: str) -> CompanyProfile:
-    profile = get_sample(company_id)
-    if profile is None:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                f"会社 ID '{company_id}' が見つかりません。サンプルは "
-                f"{format_sample_ids(separator=', ')}、または "
-                "POST /api/v1/company/load で取込済みの ID が利用可能"
-            ),
-        )
-    return profile
+    try:
+        return resolve_profile(company_id)
+    except ProfileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 def _publish_files(response: ToolResponse) -> None:
