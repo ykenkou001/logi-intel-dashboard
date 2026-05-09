@@ -55,6 +55,7 @@ from core.export.citation import (
 )
 from core.export.docx_form3_writer import PlanMeasure, PlanSection, write_form3
 from core.export.excel_writer import write_data_table
+from core.export.formatter import format_jpy
 from core.export.markdown_writer import write_clo_plan_draft as write_md_plan
 from core.export.ppt_writer import ChartSpec, SlideContent
 from core.export.ppt_writer import write_clo_plan_draft as write_ppt_plan
@@ -365,27 +366,39 @@ def _build_executive_summary_lines(
     conservative_op_profit = financial.total_operating_profit_increase_jpy * 0.42
     conservative_co2 = simulation.total_co2_reduction_kg * 0.42
 
+    op_standard = format_jpy(
+        financial.total_operating_profit_increase_jpy * 0.7,
+        digits=2,
+        with_sign=True,
+    )
+    op_conservative = format_jpy(conservative_op_profit, digits=2)
+    carbon_low = format_jpy(financial.total_carbon_avoidance_jpy_low, unit="million", digits=0)
+    carbon_high = format_jpy(financial.total_carbon_avoidance_jpy_high, unit="million", digits=0)
+    npv_5y = format_jpy(financial.total_5y_npv_jpy, digits=2)
+    revenue = format_jpy(profile.annual_revenue_jpy)
+    invest_total = format_jpy(
+        simulation.total_investment_jpy, unit="man", digits=0, thousand_sep=True
+    )
+    cost_saving_total = format_jpy(simulation.total_cost_saving_jpy, digits=2)
+
     lines = [
         # 4 KPI カード（経営層が一目で判断する指標・標準シナリオ概算）
-        f"営業利益(標準): +{financial.total_operating_profit_increase_jpy * 0.7 / 1e8:.2f}"
-        f"億円/年 / 保守ケース下限 約 {conservative_op_profit / 1e8:.2f}億円/年"
+        f"営業利益(標準): {op_standard}/年 / 保守ケース下限 約 {op_conservative}/年"
         f"（同領域施策重複0.7倍 × 保守倍率0.6）",
         f"CO2削減(標準): 約 {simulation.total_co2_reduction_kg * 0.7 / 1000:,.0f}トン-CO2/年 "
         f"/ 保守ケース 約 {conservative_co2 / 1000:,.0f}トン",
-        f"炭素価格回避: {financial.total_carbon_avoidance_jpy_low / 1e6:.0f}〜"
-        f"{financial.total_carbon_avoidance_jpy_high / 1e6:.0f}百万円/年",
-        f"5年累積NPV: 約 {financial.total_5y_npv_jpy / 1e8:.2f}億円 (割引率3%・標準シナリオ)",
+        f"炭素価格回避: {carbon_low}〜{carbon_high}/年",
+        f"5年累積NPV: 約 {npv_5y} (割引率3%・標準シナリオ)",
         # 会社プロフィール 3 行
         f"会社名: {profile.name}（JSIC {profile.jsic_code}）",
         f"特定荷主3区分: {cat_labels} / CLO選任義務 {obligation}",
-        f"年間売上 {profile.annual_revenue_jpy / 1e8:.1f}億円 / 営業利益率 "
+        f"年間売上 {revenue} / 営業利益率 "
         f"{financial.base_operating_profit_margin_pct:.2f}% / "
         f"取扱量 {profile.annual_freight_tons_total:,.0f}トン",
         # 末尾（PPT では右下バナーに固定文言が入るため、参考情報として保持）
         "次のアクション: 様式第3別紙（添付Word）に署名・押印し、2026年10月末までに国交省へ提出",
-        f"必要投資 合計: 約 {simulation.total_investment_jpy / 1e4:,.0f}万円 "
-        f"/ 合算最大コスト削減: 約 "
-        f"{simulation.total_cost_saving_jpy / 1e8:.2f}億円/年（重複未控除・上限値）",
+        f"必要投資 合計: 約 {invest_total} / 合算最大コスト削減: 約 "
+        f"{cost_saving_total}/年（重複未控除・上限値）",
     ]
     return lines
 
@@ -648,12 +661,16 @@ def _build_excel(
         if m.co2_reduction_kg_per_year:
             effect_parts.append(f"CO2 約{m.co2_reduction_kg_per_year / 1000:,.1f}トン/年削減")
         if m.cost_saving_jpy_per_year:
-            effect_parts.append(f"コスト 約{m.cost_saving_jpy_per_year / 1e4:,.0f}万円/年削減")
+            cost_man = format_jpy(
+                m.cost_saving_jpy_per_year, unit="man", digits=0, thousand_sep=True
+            )
+            effect_parts.append(f"コスト 約{cost_man}/年削減")
+        invest_man = format_jpy(m.investment_jpy, unit="man", digits=0, thousand_sep=True)
         rows.append(
             [
                 m.name,
                 "施策効果（推計）",
-                f"投資 約{m.investment_jpy / 1e4:,.0f}万円",
+                f"投資 約{invest_man}",
                 "・".join(effect_parts) if effect_parts else "効果記載なし",
                 m.citation.label,
             ]
@@ -873,22 +890,33 @@ def build_plan_draft_summary(r: PlanDraftResult) -> str:
         if key in r.files:
             lines.append(f"  {label}: {r.files[key]}")
 
+    sum_cost = format_jpy(r.simulation.total_cost_saving_jpy, digits=2)
+    sum_invest = format_jpy(
+        r.simulation.total_investment_jpy, unit="man", digits=0, thousand_sep=True
+    )
+    fin_op = format_jpy(r.financial.total_operating_profit_increase_jpy, digits=2, with_sign=True)
+    fin_carbon_low = format_jpy(
+        r.financial.total_carbon_avoidance_jpy_low, unit="million", digits=0
+    )
+    fin_carbon_high = format_jpy(
+        r.financial.total_carbon_avoidance_jpy_high, unit="million", digits=0
+    )
+    fin_npv = format_jpy(r.financial.total_5y_npv_jpy, digits=2)
+
     lines += [
         "",
         "【サマリー】",
         f"  CLO 選任義務: {'あり' if r.eligibility.must_appoint_clo else 'なし'}",
         _format_revenue_ratio_line(r.benchmark),
         f"  5施策合算 CO2削減: 約 {r.simulation.total_co2_reduction_kg / 1000:,.0f}トン-CO2/年",
-        f"  5施策合算 物流コスト削減（= 営業利益増）: "
-        f"約 {r.simulation.total_cost_saving_jpy / 1e8:.2f}億円/年",
-        f"  必要投資 合計: 約 {r.simulation.total_investment_jpy / 1e4:,.0f}万円",
+        f"  5施策合算 物流コスト削減（= 営業利益増）: 約 {sum_cost}/年",
+        f"  必要投資 合計: 約 {sum_invest}",
         "",
         "【財務インパクト（経営指標換算）】",
-        f"  営業利益 +{r.financial.total_operating_profit_increase_jpy / 1e8:.2f}億円/年 "
+        f"  営業利益 {fin_op}/年 "
         f"(利益率 +{r.financial.operating_profit_margin_lift_pp_total:.2f}pp)",
-        f"  炭素価格回避: {r.financial.total_carbon_avoidance_jpy_low / 1e6:.0f}〜"
-        f"{r.financial.total_carbon_avoidance_jpy_high / 1e6:.0f}百万円/年",
-        f"  5年累積NPV: 約 {r.financial.total_5y_npv_jpy / 1e8:.2f}億円 (割引率3%)",
+        f"  炭素価格回避: {fin_carbon_low}〜{fin_carbon_high}/年",
+        f"  5年累積NPV: 約 {fin_npv} (割引率3%)",
         "",
         "【次のアクション】",
         "  1. PPT を経営会議で説明（2枚目のエグゼクティブサマリーから始める）",
