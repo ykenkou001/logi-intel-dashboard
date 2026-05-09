@@ -11,7 +11,6 @@ import {
   fetchSamples,
   type IndustryPackage,
   type IndustryPackageMetadata,
-  type JsicCategory,
   type MeasureDetail,
   type OverrideCategory,
   type OverrideEntry,
