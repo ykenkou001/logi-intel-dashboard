@@ -32,6 +32,7 @@ from core.export.docx_form5_writer import (
     ProgressRow,
     write_form5,
 )
+from core.export.formatter import format_jpy
 from core.export.submission_checklist import (
     SubmissionChecklist,
     build_submission_checklist,
@@ -211,7 +212,7 @@ def _build_progress_rows(plan: PlanDraftResult) -> list[ProgressRow]:
     # 主要施策（simulation）に対する初年度進捗
     for m in plan.simulation.measures[:3]:
         if m.cost_saving_jpy_per_year:
-            target_text = f"年間 約{m.cost_saving_jpy_per_year / 1e8:.2f}億円のコスト削減"
+            target_text = f"年間 約{format_jpy(m.cost_saving_jpy_per_year, digits=2)}のコスト削減"
             actual_text = "初年度は試行導入。本格展開は 2027 年度以降"
         else:
             target_text = m.description[:40] + "…" if len(m.description) > 40 else m.description

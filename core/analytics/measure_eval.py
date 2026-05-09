@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 
 from core.analytics.benchmark import INDUSTRY_AVG_LOGISTICS_RATIO
 from core.export.citation import Citation, logistics_efficiency_law_citation
+from core.export.formatter import format_jpy
 from core.playbook.filters import PlaybookFilter, filter_playbook
 from core.playbook.measures import PlaybookMeasure, RequiredResource
 from core.static._freshness import all_warnings
@@ -514,7 +515,8 @@ def _build_selection_reason(
         if est_cost_saving and est_payback is not None:
             payback_str = "回収 1年未満" if est_payback < 0.1 else f"回収 約{est_payback:.1f}年"
             parts.append(
-                f"投資対効果が高い（年 約{est_cost_saving / 1e8:.2f}億円削減・{payback_str}）"
+                "投資対効果が高い（"
+                f"年 約{format_jpy(est_cost_saving, digits=2)}削減・{payback_str}）"
             )
         else:
             parts.append("投資対効果が高い")
@@ -642,7 +644,7 @@ def _format_score_block(
         ),
     ]
     if s.estimated_annual_cost_saving_jpy:
-        line = f"     期待効果: 年 約{s.estimated_annual_cost_saving_jpy / 1e8:.2f}億円削減"
+        line = f"     期待効果: 年 約{format_jpy(s.estimated_annual_cost_saving_jpy, digits=2)}削減"
         if s.estimated_payback_years is not None:
             if s.estimated_payback_years < 0.1:
                 line += " / 回収 1年未満"

@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from core.export.citation import Citation, co2_factors_citation
+from core.export.formatter import format_jpy
 from core.static._freshness import all_warnings
 from core.static.co2_factors import CO2_FACTORS
 from core.static.industry_freight_coef import estimate_freight_tons
@@ -381,7 +382,7 @@ def build_simulation_summary(r: SimulationResult) -> str:
         "=== 施策効果シミュレーション（5施策同時試算）===",
         f"業種: {r.jsic_name}（{r.jsic_code}）",
         f"都道府県: {r.prefecture}",
-        f"年間売上: {r.revenue_jpy / 1e8:.1f}億円",
+        f"年間売上: {format_jpy(r.revenue_jpy)}",
         f"年間取扱量: 約 {r.annual_freight_tons:,.0f} トン（{tons_label}）",
         f"想定平均輸送距離: {r.avg_distance_km:.0f}km / "
         f"中長距離比率: {r.long_distance_share_pct:.0f}%",

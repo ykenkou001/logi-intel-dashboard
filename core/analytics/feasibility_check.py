@@ -23,6 +23,7 @@ from core.export.citation import (
     co2_factors_citation,
     logistics_efficiency_law_citation,
 )
+from core.export.formatter import format_jpy
 from core.playbook.filters import PlaybookFilter, filter_playbook
 from core.playbook.measures import (
     ALL_MEASURES,
@@ -286,7 +287,7 @@ def _assess_measure(
             level="yellow",
             primary_reason="自社規模が施策の最小推奨レンジ近傍（投資効率に注意）",
             detailed_reasons=[
-                f"自社売上 {profile.annual_revenue_jpy / 1e8:.1f}億円 vs "
+                f"自社売上 {format_jpy(profile.annual_revenue_jpy)} vs "
                 f"推奨最小 {_fmt_yen(measure.min_revenue_jpy)}",
                 "規模の経済が効きにくい可能性",
             ],
@@ -357,12 +358,12 @@ def _build_ineligible_verdict(
             measure=measure,
             level="red",
             primary_reason=(
-                f"売上未達（自社 {profile.annual_revenue_jpy / 1e8:.1f}億円 < "
-                f"推奨最小 {measure.min_revenue_jpy / 1e8:.1f}億円）"
+                f"売上未達（自社 {format_jpy(profile.annual_revenue_jpy)} < "
+                f"推奨最小 {format_jpy(measure.min_revenue_jpy)}）"
             ),
             detailed_reasons=[
                 f"施策の最小推奨売上: {_fmt_yen(measure.min_revenue_jpy)}",
-                f"自社売上: {profile.annual_revenue_jpy / 1e8:.1f}億円",
+                f"自社売上: {format_jpy(profile.annual_revenue_jpy)}",
                 "投資対効果が見込みにくい規模",
             ],
             recommendation="自社規模では効果発現が限定的。別の規模適合施策を検討",
@@ -488,7 +489,7 @@ def _build_overall_message(
 def _fmt_yen(jpy: int | None) -> str:
     if jpy is None:
         return "制約なし"
-    return f"{jpy / 1e8:.1f}億円"
+    return format_jpy(jpy)
 
 
 def _fmt_tons(tons: float | None) -> str:
