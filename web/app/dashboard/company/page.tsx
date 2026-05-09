@@ -12,6 +12,7 @@ import {
   type TemplatePurpose,
   type ToolResponse,
 } from "@/lib/api";
+import { useFetchTool } from "@/lib/useFetchTool";
 
 const PURPOSE_OPTIONS: ReadonlyArray<{
   value: TemplatePurpose;
@@ -44,41 +45,28 @@ const PURPOSE_OPTIONS: ReadonlyArray<{
 
 export default function CompanyPage() {
   const [purpose, setPurpose] = useState<TemplatePurpose>("annual");
-  const [templateResult, setTemplateResult] = useState<ToolResponse | null>(
-    null
-  );
-  const [loadResult, setLoadResult] = useState<ToolResponse | null>(null);
-  const [templateLoading, setTemplateLoading] = useState(false);
-  const [loadLoading, setLoadLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  // 独立した 2 操作はそれぞれ useFetchTool で管理
+  const template = useFetchTool<ToolResponse>();
+  const load = useFetchTool<ToolResponse>();
+
+  // 表示用エラー: バリデーション > テンプレ生成 > 取込 の順で表示
+  const error = validationError ?? template.error ?? load.error;
 
   async function handleGenerateTemplate() {
-    setTemplateLoading(true);
-    setError(null);
-    try {
-      setTemplateResult(await generateCompanyTemplate(purpose));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "テンプレ生成失敗");
-    } finally {
-      setTemplateLoading(false);
-    }
+    setValidationError(null);
+    await template.run(() => generateCompanyTemplate(purpose));
   }
 
   async function handleUpload() {
     if (!file) {
-      setError("Excel ファイル（.xlsx）を選択してください");
+      setValidationError("Excel ファイル（.xlsx）を選択してください");
       return;
     }
-    setLoadLoading(true);
-    setError(null);
-    try {
-      setLoadResult(await loadCompanyProfile(file));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "アップロード失敗");
-    } finally {
-      setLoadLoading(false);
-    }
+    setValidationError(null);
+    await load.run(() => loadCompanyProfile(file));
   }
 
   return (
@@ -161,10 +149,10 @@ export default function CompanyPage() {
           </fieldset>
           <button
             onClick={handleGenerateTemplate}
-            disabled={templateLoading}
+            disabled={template.loading}
             className="flex items-center gap-2 bg-[#1F4E79] text-white rounded-lg px-5 py-2.5 font-bold text-sm hover:bg-[#2E73AC] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {templateLoading ? (
+            {template.loading ? (
               <>
                 <Spinner /> 生成中...
               </>
@@ -172,8 +160,8 @@ export default function CompanyPage() {
               `Excel テンプレを生成（${purpose}）`
             )}
           </button>
-          {templateResult && (
-            <ToolResponseDisplay response={templateResult} />
+          {template.data && (
+            <ToolResponseDisplay response={template.data} />
           )}
         </div>
       </div>
@@ -233,10 +221,10 @@ export default function CompanyPage() {
           </div>
           <button
             onClick={handleUpload}
-            disabled={loadLoading || !file}
+            disabled={load.loading || !file}
             className="flex items-center gap-2 bg-[#1F4E79] text-white rounded-lg px-5 py-2.5 font-bold text-sm hover:bg-[#2E73AC] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loadLoading ? (
+            {load.loading ? (
               <>
                 <Spinner /> アップロード中...
               </>
@@ -244,7 +232,7 @@ export default function CompanyPage() {
               "アップロードして取込"
             )}
           </button>
-          {loadResult && <ToolResponseDisplay response={loadResult} />}
+          {load.data && <ToolResponseDisplay response={load.data} />}
         </div>
       </div>
 
