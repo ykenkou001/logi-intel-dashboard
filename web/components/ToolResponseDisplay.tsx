@@ -90,7 +90,7 @@ export function ToolResponseDisplay({
                 <a
                   key={key}
                   href={fileDownloadUrl(path)}
-                  target="_blank"
+                  download={String(path).split("/").pop() ?? ""}
                   rel="noreferrer"
                   className={`flex items-center gap-3 border rounded-lg p-3 transition-colors duration-150 ${cfg.bg}`}
                 >

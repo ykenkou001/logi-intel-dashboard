@@ -26,7 +26,9 @@ _MEDIA_TYPES = {
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ".pdf": "application/pdf",
-    ".md": "text/markdown; charset=utf-8",
+    # MD はブラウザが直接表示しがちなので octet-stream で DL を強制する
+    ".md": "application/octet-stream",
+    ".html": "text/html; charset=utf-8",
     ".json": "application/json",
 }
 
@@ -70,4 +72,5 @@ async def download(file_path: str) -> FileResponse | RedirectResponse:
         path=candidate,
         media_type=media_type,
         filename=candidate.name,
+        content_disposition_type="attachment",
     )

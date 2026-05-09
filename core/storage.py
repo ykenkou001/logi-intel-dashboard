@@ -145,9 +145,15 @@ class S3Storage:
             key = self.prefix + key_or_path.lstrip("/")
         else:
             key = key_or_path
+        # ブラウザでプレビュー表示されず即 DL されるよう attachment を強制
+        filename = Path(key).name
         return self._s3.generate_presigned_url(
             "get_object",
-            Params={"Bucket": self.bucket, "Key": key},
+            Params={
+                "Bucket": self.bucket,
+                "Key": key,
+                "ResponseContentDisposition": f'attachment; filename="{filename}"',
+            },
             ExpiresIn=self.presigned_ttl,
         )
 

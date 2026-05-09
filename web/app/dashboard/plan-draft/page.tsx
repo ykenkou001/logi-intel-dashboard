@@ -182,7 +182,7 @@ export default function PlanDraftPage() {
                   <a
                     key={key}
                     href={fileDownloadUrl(path)}
-                    target="_blank"
+                    download={String(path).split("/").pop() ?? ""}
                     rel="noreferrer"
                     className={`flex items-center gap-3 border rounded-lg p-4 transition-colors duration-150 ${cfg.bg}`}
                   >
