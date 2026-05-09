@@ -24,6 +24,8 @@ from core.io.template_writer import (
     TemplatePurpose,
     write_company_template,
 )
+from core.static.jsic import category_of
+from core.static.sample_company import ALL_SAMPLES
 
 router = APIRouter(prefix="/api/v1/company", tags=["company"])
 
@@ -156,28 +158,16 @@ async def load_company(file: UploadFile = _UPLOAD_FILE) -> ToolResponseModel:
 
 @router.get("/samples", response_model=list[dict[str, str]])
 async def list_samples() -> list[dict[str, str]]:
-    """利用可能なサンプル企業 ID 一覧を返す。
+    """利用可能なサンプル企業一覧を返す。
 
-    実データを取込済みの場合は outputs/profiles/ にも JSON が存在するが、
-    本エンドポイントはサンプル3社のみを返す（実データ列挙は別エンドポイントで対応）。
+    ALL_SAMPLES から動的生成することで、サンプル追加時の抜け漏れを構造的に防ぐ。
     """
     return [
         {
-            "company_id": "sample_mfg_01",
-            "name": "電子部品製造（架空）",
-            "industry": "manufacturing",
-            "data_source": "sample",
-        },
-        {
-            "company_id": "sample_wholesale_01",
-            "name": "インテリア卸売（架空）",
-            "industry": "wholesale",
-            "data_source": "sample",
-        },
-        {
-            "company_id": "sample_chain_01",
-            "name": "コンビニ本部（架空）",
-            "industry": "chain_franchise",
-            "data_source": "sample",
-        },
+            "company_id": profile.company_id,
+            "name": profile.name,
+            "industry": category_of(profile.jsic_code) or "other",
+            "data_source": profile.data_source,
+        }
+        for profile in ALL_SAMPLES.values()
     ]

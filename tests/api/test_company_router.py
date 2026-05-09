@@ -12,14 +12,24 @@ from api.main import app
 client = TestClient(app)
 
 
-def test_samples_returns_three_entries() -> None:
+def test_samples_returns_all_registered_entries() -> None:
     resp = client.get("/api/v1/company/samples")
     assert resp.status_code == 200
     body = resp.json()
     assert isinstance(body, list)
-    assert len(body) == 3
+    assert len(body) == 4
     ids = {item["company_id"] for item in body}
-    assert ids == {"sample_mfg_01", "sample_wholesale_01", "sample_chain_01"}
+    assert ids == {
+        "sample_mfg_01",
+        "sample_wholesale_01",
+        "sample_retail_01",
+        "sample_chain_01",
+    }
+    industries = {item["company_id"]: item["industry"] for item in body}
+    assert industries["sample_mfg_01"] == "manufacturing"
+    assert industries["sample_wholesale_01"] == "wholesale"
+    assert industries["sample_retail_01"] == "retail"
+    assert industries["sample_chain_01"] == "chain_franchise"
 
 
 def test_template_generation_writes_xlsx() -> None:
