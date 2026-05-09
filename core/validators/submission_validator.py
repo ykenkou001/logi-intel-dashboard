@@ -21,6 +21,7 @@ from typing import Literal
 
 from docx import Document
 
+from core.analytics._summary import SummaryResult
 from core.analytics.plan_draft import PlanDraftResult, generate_plan_draft
 from core.export.formatter import format_jpy
 from core.legal.article_resolver import expected_plan_article_number
@@ -729,10 +730,9 @@ def _to_code(label: str) -> str:
     return mapping.get(label, label.encode("ascii", "ignore").decode() or "UNKNOWN")
 
 
-def build_validation_summary(report: ValidationReport) -> str:
+def build_validation_summary(report: ValidationReport) -> SummaryResult:
     """ValidationReport から CLO 向けサマリーテキストを生成する。"""
     lines: list[str] = [
-        f"=== 提出前バリデータ結果: {report.company_name} ===",
         f"総合判定: {'✅ PASS（提出可）' if report.overall_pass else '❌ FAIL（提出前修正必須）'}",
         f"法定様式準拠率: {report.compliance_score_pct:.1f}%",
         f"  エラー: {len(report.errors())} 件 / 警告: {len(report.warnings())} 件",
@@ -785,4 +785,7 @@ def build_validation_summary(report: ValidationReport) -> str:
             "  3. 提出は 2026年10月末まで（罰則: 計画未達は勧告・命令・企業名公表）",
         ]
 
-    return "\n".join(lines)
+    return SummaryResult(
+        title=f"=== 提出前バリデータ結果: {report.company_name} ===",
+        body=lines,
+    )

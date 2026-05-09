@@ -20,6 +20,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Literal
 
+from core.analytics._summary import SummaryResult
 from core.analytics.benchmark import INDUSTRY_AVG_LOGISTICS_RATIO
 from core.analytics.measure_eval import evaluate_measures
 from core.export.citation import (
@@ -433,13 +434,12 @@ def _format_co2(kg: float) -> str:
     return f"{kg:,.0f}kg"
 
 
-def build_scenario_summary(r: ScenarioSimResult) -> str:
+def build_scenario_summary(r: ScenarioSimResult) -> SummaryResult:
     """ScenarioSimResult から CLO 向けサマリーテキストを生成する。"""
     source_label = (
         "引数指定" if r.measure_selection_source == "explicit" else "Step 2 Top 3 自動採用"
     )
     lines: list[str] = [
-        f"=== シナリオシミュレーション: {r.company_name} ===",
         f"業種: {r.industry} / 選択施策: {len(r.selected_measures)} 件 ({source_label})",
         "",
         "【選択施策】",
@@ -557,7 +557,10 @@ def build_scenario_summary(r: ScenarioSimResult) -> str:
         ),
     ]
 
-    return "\n".join(lines)
+    return SummaryResult(
+        title=f"=== シナリオシミュレーション: {r.company_name} ===",
+        body=lines,
+    )
 
 
 __all__ = [

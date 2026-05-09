@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.analytics._summary import SummaryResult
 from core.export.formatter import format_jpy
 from core.playbook.measures import (
     ALL_MEASURES,
@@ -124,14 +125,16 @@ def build_filter_from_profile(
 def build_search_summary(
     measures: list[PlaybookMeasure],
     filter_: PlaybookFilter | None = None,
-) -> str:
+) -> SummaryResult:
     """検索結果のサマリーテキストを生成する（MCP ツール向け）。"""
     if not measures:
-        return "=== プレイブック検索結果: 該当施策なし ===\n条件を緩和してください。"
+        return SummaryResult(
+            title="=== プレイブック検索結果: 該当施策なし ===",
+            body=["条件を緩和してください。"],
+        )
 
-    lines: list[str] = [
-        f"=== プレイブック検索結果: {len(measures)} 件 ===",
-    ]
+    title = f"=== プレイブック検索結果: {len(measures)} 件 ==="
+    lines: list[str] = []
     if filter_ is not None:
         cond_parts: list[str] = []
         if filter_.industry:
@@ -194,7 +197,7 @@ def build_search_summary(
                 lines.append(f"    - {p}")
         lines.append("")
 
-    return "\n".join(lines)
+    return SummaryResult(title=title, body=lines)
 
 
 __all__ = [

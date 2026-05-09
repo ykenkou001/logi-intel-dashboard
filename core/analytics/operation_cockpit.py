@@ -33,6 +33,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.analytics._summary import SummaryResult
 from core.analytics.feasibility_check import (
     FeasibilityResult,
     TargetReachability,
@@ -481,7 +482,7 @@ def build_daily_cockpit(
     )
 
 
-def build_cockpit_summary(result: CockpitResult) -> str:
+def build_cockpit_summary(result: CockpitResult) -> SummaryResult:
     """CockpitResult から経営会議用 1 ページ要約テキストを生成する。
 
     overall_health バナー → 3 件の headline + rationale + suggested_action →
@@ -495,9 +496,10 @@ def build_cockpit_summary(result: CockpitResult) -> str:
         "measure_pick": "軸C 今週決める施策",
     }
 
+    title = (
+        f"=== CLO 今日の3判断: {result.company_name} ({result.generated_at.date().isoformat()}) ==="
+    )
     lines: list[str] = [
-        f"=== CLO 今日の3判断: {result.company_name} "
-        f"({result.generated_at.date().isoformat()}) ===",
         f"【総合健全性】 {health_marks[result.overall_health]} {result.overall_health.upper()}"
         f" — {result.one_line_summary}",
         f"データ出所: {result.data_source}",
@@ -549,7 +551,7 @@ def build_cockpit_summary(result: CockpitResult) -> str:
         for w in result.freshness_warnings[:3]:
             lines.append(f"  ⚠ {w}")
 
-    return "\n".join(lines)
+    return SummaryResult(title=title, body=lines)
 
 
 # ---------------------------------------------------------------------------
