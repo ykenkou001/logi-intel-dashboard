@@ -12,32 +12,26 @@ import {
   type SampleCompany,
   type ToolResponse,
 } from "@/lib/api";
+import { useFetchTool } from "@/lib/useFetchTool";
 
 export default function MeasureEvalPage() {
   const [samples, setSamples] = useState<SampleCompany[]>([]);
   const [companyId, setCompanyId] = useState("sample_mfg_01");
-  const [result, setResult] = useState<ToolResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [samplesError, setSamplesError] = useState<string | null>(null);
+  const { data: result, loading, error: fetchError, run } = useFetchTool<ToolResponse>();
+  const error = samplesError ?? fetchError;
 
   useEffect(() => {
     fetchSamples()
       .then(setSamples)
       .catch((e) =>
-        setError(e instanceof Error ? e.message : "サンプル取得失敗")
+        setSamplesError(e instanceof Error ? e.message : "サンプル取得失敗")
       );
   }, []);
 
   async function handleSubmit() {
-    setLoading(true);
-    setError(null);
-    try {
-      setResult(await fetchMeasureEval(companyId));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "通信エラー");
-    } finally {
-      setLoading(false);
-    }
+    setSamplesError(null);
+    await run(() => fetchMeasureEval(companyId));
   }
 
   return (

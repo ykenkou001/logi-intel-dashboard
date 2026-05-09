@@ -15,6 +15,7 @@ import {
   type ToolResponse,
 } from "@/lib/api";
 import { SEVERITY_EMOJI } from "@/lib/labels";
+import { useFetchTool } from "@/lib/useFetchTool";
 
 const TIME_SLOT_LABEL_JP: Record<string, string> = {
   morning: "朝便（6-10時）",
@@ -43,9 +44,7 @@ function findCell(
 export default function WaitHeatmapPage() {
   const [samples, setSamples] = useState<SampleCompany[]>([]);
   const [companyId, setCompanyId] = useState<string>("sample_retail_01");
-  const [result, setResult] = useState<ToolResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { data: result, loading, error, run } = useFetchTool<ToolResponse>();
 
   useEffect(() => {
     fetchSamples()
@@ -54,15 +53,7 @@ export default function WaitHeatmapPage() {
   }, []);
 
   async function handleSubmit() {
-    setLoading(true);
-    setError(null);
-    try {
-      setResult(await fetchWaitHeatmap(companyId));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "通信エラー");
-    } finally {
-      setLoading(false);
-    }
+    await run(() => fetchWaitHeatmap(companyId));
   }
 
   const heatmap = useMemo<HeatmapMetadata | null>(() => {

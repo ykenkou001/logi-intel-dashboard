@@ -19,6 +19,7 @@ import {
   type ToolResponse,
 } from "@/lib/api";
 import { formatTargetValue, freqLabel, INDUSTRY_LABEL } from "@/lib/labels";
+import { useFetchTool } from "@/lib/useFetchTool";
 
 function scoreColor(score: number): string {
   if (score >= 80) return "bg-emerald-50 border-emerald-300 text-emerald-900";
@@ -158,10 +159,11 @@ function MissingMeasureList({
 export default function StandardizationPage() {
   const [samples, setSamples] = useState<SampleCompany[]>([]);
   const [companyId, setCompanyId] = useState<string>("sample_mfg_01");
-  const [scoreResult, setScoreResult] = useState<ToolResponse | null>(null);
-  const [pkgResult, setPkgResult] = useState<ToolResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // tuple data type で並列 fetch を 1 フックに集約（score + 業種別パッケージ）
+  const { data, loading, error, run } = useFetchTool<
+    [ToolResponse, ToolResponse | null]
+  >();
+  const [scoreResult, pkgResult] = data ?? [null, null];
 
   useEffect(() => {
     fetchSamples()
@@ -170,21 +172,14 @@ export default function StandardizationPage() {
   }, []);
 
   async function handleSubmit() {
-    setLoading(true);
-    setError(null);
-    try {
+    await run(async () => {
       // 並列フェッチ：F2 スコア + 業種別パッケージ（差分テーブルで KPI 詳細を出すため）
       const [score, pkg] = await Promise.all([
         fetchStandardizationScore(companyId),
         fetchIndustryPackage(companyId).catch(() => null),
       ]);
-      setScoreResult(score);
-      setPkgResult(pkg);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "通信エラー");
-    } finally {
-      setLoading(false);
-    }
+      return [score, pkg];
+    });
   }
 
   const score = useMemo<StandardizationScoreResult | null>(() => {

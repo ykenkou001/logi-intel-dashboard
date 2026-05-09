@@ -8,6 +8,7 @@ import {
   type SampleCompany,
   type ToolResponse,
 } from "@/lib/api";
+import { useFetchTool } from "@/lib/useFetchTool";
 
 const FILE_CONFIG: Record<
   string,
@@ -42,29 +43,22 @@ const FILE_CONFIG: Record<
 export default function PlanDraftPage() {
   const [samples, setSamples] = useState<SampleCompany[]>([]);
   const [companyId, setCompanyId] = useState("sample_mfg_01");
-  const [result, setResult] = useState<ToolResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [samplesError, setSamplesError] = useState<string | null>(null);
+  const { data: result, loading, error: fetchError, run, reset } = useFetchTool<ToolResponse>();
+  const error = samplesError ?? fetchError;
 
   useEffect(() => {
     fetchSamples()
       .then(setSamples)
       .catch((e) =>
-        setError(e instanceof Error ? e.message : "サンプル取得失敗")
+        setSamplesError(e instanceof Error ? e.message : "サンプル取得失敗")
       );
   }, []);
 
   async function handleSubmit() {
-    setLoading(true);
-    setError(null);
-    setResult(null);
-    try {
-      setResult(await generatePlanDraft(companyId));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "計画書生成失敗");
-    } finally {
-      setLoading(false);
-    }
+    setSamplesError(null);
+    reset();
+    await run(() => generatePlanDraft(companyId));
   }
 
   return (
