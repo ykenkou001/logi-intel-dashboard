@@ -6,7 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from core.export import docx_form3_writer, excel_writer, markdown_writer, ppt_writer
+from core.export import (
+    docx_form3_writer,
+    excel_writer,
+    html_writer,
+    markdown_writer,
+    ppt_writer,
+)
 from core.export.citation import Citation, estat_citation
 
 
@@ -48,6 +54,60 @@ def test_write_clo_plan_markdown_includes_executive_summary() -> None:
     content = path.read_text(encoding="utf-8")
     assert "エグゼクティブサマリー" in content
     assert "経営層向け要約" in content
+
+
+# ---- html_writer ----
+
+
+def test_write_clo_plan_html_is_self_contained() -> None:
+    """生成 HTML は外部 CSS/JS 参照なしで開けること。
+
+    社内メールに添付して誰でもダブルクリックで開ける運用が前提。
+    """
+    path = html_writer.write_clo_plan_draft(
+        company_name="テスト株式会社",
+        company_id="testco",
+        plan_period="2026〜2030",
+        executive_summary="営業利益+5億円・CO2削減2,400t",
+        sections=[("Step 1: ベンチマーク", "業界平均比 +12%")],
+        citations=[
+            Citation(label="経済センサス2021", url="https://example.com/estat"),
+        ],
+    )
+    assert path.exists()
+    assert path.suffix == ".html"
+    content = path.read_text(encoding="utf-8")
+    # self-contained の証拠: 外部 CSS/JS の参照がない
+    assert "<link rel=\"stylesheet\"" not in content
+    assert "<script src=" not in content
+    # 主要要素
+    assert "<!DOCTYPE html>" in content
+    assert "テスト株式会社" in content
+    assert "計画期間" in content
+    assert "営業利益+5億円" in content
+    assert "Step 1: ベンチマーク" in content
+    assert "業界平均比 +12%" in content
+    # 出典は <a target="_blank"> でリンク化
+    assert 'href="https://example.com/estat"' in content
+    assert 'target="_blank"' in content
+
+
+def test_write_clo_plan_html_escapes_user_content() -> None:
+    """会社名や本文に含まれる HTML 特殊文字がエスケープされる。"""
+    path = html_writer.write_clo_plan_draft(
+        company_name="A&B<script>株式会社",
+        company_id="testco",
+        plan_period="2026〜2030",
+        executive_summary="<img src=x onerror=alert(1)>",
+        sections=[("Step", "</style><script>evil()</script>")],
+        citations=[Citation(label="出典", url="https://example.com")],
+    )
+    content = path.read_text(encoding="utf-8")
+    # 危険なタグはエスケープされていること
+    assert "<script>" not in content
+    assert "<img src=x" not in content
+    # エスケープ済みの形では含まれていること
+    assert "A&amp;B&lt;script&gt;" in content
 
 
 # ---- excel_writer ----

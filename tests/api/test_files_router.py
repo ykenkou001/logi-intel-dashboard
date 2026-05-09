@@ -26,8 +26,17 @@ def sample_output() -> Iterator[Path]:
 def test_download_existing_markdown(sample_output: Path) -> None:
     resp = client.get(f"/api/v1/files/markdown/{sample_output.name}")
     assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("text/markdown")
+    # MD はブラウザで直接表示されないよう octet-stream で配信される
+    assert resp.headers["content-type"] == "application/octet-stream"
     assert "本文" in resp.text
+
+
+def test_download_sets_attachment_disposition(sample_output: Path) -> None:
+    """ブラウザがプレビュー表示せず即 DL するよう attachment を強制する。"""
+    resp = client.get(f"/api/v1/files/markdown/{sample_output.name}")
+    assert resp.status_code == 200
+    assert resp.headers["content-disposition"].startswith("attachment;")
+    assert sample_output.name in resp.headers["content-disposition"]
 
 
 def test_download_missing_file_returns_404() -> None:

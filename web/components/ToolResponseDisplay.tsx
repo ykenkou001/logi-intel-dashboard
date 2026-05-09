@@ -25,9 +25,15 @@ const FILE_CONFIG: Record<
     color: "text-green-700",
     bg: "bg-green-50 border-green-200 hover:bg-green-100",
   },
+  html: {
+    label: "HTML",
+    sub: "HTML（詳細閲覧・印刷向け）",
+    color: "text-purple-700",
+    bg: "bg-purple-50 border-purple-200 hover:bg-purple-100",
+  },
   markdown: {
     label: "MD",
-    sub: "Markdown",
+    sub: "Markdown（再編集用）",
     color: "text-gray-700",
     bg: "bg-gray-50 border-gray-200 hover:bg-gray-100",
   },
@@ -90,7 +96,7 @@ export function ToolResponseDisplay({
                 <a
                   key={key}
                   href={fileDownloadUrl(path)}
-                  target="_blank"
+                  download={String(path).split("/").pop() ?? ""}
                   rel="noreferrer"
                   className={`flex items-center gap-3 border rounded-lg p-3 transition-colors duration-150 ${cfg.bg}`}
                 >
