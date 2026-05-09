@@ -15,6 +15,7 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 from api.routers._helpers import to_model
 from api.schemas.responses import ToolResponseModel
+from core.export.formatter import format_jpy
 from core.export.response import ToolResponse
 from core.io.company_loader import load_company_profile_from_excel
 from core.io.company_store import save_company_profile
@@ -138,7 +139,7 @@ async def load_company(file: UploadFile = _UPLOAD_FILE) -> ToolResponseModel:
         f"company_id: {profile.company_id}\n"
         f"会社名: {profile.name}\n"
         f"業種: {profile.main_business} (JSIC {profile.jsic_code})\n"
-        f"年間売上: {profile.annual_revenue_jpy / 1e8:.1f} 億円\n"
+        f"年間売上: {format_jpy(profile.annual_revenue_jpy)}\n"
         f"年間取扱量: {profile.annual_freight_tons_total:,.0f} トン\n"
         f"連鎖化事業者: {'はい' if profile.is_chain_franchise else 'いいえ'}\n"
         f"拠点数: {len(profile.sites)} 件\n"

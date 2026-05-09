@@ -83,6 +83,7 @@ from core.export.citation import (
     Citation,
     logistics_efficiency_law_citation,
 )
+from core.export.formatter import format_jpy
 from core.export.ppt_writer import write_clo_executive_brief
 from core.export.response import ToolResponse
 from core.io.company_loader import (
@@ -204,20 +205,29 @@ def register_tools(mcp: FastMCP) -> None:
         fin_result = translate_to_pnl_impact(profile, sim_result)
 
         # KPI 4 行（金額換算）+ プロフィール 3 行
-        op_profit_oku = (fin_result.total_operating_profit_increase_jpy * 0.7) / 1e8
+        op_standard_str = format_jpy(
+            fin_result.total_operating_profit_increase_jpy * 0.7,
+            digits=2,
+            with_sign=True,
+        )
         co2_t = (sim_result.total_co2_reduction_kg * 0.7) / 1000
-        npv_oku = fin_result.total_5y_npv_jpy / 1e8
-        carbon_low_m = fin_result.total_carbon_avoidance_jpy_low / 1e6
-        carbon_high_m = fin_result.total_carbon_avoidance_jpy_high / 1e6
+        npv_str = format_jpy(fin_result.total_5y_npv_jpy, digits=2)
+        carbon_low_str = format_jpy(
+            fin_result.total_carbon_avoidance_jpy_low, unit="million", digits=0
+        )
+        carbon_high_str = format_jpy(
+            fin_result.total_carbon_avoidance_jpy_high, unit="million", digits=0
+        )
+        revenue_str = format_jpy(profile.annual_revenue_jpy, digits=0)
         executive_summary = [
-            f"営業利益(標準): +{op_profit_oku:.2f}億円/年",
+            f"営業利益(標準): {op_standard_str}/年",
             f"CO2削減(標準): 約 {co2_t:,.0f}トン-CO2/年",
-            f"炭素価格回避: {carbon_low_m:.0f}〜{carbon_high_m:.0f}百万円/年",
-            f"5年累積NPV: 約 {npv_oku:.2f}億円 (割引率3%)",
+            f"炭素価格回避: {carbon_low_str}〜{carbon_high_str}/年",
+            f"5年累積NPV: 約 {npv_str} (割引率3%)",
             f"会社名: {profile.name}（JSIC {profile.jsic_code}）",
             f"CLO: {profile.clo_name} / 計画期間 "
             f"FY{profile.plan_period_start_fy}〜FY{profile.plan_period_end_fy}",
-            f"年間売上 {profile.annual_revenue_jpy / 1e8:.0f}億円 / "
+            f"年間売上 {revenue_str} / "
             f"取扱量 {profile.annual_freight_tons_total:,.0f}トン / "
             f"data_source={profile.data_source}",
         ]
@@ -225,9 +235,9 @@ def register_tools(mcp: FastMCP) -> None:
         # 「やる」3 件: measure_eval Top 3
         actions_to_pursue: list[str] = []
         for s in eval_result.top_recommendations[:3]:
-            cost_oku = (s.estimated_annual_cost_saving_jpy or 0) / 1e8
+            cost_str = format_jpy(s.estimated_annual_cost_saving_jpy or 0, digits=2, with_sign=True)
             actions_to_pursue.append(
-                f"{s.measure.name}（年 +{cost_oku:.2f}億円・スコア{s.total_score:.0f}）"
+                f"{s.measure.name}（年 {cost_str}・スコア{s.total_score:.0f}）"
             )
 
         # 「やらない」3 件: feasibility=red を優先、次に bottom_candidates
@@ -1114,7 +1124,7 @@ def register_tools(mcp: FastMCP) -> None:
             f"company_id: {profile.company_id}\n"
             f"会社名: {profile.name}\n"
             f"業種: {profile.main_business} (JSIC {profile.jsic_code})\n"
-            f"年間売上: {profile.annual_revenue_jpy / 1e8:.1f} 億円\n"
+            f"年間売上: {format_jpy(profile.annual_revenue_jpy)}\n"
             f"年間取扱量: {profile.annual_freight_tons_total:,.0f} トン\n"
             f"連鎖化事業者: {'はい' if profile.is_chain_franchise else 'いいえ'}\n"
             f"拠点数: {len(profile.sites)} 件\n"
