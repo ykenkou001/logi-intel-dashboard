@@ -483,29 +483,32 @@ def _build_ppt_slides(
     slides: list[SlideContent] = [
         SlideContent(
             title="業界ベンチマーク",
-            body_lines=build_benchmark_summary(benchmark).split("\n")[2:],
+            # benchmark の body[0] は「業種: ...」行で、スライドタイトルと重複するためスキップ
+            body_lines=list(build_benchmark_summary(benchmark).body[1:]),
         ),
         SlideContent(
             title="ドライバー需給ギャップ",
-            body_lines=build_driver_gap_summary(driver_gap).split("\n")[1:],
+            body_lines=list(build_driver_gap_summary(driver_gap).body),
         ),
         SlideContent(
             title="特定荷主3区分 適用判定",
-            body_lines=build_eligibility_summary(
-                result=eligibility,
-                jsic_code=profile.jsic_code,
-                annual_revenue_jpy=profile.annual_revenue_jpy,
-                annual_freight_tons_total=profile.annual_freight_tons_total,
-                is_chain_franchise=profile.is_chain_franchise,
-            ).split("\n")[1:],
+            body_lines=list(
+                build_eligibility_summary(
+                    result=eligibility,
+                    jsic_code=profile.jsic_code,
+                    annual_revenue_jpy=profile.annual_revenue_jpy,
+                    annual_freight_tons_total=profile.annual_freight_tons_total,
+                    is_chain_franchise=profile.is_chain_franchise,
+                ).body
+            ),
         ),
         SlideContent(
             title="数値目標提案",
-            body_lines=build_target_proposal_summary(target_proposal).split("\n")[1:],
+            body_lines=list(build_target_proposal_summary(target_proposal).body),
         ),
         SlideContent(
             title="施策効果シミュレーション",
-            body_lines=build_simulation_summary(simulation).split("\n")[1:],
+            body_lines=list(build_simulation_summary(simulation).body),
         ),
     ]
     # ─── Codex 指摘対応: 視覚化 3 枚を施策シミュレーションの直後に挿入 ───────────
@@ -514,7 +517,7 @@ def _build_ppt_slides(
     slides.append(
         SlideContent(
             title="認定事業 類似マッチング",
-            body_lines=build_certified_match_summary(certified_matches).split("\n")[1:],
+            body_lines=list(build_certified_match_summary(certified_matches).body),
         ),
     )
     if submission_checklist is not None:
