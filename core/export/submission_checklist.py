@@ -10,6 +10,7 @@
     - 様式第3 / 様式第4 / 様式第5 の使い分けを固定テキストで提示
     - Markdown / プレーンテキスト / 行リストの 3 形式で出力可能
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -57,13 +58,9 @@ class SubmissionChecklist:
         ]
         for item in self.items:
             check = "✅" if item.auto_value else "☐"
-            value_part = (
-                f"`{item.auto_value}`" if item.auto_value else "（自社で記載）"
-            )
+            value_part = f"`{item.auto_value}`" if item.auto_value else "（自社で記載）"
             req_mark = " (必須)" if item.required else " (任意)"
-            lines.append(
-                f"- {check} **{item.label}**{req_mark}: {item.guidance} → {value_part}"
-            )
+            lines.append(f"- {check} **{item.label}**{req_mark}: {item.guidance} → {value_part}")
         if self.form_usage_notes:
             lines += ["", "### 様式の使い分け", ""]
             lines.extend(f"- {note}" for note in self.form_usage_notes)
@@ -81,9 +78,7 @@ class SubmissionChecklist:
             check = "✅" if item.auto_value else "☐"
             value_part = item.auto_value if item.auto_value else "（自社で記載）"
             req_mark = "必須" if item.required else "任意"
-            lines.append(
-                f"  {check} {item.label} [{req_mark}]: {item.guidance} → {value_part}"
-            )
+            lines.append(f"  {check} {item.label} [{req_mark}]: {item.guidance} → {value_part}")
         if self.form_usage_notes:
             lines += ["", "  様式の使い分け:"]
             lines.extend(f"  ・{note}" for note in self.form_usage_notes)
@@ -168,11 +163,13 @@ def build_submission_checklist(
     ]
 
     if must_appoint_clo:
-        items.append(ChecklistItem(
-            label="CLO 役職・氏名",
-            guidance="物流統括管理者（役員級）の役職・氏名を記載",
-            auto_value=clo_name,
-        ))
+        items.append(
+            ChecklistItem(
+                label="CLO 役職・氏名",
+                guidance="物流統括管理者（役員級）の役職・氏名を記載",
+                auto_value=clo_name,
+            )
+        )
 
     submission_method = "e-Gov 電子申請（GビズID プライム または GビズID メンバー）"
 

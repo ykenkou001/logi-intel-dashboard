@@ -9,6 +9,7 @@
     - LOGI_STORAGE_BACKEND=s3 のときは保存後に S3 にも複製、読出時は S3 から優先
       フェッチする（Lambda 上では /tmp はリクエスト間で共有されないため）。
 """
+
 from __future__ import annotations
 
 import os

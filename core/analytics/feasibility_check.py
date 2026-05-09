@@ -11,6 +11,7 @@ CLO が無理筋な計画を提出して罰則リスク（勧告→命令→企�
     - KPI 到達可能性として「積載率 38→50%」が指定目標年に届くかを業界実績と比較
     - 「やめておけ」のメッセージは具体的に（経営判断材料として）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -136,23 +137,27 @@ def check_feasibility(
     is_chain = profile.is_chain_franchise
 
     # まず業種・規模で適用可能な施策を抽出
-    eligible = filter_playbook(filter_=PlaybookFilter(
-        industry=industry,
-        revenue_jpy=profile.annual_revenue_jpy,
-        freight_tons=profile.annual_freight_tons_total,
-    ))
+    eligible = filter_playbook(
+        filter_=PlaybookFilter(
+            industry=industry,
+            revenue_jpy=profile.annual_revenue_jpy,
+            freight_tons=profile.annual_freight_tons_total,
+        )
+    )
 
     # 適用外施策も含めて全施策に verdict を付与（除外理由を明示するため）
     verdicts: list[FeasibilityVerdict] = []
     eligible_ids = {m.measure_id for m in eligible}
     for m in ALL_MEASURES:
-        verdicts.append(_assess_measure(
-            measure=m,
-            profile=profile,
-            available_resources=resources,
-            is_eligible_by_scale=m.measure_id in eligible_ids,
-            is_chain=is_chain,
-        ))
+        verdicts.append(
+            _assess_measure(
+                measure=m,
+                profile=profile,
+                available_resources=resources,
+                is_eligible_by_scale=m.measure_id in eligible_ids,
+                is_chain=is_chain,
+            )
+        )
 
     # KPI 到達可能性
     kpi_reachability = [
@@ -332,16 +337,11 @@ def _build_ineligible_verdict(
     industry = category_of(profile.jsic_code) or "other"
 
     # 1. 業種非適合
-    if (
-        measure.applicable_industries
-        and industry not in measure.applicable_industries
-    ):
+    if measure.applicable_industries and industry not in measure.applicable_industries:
         return FeasibilityVerdict(
             measure=measure,
             level="red",
-            primary_reason=(
-                f"業種非適合（自社業種 {industry} は施策の対象外）"
-            ),
+            primary_reason=(f"業種非適合（自社業種 {industry} は施策の対象外）"),
             detailed_reasons=[
                 f"施策の対象業種: {', '.join(measure.applicable_industries)}",
                 f"自社業種: {industry}",
@@ -352,10 +352,7 @@ def _build_ineligible_verdict(
         )
 
     # 2. 売上未達
-    if (
-        measure.min_revenue_jpy is not None
-        and profile.annual_revenue_jpy < measure.min_revenue_jpy
-    ):
+    if measure.min_revenue_jpy is not None and profile.annual_revenue_jpy < measure.min_revenue_jpy:
         return FeasibilityVerdict(
             measure=measure,
             level="red",
@@ -405,7 +402,8 @@ def _build_ineligible_verdict(
 
 
 def _is_borderline_scale(
-    measure: PlaybookMeasure, profile: CompanyProfile,
+    measure: PlaybookMeasure,
+    profile: CompanyProfile,
 ) -> bool:
     """規模が施策の min から +30% 以内ならボーダーライン判定。"""
     if measure.min_revenue_jpy:
@@ -423,9 +421,7 @@ def _assess_load_factor_reachability(target_year: int) -> TargetReachability:
     """積載率 38→50% 目標の到達可能性を業界実績と比較する。"""
     current_year = 2026  # 計画書提出年
     years_remaining = max(target_year - current_year, 1)
-    required_improvement = (
-        (_LOAD_FACTOR_TARGET_PCT - _LOAD_FACTOR_BASELINE_PCT) / years_remaining
-    )
+    required_improvement = (_LOAD_FACTOR_TARGET_PCT - _LOAD_FACTOR_BASELINE_PCT) / years_remaining
 
     industry_typical = _INDUSTRY_TYPICAL_LOAD_FACTOR_IMPROVEMENT_PP_PER_YEAR
 
@@ -463,17 +459,16 @@ def _assess_load_factor_reachability(target_year: int) -> TargetReachability:
 
 
 def _build_overall_message(
-    green: int, yellow: int, red: int,
+    green: int,
+    yellow: int,
+    red: int,
     kpi_reachability: list[TargetReachability],
 ) -> str:
     """全体メッセージを生成する。"""
-    parts: list[str] = [
-        f"実施推奨 {green} 件 / 条件付き {yellow} 件 / 再検討 {red} 件"
-    ]
+    parts: list[str] = [f"実施推奨 {green} 件 / 条件付き {yellow} 件 / 再検討 {red} 件"]
     if green == 0:
         parts.append(
-            "⚠️ 緑判定の施策がゼロ。"
-            "リソース整備（visualization_baseline 等）から着手すべき",
+            "⚠️ 緑判定の施策がゼロ。リソース整備（visualization_baseline 等）から着手すべき",
         )
     elif green >= 5:
         parts.append("十分な施策数が緑判定。CLO 計画書の充実度は高い")
@@ -485,9 +480,7 @@ def _build_overall_message(
                 "→ 目標年延長または目標値の見直しを推奨"
             )
         elif kpi.feasibility_level == "yellow":
-            parts.append(
-                f"⚠️ KPI「{kpi.kpi_name}」は複数施策の同時実施が必須"
-            )
+            parts.append(f"⚠️ KPI「{kpi.kpi_name}」は複数施策の同時実施が必須")
 
     return " / ".join(parts)
 

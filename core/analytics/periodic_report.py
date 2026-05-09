@@ -13,6 +13,7 @@
     - 提出実務チェックリスト（Codex 1 取込）を最終ページに統合
     - 連鎖化事業者は荷役等項目を docx_form5_writer 側で自動省略
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -117,9 +118,7 @@ async def generate_periodic_report(
         must_appoint_clo=plan.eligibility.must_appoint_clo,
     )
 
-    report_period = (
-        f"{report_fy}年度（{report_fy}年4月1日〜{report_fy + 1}年3月31日）"
-    )
+    report_period = f"{report_fy}年度（{report_fy}年4月1日〜{report_fy + 1}年3月31日）"
 
     sections = Form5Sections(
         company_name=profile.name,
@@ -172,12 +171,12 @@ def _build_compliance(
 
     # サンプル企業はいずれも改善基準告示の遵守を前提（実データはフェーズ4.0）
     return check_truck_driver_compliance(
-        daily_working_hours_max=12.5,        # 13h 基準内
-        annual_working_hours=2950.0,          # 3300h 基準内
-        annual_overtime_hours=850.0,          # 960h 基準内
+        daily_working_hours_max=12.5,  # 13h 基準内
+        annual_working_hours=2950.0,  # 3300h 基準内
+        annual_overtime_hours=850.0,  # 960h 基準内
         waiting_minutes_max=waiting_max,
         handling_minutes_max=handling_max,
-        rest_hours_min=11.0,                  # 原則 11h 遵守
+        rest_hours_min=11.0,  # 原則 11h 遵守
     )
 
 
@@ -191,9 +190,7 @@ def _build_progress_rows(plan: PlanDraftResult) -> list[ProgressRow]:
 
     # 数値目標 4 つに対する進捗（初年度想定で 30-50% 進捗）
     for t in plan.target_proposal.targets:
-        plan_target = (
-            f"{t.proposed_target:.1f}{t.proposed_target_unit}（{t.target_year}年目標）"
-        )
+        plan_target = f"{t.proposed_target:.1f}{t.proposed_target_unit}（{t.target_year}年目標）"
         if t.current_industry_avg is not None:
             actual_label = (
                 f"業界平均水準（{t.current_industry_avg:.1f}{t.current_industry_avg_unit}）"
@@ -201,29 +198,31 @@ def _build_progress_rows(plan: PlanDraftResult) -> list[ProgressRow]:
             )
         else:
             actual_label = "計測データを蓄積中（初年度・基準値設定段階）"
-        rows.append(ProgressRow(
-            measure_name=t.name,
-            plan_target=plan_target,
-            actual_result=actual_label,
-            status_mark="△ 継続対応",
-        ))
+        rows.append(
+            ProgressRow(
+                measure_name=t.name,
+                plan_target=plan_target,
+                actual_result=actual_label,
+                status_mark="△ 継続対応",
+            )
+        )
 
     # 主要施策（simulation）に対する初年度進捗
     for m in plan.simulation.measures[:3]:
         if m.cost_saving_jpy_per_year:
-            target_text = (
-                f"年間 約{m.cost_saving_jpy_per_year / 1e8:.2f}億円のコスト削減"
-            )
+            target_text = f"年間 約{m.cost_saving_jpy_per_year / 1e8:.2f}億円のコスト削減"
             actual_text = "初年度は試行導入。本格展開は 2027 年度以降"
         else:
             target_text = m.description[:40] + "…" if len(m.description) > 40 else m.description
             actual_text = "施策の実施計画策定中"
-        rows.append(ProgressRow(
-            measure_name=m.name,
-            plan_target=target_text,
-            actual_result=actual_text,
-            status_mark="△ 継続対応",
-        ))
+        rows.append(
+            ProgressRow(
+                measure_name=m.name,
+                plan_target=target_text,
+                actual_result=actual_text,
+                status_mark="△ 継続対応",
+            )
+        )
 
     return rows
 
@@ -237,8 +236,7 @@ def _build_citations(plan: PlanDraftResult) -> list[Citation]:
     if "chain_franchise" in plan.eligibility.categories:
         citations.append(logistics_efficiency_law_article65_citation())
     elif any(
-        c in plan.eligibility.categories
-        for c in ("first_class_shipper", "second_class_shipper")
+        c in plan.eligibility.categories for c in ("first_class_shipper", "second_class_shipper")
     ):
         citations.append(logistics_efficiency_law_article46_citation())
     if plan.eligibility.must_appoint_clo:
@@ -285,8 +283,7 @@ def build_periodic_report_summary(r: PeriodicReportResult) -> str:
         avg_wait = sum(w.average_minutes for w in r.wait_time_rows) / len(r.wait_time_rows)
         total_over = sum(w.over_2h_count for w in r.wait_time_rows)
         lines.append(
-            f"  荷待ち時間: 平均 {avg_wait:.0f}分 / 最大 {max_wait:.0f}分 "
-            f"/ 2時間超 {total_over}件"
+            f"  荷待ち時間: 平均 {avg_wait:.0f}分 / 最大 {max_wait:.0f}分 / 2時間超 {total_over}件"
         )
     else:
         lines.append("  荷待ち時間: 計測データなし（計測体制整備が必要）")
@@ -294,13 +291,9 @@ def build_periodic_report_summary(r: PeriodicReportResult) -> str:
     if r.handling_time_rows:
         max_h = max(h.max_minutes for h in r.handling_time_rows)
         avg_h = sum(h.average_minutes for h in r.handling_time_rows) / len(r.handling_time_rows)
-        lines.append(
-            f"  荷役等時間: 平均 {avg_h:.0f}分 / 最大 {max_h:.0f}分"
-        )
+        lines.append(f"  荷役等時間: 平均 {avg_h:.0f}分 / 最大 {max_h:.0f}分")
     elif "chain_franchise" in r.eligibility_categories:
-        lines.append(
-            "  荷役等時間: 連鎖化事業者は判断基準対象外（参考記載なし）"
-        )
+        lines.append("  荷役等時間: 連鎖化事業者は判断基準対象外（参考記載なし）")
 
     lines += [
         "",
@@ -333,10 +326,7 @@ def _format_data_source_note(data_source: DataSource) -> str:
     if data_source == "actual":
         return "※ 入力プロフィールは自社実績データ（actual）に基づく。"
     if data_source == "sample":
-        return (
-            "※ ⚠️ 入力プロフィールはデモ用架空企業（sample）。"
-            "経営判断・国交省提出には使用不可。"
-        )
+        return "※ ⚠️ 入力プロフィールはデモ用架空企業（sample）。経営判断・国交省提出には使用不可。"
     return (
         "※ 入力プロフィールは業界統計からの推計値（estimated）。"
         "提出前には自社実測データへの差し替えを推奨。"

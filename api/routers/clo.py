@@ -4,6 +4,7 @@
 MCP ツールと REST API で出力構造が完全に一致するため、Web フロントは MCP と同じ
 スキーマで表示できる。
 """
+
 from __future__ import annotations
 
 import uuid
@@ -214,14 +215,10 @@ async def executive_brief(company_id: str) -> ToolResponseModel:
         )
 
     red_verdicts = [v for v in feas_result.measure_verdicts if v.level == "red"][:3]
-    actions_to_skip: list[str] = [
-        f"{v.measure.name}（{v.primary_reason}）" for v in red_verdicts
-    ]
+    actions_to_skip: list[str] = [f"{v.measure.name}（{v.primary_reason}）" for v in red_verdicts]
     if len(actions_to_skip) < 3:
         for s in eval_result.bottom_candidates[: 3 - len(actions_to_skip)]:
-            actions_to_skip.append(
-                f"{s.measure.name}（{s.comparison_note or '優先度低'}）"
-            )
+            actions_to_skip.append(f"{s.measure.name}（{s.comparison_note or '優先度低'}）")
 
     citations: list[Citation] = []
     seen_urls: set[str] = set()
@@ -252,14 +249,14 @@ async def executive_brief(company_id: str) -> ToolResponseModel:
         *[f"  ✅ {a}" for a in actions_to_pursue],
         "",
         "【やらない】",
-        *([f"  🚫 {a}" for a in actions_to_skip] if actions_to_skip
-          else ["  （除外候補なし）"]),
+        *([f"  🚫 {a}" for a in actions_to_skip] if actions_to_skip else ["  （除外候補なし）"]),
     ]
 
-    warnings = list(dict.fromkeys(
-        [*eval_result.freshness_warnings, *feas_result.freshness_warnings,
-         *all_warnings()]
-    ))
+    warnings = list(
+        dict.fromkeys(
+            [*eval_result.freshness_warnings, *feas_result.freshness_warnings, *all_warnings()]
+        )
+    )
 
     response = ToolResponse(
         summary="\n".join(summary_lines),
@@ -743,13 +740,16 @@ class DecisionLogRequest(BaseModel):
     decided_by: str = Field(default="system", description="決定者（CLO 名 or 'system'）")
     rationale: str = Field(default="", description="決定の根拠（短文）")
     expected_effect_jpy: int | None = Field(
-        default=None, description="採用時の想定経営効果（円）",
+        default=None,
+        description="採用時の想定経営効果（円）",
     )
     review_due: date | None = Field(
-        default=None, description="次回レビュー期日（postpone/escalate 時）",
+        default=None,
+        description="次回レビュー期日（postpone/escalate 時）",
     )
     linked_alerts: list[str] = Field(
-        default_factory=list, description="H1 アラート ID への参照",
+        default_factory=list,
+        description="H1 アラート ID への参照",
     )
 
 
@@ -830,13 +830,15 @@ async def industry_package(company_id: str) -> ToolResponseModel:
         m = get_measure(mid)
         if m is None:
             continue
-        measure_details.append({
-            "measure_id": m.measure_id,
-            "name": m.name,
-            "description": m.description,
-            "form3_section": m.form3_section,
-            "measure_type": m.measure_type,
-        })
+        measure_details.append(
+            {
+                "measure_id": m.measure_id,
+                "name": m.name,
+                "description": m.description,
+                "form3_section": m.form3_section,
+                "measure_type": m.measure_type,
+            }
+        )
 
     chain_franchise_notice: dict[str, str] | None = None
     if base_industry == "chain_franchise":
@@ -873,7 +875,8 @@ async def industry_package(company_id: str) -> ToolResponseModel:
 
 
 @router.get(
-    "/standardization-score/{company_id}", response_model=ToolResponseModel,
+    "/standardization-score/{company_id}",
+    response_model=ToolResponseModel,
 )
 async def standardization_score(company_id: str) -> ToolResponseModel:
     """F2 標準化スコア（業種別 CLO 標準パッケージへの準拠度 0-100）を算出する。

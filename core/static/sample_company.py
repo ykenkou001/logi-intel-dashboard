@@ -15,6 +15,7 @@ CompanyProfile を構築してサンプル3社と同じインターフェース�
     - サンプル企業名・数値は架空であり、実在する企業とは無関係。
     - 公式記載事例集（core/templates/clo_plan_examples/）と業種コードを揃えてある。
 """
+
 from __future__ import annotations
 
 from typing import Literal
@@ -189,20 +190,29 @@ SAMPLE_MANUFACTURING = CompanyProfile(
     name="テクノパーツ製造株式会社（架空）",
     jsic_code="3159",
     main_business="その他の電子部品・デバイス製造業",
-    annual_revenue_jpy=85_000_000_000,    # 850 億円
+    annual_revenue_jpy=85_000_000_000,  # 850 億円
     annual_freight_tons_total=120_000.0,  # 12 万トン（特定第一種荷主該当）
-    operating_profit_jpy=5_950_000_000,   # 59.5 億円（営業利益率 7%）
+    operating_profit_jpy=5_950_000_000,  # 59.5 億円（営業利益率 7%）
     cost_of_goods_sold_jpy=63_750_000_000,  # 637.5 億円（売上原価率 75%）
     is_chain_franchise=False,
     fleet_count_owned=12,
     fleet_count_outsourced=180,
     sites=[
-        CompanySite(name="本社工場", site_type="factory",
-                    prefecture="愛知県", annual_freight_tons=70_000),
-        CompanySite(name="東日本物流センター", site_type="dc",
-                    prefecture="埼玉県", annual_freight_tons=30_000),
-        CompanySite(name="西日本物流センター", site_type="dc",
-                    prefecture="兵庫県", annual_freight_tons=20_000),
+        CompanySite(
+            name="本社工場", site_type="factory", prefecture="愛知県", annual_freight_tons=70_000
+        ),
+        CompanySite(
+            name="東日本物流センター",
+            site_type="dc",
+            prefecture="埼玉県",
+            annual_freight_tons=30_000,
+        ),
+        CompanySite(
+            name="西日本物流センター",
+            site_type="dc",
+            prefecture="兵庫県",
+            annual_freight_tons=20_000,
+        ),
     ],
     clo_name="専務執行役員 田中 雄一",
     plan_period_start_fy=2026,
@@ -266,22 +276,26 @@ SAMPLE_WHOLESALE = CompanyProfile(
     name="株式会社インテリアリンク商事（架空）",
     jsic_code="5514",
     main_business="室内装飾繊維品卸売業",
-    annual_revenue_jpy=42_000_000_000,    # 420 億円
+    annual_revenue_jpy=42_000_000_000,  # 420 億円
     annual_freight_tons_total=180_000.0,  # 18 万トン（第一種・第二種双方該当）
-    operating_profit_jpy=840_000_000,     # 8.4 億円（営業利益率 2%）
+    operating_profit_jpy=840_000_000,  # 8.4 億円（営業利益率 2%）
     cost_of_goods_sold_jpy=35_700_000_000,  # 357 億円（売上原価率 85%）
     is_chain_franchise=False,
     fleet_count_owned=8,
     fleet_count_outsourced=240,
     sites=[
-        CompanySite(name="関東センター", site_type="dc",
-                    prefecture="千葉県", annual_freight_tons=70_000),
-        CompanySite(name="関西センター", site_type="dc",
-                    prefecture="大阪府", annual_freight_tons=55_000),
-        CompanySite(name="九州センター", site_type="dc",
-                    prefecture="福岡県", annual_freight_tons=30_000),
-        CompanySite(name="東北センター", site_type="dc",
-                    prefecture="宮城県", annual_freight_tons=25_000),
+        CompanySite(
+            name="関東センター", site_type="dc", prefecture="千葉県", annual_freight_tons=70_000
+        ),
+        CompanySite(
+            name="関西センター", site_type="dc", prefecture="大阪府", annual_freight_tons=55_000
+        ),
+        CompanySite(
+            name="九州センター", site_type="dc", prefecture="福岡県", annual_freight_tons=30_000
+        ),
+        CompanySite(
+            name="東北センター", site_type="dc", prefecture="宮城県", annual_freight_tons=25_000
+        ),
     ],
     clo_name="専務執行役員 佐藤 一郎",
     plan_period_start_fy=2026,
@@ -338,7 +352,7 @@ SAMPLE_CHAIN = CompanyProfile(
     name="スマートマート株式会社（架空）",
     jsic_code="5891",
     main_business="コンビニエンスストア",
-    annual_revenue_jpy=320_000_000_000,   # 3,200 億円
+    annual_revenue_jpy=320_000_000_000,  # 3,200 億円
     annual_freight_tons_total=450_000.0,  # 45 万トン
     operating_profit_jpy=11_200_000_000,  # 112 億円（営業利益率 3.5%）
     cost_of_goods_sold_jpy=224_000_000_000,  # 2,240 億円（売上原価率 70%）
@@ -346,14 +360,24 @@ SAMPLE_CHAIN = CompanyProfile(
     fleet_count_owned=0,
     fleet_count_outsourced=850,
     sites=[
-        CompanySite(name="関東第一センター", site_type="dc",
-                    prefecture="埼玉県", annual_freight_tons=180_000),
-        CompanySite(name="関東第二センター", site_type="dc",
-                    prefecture="神奈川県", annual_freight_tons=120_000),
-        CompanySite(name="関西センター", site_type="dc",
-                    prefecture="大阪府", annual_freight_tons=100_000),
-        CompanySite(name="九州センター", site_type="dc",
-                    prefecture="福岡県", annual_freight_tons=50_000),
+        CompanySite(
+            name="関東第一センター",
+            site_type="dc",
+            prefecture="埼玉県",
+            annual_freight_tons=180_000,
+        ),
+        CompanySite(
+            name="関東第二センター",
+            site_type="dc",
+            prefecture="神奈川県",
+            annual_freight_tons=120_000,
+        ),
+        CompanySite(
+            name="関西センター", site_type="dc", prefecture="大阪府", annual_freight_tons=100_000
+        ),
+        CompanySite(
+            name="九州センター", site_type="dc", prefecture="福岡県", annual_freight_tons=50_000
+        ),
     ],
     clo_name="専務執行役員 佐藤 一郎",
     plan_period_start_fy=2026,
@@ -398,26 +422,29 @@ SAMPLE_RETAIL = CompanyProfile(
     name="ライフスマート小売株式会社（架空）",
     jsic_code="5811",
     main_business="食料品スーパーマーケット",
-    annual_revenue_jpy=120_000_000_000,    # 1,200 億円
-    annual_freight_tons_total=100_000.0,   # 10 万トン（特定第一種・第二種双方該当）
-    operating_profit_jpy=3_600_000_000,    # 36 億円（営業利益率 3%）
+    annual_revenue_jpy=120_000_000_000,  # 1,200 億円
+    annual_freight_tons_total=100_000.0,  # 10 万トン（特定第一種・第二種双方該当）
+    operating_profit_jpy=3_600_000_000,  # 36 億円（営業利益率 3%）
     cost_of_goods_sold_jpy=90_000_000_000,  # 900 億円（売上原価率 75%）
     is_chain_franchise=False,
     fleet_count_owned=15,
     fleet_count_outsourced=320,
     sites=[
-        CompanySite(name="関東地域DC", site_type="dc",
-                    prefecture="埼玉県", annual_freight_tons=45_000),
-        CompanySite(name="中部地域DC", site_type="dc",
-                    prefecture="愛知県", annual_freight_tons=30_000),
-        CompanySite(name="関西地域DC", site_type="dc",
-                    prefecture="大阪府", annual_freight_tons=25_000),
+        CompanySite(
+            name="関東地域DC", site_type="dc", prefecture="埼玉県", annual_freight_tons=45_000
+        ),
+        CompanySite(
+            name="中部地域DC", site_type="dc", prefecture="愛知県", annual_freight_tons=30_000
+        ),
+        CompanySite(
+            name="関西地域DC", site_type="dc", prefecture="大阪府", annual_freight_tons=25_000
+        ),
     ],
     clo_name="取締役執行役員 鈴木 誠",
     plan_period_start_fy=2026,
     plan_period_end_fy=2030,
     data_source="sample",
-    load_factor_actual_pct=42.0,         # 業界平均（38%）よりやや上
+    load_factor_actual_pct=42.0,  # 業界平均（38%）よりやや上
     annual_fuel_liters=None,
     annual_co2_emissions_kg=None,
     wait_time_rows=[

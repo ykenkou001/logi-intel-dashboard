@@ -6,6 +6,7 @@
       タイムアウト保護する（部分失敗許容）。
     - fastmcp / FastAPI に依存させず、Lambda zip にも含められる軽量モジュール。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -94,7 +95,7 @@ async def fetch_estat(cd_area: str) -> str:
             data = await client.get_stats_data(
                 stats_data_id=ESTAT_STATS_ID,
                 cd_area=cd_area,
-                cd_cat01="H",   # 運輸業，郵便業
+                cd_cat01="H",  # 運輸業，郵便業
                 limit=1,
             )
         values = data.get("DATA_INF", {}).get("VALUE", [])

@@ -13,6 +13,7 @@
     - NPV: 投資は初年度 / 削減は 1〜5 年目 / 割引率 3%
     - 全数値に出典付与（経営会議「出典は？」即答用）
 """
+
 from __future__ import annotations
 
 from collections import Counter
@@ -242,9 +243,7 @@ def simulate_scenarios(
             base_cost_saving=base_cost,
             base_co2_reduction=base_co2,
             base_investment=base_invest,
-            baseline_standard_op_increase=(
-                baseline.annual_operating_profit_increase_jpy.standard
-            ),
+            baseline_standard_op_increase=(baseline.annual_operating_profit_increase_jpy.standard),
         )
         for params in _STRESS_PRESETS
     ]
@@ -279,9 +278,7 @@ def _resolve_measures(
         for mid in selected_measure_ids:
             m = get_measure(mid)
             if m is None:
-                raise ValueError(
-                    f"measure_id '{mid}' はプレイブックに登録されていません。"
-                )
+                raise ValueError(f"measure_id '{mid}' はプレイブックに登録されていません。")
             measures.append(m)
         return measures, "explicit"
 
@@ -343,8 +340,7 @@ def _aggregate_co2_reduction(
 def _aggregate_investment(measures: list[PlaybookMeasure]) -> float:
     """選択施策の必要投資合算（投資はセクション内ダンピングしない）。"""
     return sum(
-        (m.typical_investment_jpy_low + m.typical_investment_jpy_high) / 2.0
-        for m in measures
+        (m.typical_investment_jpy_low + m.typical_investment_jpy_high) / 2.0 for m in measures
     )
 
 
@@ -415,10 +411,7 @@ def _calculate_npv(annual_saving: float, investment: float) -> float:
     if annual_saving <= 0:
         return -investment
     r = NPV_PARAMS.discount_rate_pct / 100.0
-    pv = sum(
-        annual_saving / ((1.0 + r) ** t)
-        for t in range(1, NPV_PARAMS.horizon_years + 1)
-    )
+    pv = sum(annual_saving / ((1.0 + r) ** t) for t in range(1, NPV_PARAMS.horizon_years + 1))
     return pv - investment
 
 
@@ -443,8 +436,7 @@ def _format_co2(kg: float) -> str:
 def build_scenario_summary(r: ScenarioSimResult) -> str:
     """ScenarioSimResult から CLO 向けサマリーテキストを生成する。"""
     source_label = (
-        "引数指定" if r.measure_selection_source == "explicit"
-        else "Step 2 Top 3 自動採用"
+        "引数指定" if r.measure_selection_source == "explicit" else "Step 2 Top 3 自動採用"
     )
     lines: list[str] = [
         f"=== シナリオシミュレーション: {r.company_name} ===",
@@ -453,16 +445,12 @@ def build_scenario_summary(r: ScenarioSimResult) -> str:
         "【選択施策】",
     ]
     for m in r.selected_measures:
-        lines.append(
-            f"  ・[{m.measure_id}] {m.name}（{m.form3_section}）"
-        )
+        lines.append(f"  ・[{m.measure_id}] {m.name}（{m.form3_section}）")
     lines.append("")
 
     lines.append("【施策組合せの重複処理】")
     overlap_sections = [
-        f"{sec} {count} 件"
-        for sec, count in r.section_overlap_count.items()
-        if count >= 2
+        f"{sec} {count} 件" for sec, count in r.section_overlap_count.items() if count >= 2
     ]
     if overlap_sections:
         lines.append(
@@ -470,9 +458,7 @@ def build_scenario_summary(r: ScenarioSimResult) -> str:
             f" → 効果合算に {r.synergy_multiplier} 倍を適用（30% ディスカウント）"
         )
     else:
-        lines.append(
-            "  セクション跨ぎのみ → 倍率 1.0（重複ダンピングなし）"
-        )
+        lines.append("  セクション跨ぎのみ → 倍率 1.0（重複ダンピングなし）")
     lines.append("")
 
     b = r.baseline
@@ -528,9 +514,7 @@ def build_scenario_summary(r: ScenarioSimResult) -> str:
                 f"（baseline 比 {fuel_up.operating_profit_ratio_to_baseline * 100:.1f}%）"
             )
         else:
-            lines.append(
-                "  ❌ 燃料 +20% で黒字維持できず — 施策見直しが必要"
-            )
+            lines.append("  ❌ 燃料 +20% で黒字維持できず — 施策見直しが必要")
         lines.append("")
 
     # 堅牢性総合判定 + 最悪ストレスシナリオ

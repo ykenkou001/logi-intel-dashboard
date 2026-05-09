@@ -12,6 +12,7 @@ CompanyProfile（事実）と CompanyPackageOverride（判断）を意図的に�
 
 plan: plans/b-c-flickering-pixel.md §段階 c.5
 """
+
 from __future__ import annotations
 
 import os
@@ -60,7 +61,8 @@ def save_override(
 
 
 def load_override(
-    company_id: str, base_dir: Path | None = None,
+    company_id: str,
+    base_dir: Path | None = None,
 ) -> CompanyPackageOverride | None:
     """ID から保存済み CompanyPackageOverride JSON を読み込む。
 

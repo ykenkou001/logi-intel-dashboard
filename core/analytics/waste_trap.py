@@ -28,6 +28,7 @@ CLO の中長期計画書では「実施した施策」だけでなく「効果�
         MeasureExecutionRecord は core/io/measure_run_store.py で定義・永続化される。
         後方互換性のためここでも re-export する。
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -172,8 +173,7 @@ def build_waste_trap_summary(result: WasteTrapResult) -> str:
     ]
     if result.investment_freeze_count > 0:
         lines.append(
-            f"投資凍結推奨: {result.investment_freeze_count} 件 "
-            "(経営会議で再評価)",
+            f"投資凍結推奨: {result.investment_freeze_count} 件 (経営会議で再評価)",
         )
     high_items = [i for i in result.items if i.trap_severity == "high"]
     if high_items:
@@ -188,7 +188,8 @@ def build_waste_trap_summary(result: WasteTrapResult) -> str:
 
 
 def _evaluate_run(
-    run: MeasureExecutionRecord, today: date,
+    run: MeasureExecutionRecord,
+    today: date,
 ) -> WasteTrapItem:
     """単一施策実行記録の severity と推奨対応を判定する。"""
     measure = get_measure(run.measure_id)
@@ -236,7 +237,8 @@ def _evaluate_run(
 
 
 def _check_safeguards(
-    run: MeasureExecutionRecord, months: int | None,
+    run: MeasureExecutionRecord,
+    months: int | None,
 ) -> list[str]:
     """6 軸セーフガード（Codex 勧告④）。発火した識別子のリストを返す。
 
@@ -247,16 +249,10 @@ def _check_safeguards(
     if months is None or months < MIN_MONTHS_SINCE_START_FOR_JUDGMENT:
         triggered.append("ramp_up_period")
     # ② データ欠損
-    if (
-        run.data_completeness is not None
-        and run.data_completeness < MIN_DATA_COMPLETENESS
-    ):
+    if run.data_completeness is not None and run.data_completeness < MIN_DATA_COMPLETENESS:
         triggered.append("data_incomplete")
     # ③ サンプル数不足
-    if (
-        run.measured_count is not None
-        and run.measured_count < MIN_MEASURED_COUNT
-    ):
+    if run.measured_count is not None and run.measured_count < MIN_MEASURED_COUNT:
         triggered.append("insufficient_samples")
     # ④ 季節性
     if run.seasonal_factor_active:
@@ -291,10 +287,7 @@ def _calc_severity(run: MeasureExecutionRecord) -> TrapSeverity:
         return "low"
     actual_ratio = actual / invested
     expected_ratio = expected / invested
-    if (
-        actual_ratio <= LOW_RATIO_HIGH_SEVERITY
-        and expected_ratio >= HIGH_EXPECTATION_RATIO
-    ):
+    if actual_ratio <= LOW_RATIO_HIGH_SEVERITY and expected_ratio >= HIGH_EXPECTATION_RATIO:
         return "high"
     if LOW_RATIO_HIGH_SEVERITY < actual_ratio < MID_RATIO_MEDIUM_SEVERITY:
         return "medium"
@@ -302,7 +295,8 @@ def _calc_severity(run: MeasureExecutionRecord) -> TrapSeverity:
 
 
 def _should_freeze_investment(
-    severity: TrapSeverity, root_cause: RootCause,
+    severity: TrapSeverity,
+    root_cause: RootCause,
 ) -> bool:
     """投資凍結推奨の判定。high かつ要因型 root cause のみ True。"""
     if severity != "high":

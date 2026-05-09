@@ -11,6 +11,7 @@
     - 減少係数は core/static/improvement_standards.py の中央値（0.135）を使用
     - 国交省2030年試算（▲34.1%輸送力不足）も参考値として併記
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -42,22 +43,53 @@ _MLIT_2030_REPORT_URL = (
 
 # 都道府県名 → e-Stat cdArea（5桁）
 _PREF_ESTAT_CODE: dict[str, str] = {
-    "北海道": "01000", "青森県": "02000", "岩手県": "03000",
-    "宮城県": "04000", "秋田県": "05000", "山形県": "06000",
-    "福島県": "07000", "茨城県": "08000", "栃木県": "09000",
-    "群馬県": "10000", "埼玉県": "11000", "千葉県": "12000",
-    "東京都": "13000", "神奈川県": "14000", "新潟県": "15000",
-    "富山県": "16000", "石川県": "17000", "福井県": "18000",
-    "山梨県": "19000", "長野県": "20000", "岐阜県": "21000",
-    "静岡県": "22000", "愛知県": "23000", "三重県": "24000",
-    "滋賀県": "25000", "京都府": "26000", "大阪府": "27000",
-    "兵庫県": "28000", "奈良県": "29000", "和歌山県": "30000",
-    "鳥取県": "31000", "島根県": "32000", "岡山県": "33000",
-    "広島県": "34000", "山口県": "35000", "徳島県": "36000",
-    "香川県": "37000", "愛媛県": "38000", "高知県": "39000",
-    "福岡県": "40000", "佐賀県": "41000", "長崎県": "42000",
-    "熊本県": "43000", "大分県": "44000", "宮崎県": "45000",
-    "鹿児島県": "46000", "沖縄県": "47000",
+    "北海道": "01000",
+    "青森県": "02000",
+    "岩手県": "03000",
+    "宮城県": "04000",
+    "秋田県": "05000",
+    "山形県": "06000",
+    "福島県": "07000",
+    "茨城県": "08000",
+    "栃木県": "09000",
+    "群馬県": "10000",
+    "埼玉県": "11000",
+    "千葉県": "12000",
+    "東京都": "13000",
+    "神奈川県": "14000",
+    "新潟県": "15000",
+    "富山県": "16000",
+    "石川県": "17000",
+    "福井県": "18000",
+    "山梨県": "19000",
+    "長野県": "20000",
+    "岐阜県": "21000",
+    "静岡県": "22000",
+    "愛知県": "23000",
+    "三重県": "24000",
+    "滋賀県": "25000",
+    "京都府": "26000",
+    "大阪府": "27000",
+    "兵庫県": "28000",
+    "奈良県": "29000",
+    "和歌山県": "30000",
+    "鳥取県": "31000",
+    "島根県": "32000",
+    "岡山県": "33000",
+    "広島県": "34000",
+    "山口県": "35000",
+    "徳島県": "36000",
+    "香川県": "37000",
+    "愛媛県": "38000",
+    "高知県": "39000",
+    "福岡県": "40000",
+    "佐賀県": "41000",
+    "長崎県": "42000",
+    "熊本県": "43000",
+    "大分県": "44000",
+    "宮崎県": "45000",
+    "鹿児島県": "46000",
+    "沖縄県": "47000",
 }
 
 
@@ -68,21 +100,21 @@ class DriverGapResult:
     prefecture: str
 
     # 現状（経済センサス‐基礎調査 2024 中分類44）
-    national_workers: int | None        # 全国 道路貨物運送業 従業者数
-    regional_workers: int | None        # 都道府県内 同従業者数
-    regional_share_pct: float | None    # 全国シェア（%）
+    national_workers: int | None  # 全国 道路貨物運送業 従業者数
+    regional_workers: int | None  # 都道府県内 同従業者数
+    regional_share_pct: float | None  # 全国シェア（%）
 
     # 改善基準告示による実効稼働減少
-    capacity_reduction_factor: float    # 0.135（業界推計中央値）
+    capacity_reduction_factor: float  # 0.135（業界推計中央値）
     national_capacity_loss: int | None  # 全国 実効稼働減（人相当）
     regional_capacity_loss: int | None  # 都道府県 実効稼働減（人相当）
 
     # 改善基準告示の主要数値（参照用）
-    annual_overtime_limit_hours: int    # 年間時間外上限 960h
+    annual_overtime_limit_hours: int  # 年間時間外上限 960h
     annual_working_hours_principle: int  # 年間総拘束時間 原則 3,300h
 
     # 国家試算
-    mlit_2030_shortage_pct: float       # 2030年 輸送力不足見込み
+    mlit_2030_shortage_pct: float  # 2030年 輸送力不足見込み
 
     citations: list[Citation] = field(default_factory=list)
     freshness_warnings: list[str] = field(default_factory=list)
@@ -140,11 +172,7 @@ async def analyze_driver_gap(prefecture: str) -> DriverGapResult:
     factor = driver_capacity_reduction_factor()
     national_loss = int(national * factor) if national is not None else None
     regional_loss = int(regional * factor) if regional is not None else None
-    regional_share = (
-        regional / national * 100.0
-        if national and regional and national > 0
-        else None
-    )
+    regional_share = regional / national * 100.0 if national and regional and national > 0 else None
 
     citations = [
         estat_citation(
@@ -168,9 +196,7 @@ async def analyze_driver_gap(prefecture: str) -> DriverGapResult:
         national_capacity_loss=national_loss,
         regional_capacity_loss=regional_loss,
         annual_overtime_limit_hours=TRUCK_DRIVER_STANDARD.max_annual_overtime_hours,
-        annual_working_hours_principle=(
-            TRUCK_DRIVER_STANDARD.max_annual_working_hours_principle
-        ),
+        annual_working_hours_principle=(TRUCK_DRIVER_STANDARD.max_annual_working_hours_principle),
         mlit_2030_shortage_pct=_MLIT_2030_SHORTAGE_PCT,
         citations=citations,
         freshness_warnings=all_warnings(),
@@ -211,9 +237,7 @@ def build_driver_gap_summary(r: DriverGapResult) -> str:
     if r.national_capacity_loss is not None:
         lines.append(f"  全国: 約 {r.national_capacity_loss:,} 人分の実稼働減")
     if r.regional_capacity_loss is not None:
-        lines.append(
-            f"  {r.prefecture}: 約 {r.regional_capacity_loss:,} 人分の実稼働減"
-        )
+        lines.append(f"  {r.prefecture}: 約 {r.regional_capacity_loss:,} 人分の実稼働減")
 
     lines += [
         "",
@@ -223,8 +247,7 @@ def build_driver_gap_summary(r: DriverGapResult) -> str:
         "",
         "【CLO 計画書への反映必須事項】",
         "  対策措置として「ドライバー確保」「労働時間管理」「効率化施策」の記載が必要",
-        "  → モーダルシフト・共同配送・中継輸送・積載率向上が主な選択肢"
-        "（Step 5 で施策効果試算）",
+        "  → モーダルシフト・共同配送・中継輸送・積載率向上が主な選択肢（Step 5 で施策効果試算）",
         "",
         "  ※ 「従業者数」は事務員・整備士等を含む業界全体の数値。"
         "ドライバー比率（業界相場約75〜80%）を勘案して詳細試算する場合は、"

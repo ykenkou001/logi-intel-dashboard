@@ -4,6 +4,7 @@
 Web UI からは「テンプレート DL → 記入 → アップロード → JSON 永続化」のフローで
 使用する。
 """
+
 from __future__ import annotations
 
 import shutil
@@ -53,12 +54,10 @@ _PURPOSE_LABEL: dict[TemplatePurpose, str] = {
 
 _PURPOSE_SHEETS: dict[TemplatePurpose, str] = {
     "annual": (
-        "profile / sites / wait_time(年集計) / handling_time / "
-        "kpi_history / _jsic_reference"
+        "profile / sites / wait_time(年集計) / handling_time / kpi_history / _jsic_reference"
     ),
     "monthly": (
-        "profile / sites / wait_time(月集計) / handling_time / "
-        "kpi_history / _jsic_reference"
+        "profile / sites / wait_time(月集計) / handling_time / kpi_history / _jsic_reference"
     ),
     "daily": "profile / sites / wait_time(日次・site×slot) / _jsic_reference",
 }

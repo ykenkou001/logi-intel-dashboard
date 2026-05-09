@@ -4,6 +4,7 @@
 `evaluate_eligibility` 結果を CLO 計画書／経営会議向けの読みやすい
 サマリーに整形することに専念する。
 """
+
 from __future__ import annotations
 
 from core.legal.eligibility import EligibilityCategory, EligibilityResult
@@ -36,9 +37,7 @@ def build_eligibility_summary(
     """EligibilityResult から CLO 計画書用のサマリーテキストを生成する。"""
     entry = lookup(jsic_code)
     jsic_name = entry.name if entry else "（未登録業種）"
-    category_label = _BUSINESS_CATEGORY_LABELS.get(
-        entry.category if entry else "other", "不明"
-    )
+    category_label = _BUSINESS_CATEGORY_LABELS.get(entry.category if entry else "other", "不明")
 
     lines: list[str] = [
         "=== 特定荷主3区分 適用判定（物流効率化法 第46条 / 第65条）===",
@@ -61,9 +60,7 @@ def build_eligibility_summary(
     ]
     if result.annual_freight_tons_used is not None:
         label = "推計値" if result.is_estimate else "実測値"
-        lines.append(
-            f"  {label}: 約 {result.annual_freight_tons_used:,.0f} トン / 年"
-        )
+        lines.append(f"  {label}: 約 {result.annual_freight_tons_used:,.0f} トン / 年")
     else:
         lines.append("  取扱量: 不明（売上・取扱量とも未指定または推計不可）")
 

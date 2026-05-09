@@ -14,6 +14,7 @@
     from core.secrets import get_secret
     estat_app_id = get_secret("ESTAT_APP_ID")  # env か SSM から取得
 """
+
 from __future__ import annotations
 
 import os

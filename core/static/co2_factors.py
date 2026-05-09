@@ -16,6 +16,7 @@
     - Ver.3.1 → Ver.3.2 では「改良トンキロ法」の燃費基準達成考慮が主な変更点で、
       輸送機関別の典型値（モーダル比較用）は据え置き
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -29,18 +30,18 @@ class Co2EmissionFactors:
     """輸送機関別 CO2 排出原単位（g-CO2/トンキロ）。"""
 
     # 自動車（営業用）
-    truck_small_commercial: float = 388     # 小型トラック 営業用（〜2t）
-    truck_medium_commercial: float = 196    # 普通トラック 営業用（2-10t）
-    truck_large_commercial: float = 76      # 大型トラック 営業用（10t〜）
+    truck_small_commercial: float = 388  # 小型トラック 営業用（〜2t）
+    truck_medium_commercial: float = 196  # 普通トラック 営業用（2-10t）
+    truck_large_commercial: float = 76  # 大型トラック 営業用（10t〜）
 
     # 鉄道
-    rail_freight: float = 21                # 鉄道貨物
+    rail_freight: float = 21  # 鉄道貨物
 
     # 海運
-    coastal_shipping: float = 39            # 内航海運（フェリー含む）
+    coastal_shipping: float = 39  # 内航海運（フェリー含む）
 
     # 航空
-    air_freight: float = 1490               # 航空貨物（参考）
+    air_freight: float = 1490  # 航空貨物（参考）
 
 
 CO2_FACTORS = Co2EmissionFactors()

@@ -3,6 +3,7 @@
 `mcp_server/tools/macro_tools.py` と同じ並列フェッチロジックを呼び出す。
 e-Stat / 国税庁 / 気象庁 / エネ庁を並列で叩き、部分失敗を許容する。
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -54,13 +55,15 @@ async def macro_overview(
         with_source_timeout("燃料価格", fetch_fuel()),
     )
 
-    summary = "\n".join([
-        f"=== {prefecture} 物流業界マクロ概況 ===",
-        estat_result,
-        corp_result,
-        weather_result,
-        fuel_result,
-    ])
+    summary = "\n".join(
+        [
+            f"=== {prefecture} 物流業界マクロ概況 ===",
+            estat_result,
+            corp_result,
+            weather_result,
+            fuel_result,
+        ]
+    )
 
     response = ToolResponse(summary=summary)
     response.add_citation(

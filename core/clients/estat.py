@@ -5,6 +5,7 @@
   2. get_meta_info() → 分類コード・地域コード・時間軸を把握
   3. get_stats_data() → 実際の統計数値を取得
 """
+
 from __future__ import annotations
 
 from typing import Any, cast

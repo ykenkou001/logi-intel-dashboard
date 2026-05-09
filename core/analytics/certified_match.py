@@ -10,6 +10,7 @@
     - 取組タイプ未指定の場合は業種一致のみで評価
     - 上位 5 件を返す（同点は認定年降順）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -94,8 +95,7 @@ def find_matches(
     entry = lookup(jsic_code)
     if entry is None:
         raise ValueError(
-            f"JSIC コード '{jsic_code}' は未収録です。"
-            "Step 1-5 と同じコードを指定してください。"
+            f"JSIC コード '{jsic_code}' は未収録です。Step 1-5 と同じコードを指定してください。"
         )
 
     interested_types: list[MeasureType] = list(interested_measure_types or [])  # type: ignore[arg-type]
@@ -103,9 +103,7 @@ def find_matches(
 
     scored: list[MatchedCase] = []
     for case in CERTIFIED_CASES:
-        score, matched_cats, matched_mt = _score_case(
-            case, self_category, interested_types
-        )
+        score, matched_cats, matched_mt = _score_case(case, self_category, interested_types)
         if score > 0:
             scored.append(
                 MatchedCase(
@@ -191,9 +189,7 @@ def build_certified_match_summary(r: CertifiedMatchResult) -> str:
     lines.append(f"【マッチ上位 {len(r.matches)} 件（スコア降順）】")
     for i, m in enumerate(r.matches, start=1):
         company_str = "、".join(m.case.main_companies)
-        mt_str = "、".join(
-            _MEASURE_TYPE_LABELS.get(t, t) for t in m.case.measure_types
-        )
+        mt_str = "、".join(_MEASURE_TYPE_LABELS.get(t, t) for t in m.case.measure_types)
         lines += [
             "",
             f"  {i}. [{m.case.certified_year}年認定 / スコア {m.score}] {m.case.title}",

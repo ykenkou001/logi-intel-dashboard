@@ -4,6 +4,7 @@
 Markdown が中継フォーマットとして使われる。CLO ドラフトを最も「読み流せる」
 形で出力する。
 """
+
 from __future__ import annotations
 
 from pathlib import Path

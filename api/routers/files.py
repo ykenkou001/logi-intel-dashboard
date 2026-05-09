@@ -6,6 +6,7 @@ backend 切替（`LOGI_STORAGE_BACKEND` 環境変数）:
 - "local"（既定）: ローカルファイルを直接配信（パストラバーサル防止あり）
 - "s3"          : S3 プレサインド URL を生成して 302 リダイレクト
 """
+
 from __future__ import annotations
 
 import os

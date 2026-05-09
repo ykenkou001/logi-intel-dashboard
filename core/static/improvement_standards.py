@@ -13,6 +13,7 @@ URL:
     - 一般によく言及される「年 960h」は時間外労働の上限であって、拘束時間とは別概念
     - 計画書・経営会議で使用する場合は、必ず本モジュールから引用する（独自数値を書かない）
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -35,10 +36,10 @@ class WaitTimeStandard:
         - JILS 2021 年度物流コスト調査報告書
     """
 
-    threshold_minutes: int = 120          # 2 時間基準（改善基準告示で「過度な拘束」相当）
-    over_threshold_max_pct: float = 5.0   # 2 時間超過率の運用目標（5% 以下）
-    avg_target_minutes: int = 30          # 平均荷待ち時間の運用目標（30 分以下）
-    measurement_minimum_runs: int = 100   # 統計的有意性のための最低計測便数
+    threshold_minutes: int = 120  # 2 時間基準（改善基準告示で「過度な拘束」相当）
+    over_threshold_max_pct: float = 5.0  # 2 時間超過率の運用目標（5% 以下）
+    avg_target_minutes: int = 30  # 平均荷待ち時間の運用目標（30 分以下）
+    measurement_minimum_runs: int = 100  # 統計的有意性のための最低計測便数
 
 
 WAIT_TIME_STANDARD = WaitTimeStandard()
@@ -52,14 +53,14 @@ class TruckDriverStandard:
     """
 
     # 1 日の拘束時間
-    max_daily_working_hours_principle: int = 13     # 1日の拘束時間 原則 13 時間以内
-    max_daily_working_hours_max: int = 15           # 1日の拘束時間 最大 15 時間（例外時 16 時間）
-    max_daily_working_hours_exception: int = 16     # 例外時の1日拘束時間上限
-    daily_over_14h_max_count_per_week: int = 3      # 1日14時間超は週2回までが目安（運用上）
+    max_daily_working_hours_principle: int = 13  # 1日の拘束時間 原則 13 時間以内
+    max_daily_working_hours_max: int = 15  # 1日の拘束時間 最大 15 時間（例外時 16 時間）
+    max_daily_working_hours_exception: int = 16  # 例外時の1日拘束時間上限
+    daily_over_14h_max_count_per_week: int = 3  # 1日14時間超は週2回までが目安（運用上）
 
     # 連続休息期間（2024 年改正で上方修正）
-    min_rest_hours_principle: int = 11              # 連続休息 原則 11 時間以上
-    min_rest_hours_floor: int = 9                   # 連続休息 下限 9 時間
+    min_rest_hours_principle: int = 11  # 連続休息 原則 11 時間以上
+    min_rest_hours_floor: int = 9  # 連続休息 下限 9 時間
 
     # 年間・月間の拘束時間
     max_annual_working_hours_principle: int = 3300  # 年間総拘束時間 原則 3,300 時間
@@ -68,14 +69,14 @@ class TruckDriverStandard:
     max_monthly_working_hours_exception: int = 310  # 例外で 310 時間まで延長可
 
     # 時間外労働（働き方改革関連法 / 同時施行）
-    max_annual_overtime_hours: int = 960            # 時間外労働 年間上限 960 時間（運送業の特例）
+    max_annual_overtime_hours: int = 960  # 時間外労働 年間上限 960 時間（運送業の特例）
 
     # 1 回の運転時間（4 時間ごとに 30 分以上の休憩を合算で必要）
-    max_continuous_driving_hours: int = 4           # 連続運転 4 時間
-    min_break_per_4h_continuous_minutes: int = 30   # 4 時間運転毎に必要な休憩
+    max_continuous_driving_hours: int = 4  # 連続運転 4 時間
+    min_break_per_4h_continuous_minutes: int = 30  # 4 時間運転毎に必要な休憩
 
     # 2 日平均の運転時間
-    max_avg_driving_hours_per_2days: int = 9        # 2 日平均 1 日 9 時間以内
+    max_avg_driving_hours_per_2days: int = 9  # 2 日平均 1 日 9 時間以内
 
 
 # シングルトン定数として公開
@@ -85,7 +86,7 @@ TRUCK_DRIVER_STANDARD = TruckDriverStandard()
 FRESHNESS = Freshness(
     label="改善基準告示（トラック運転者）",
     last_updated=date(2022, 12, 23),  # 最終改正告示日
-    update_cadence="as_needed",        # 改正時のみ更新
+    update_cadence="as_needed",  # 改正時のみ更新
     source_url=(
         "https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/koyou_roudou/"
         "roudoukijun/jidousha/index.html"

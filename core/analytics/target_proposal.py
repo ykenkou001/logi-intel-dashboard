@@ -9,6 +9,7 @@
     - 業界平均物流コスト比率は core/analytics/benchmark.py の公開定数から取得
     - 業界平均積載率・モーダルシフト目標は公表値を本ファイル内で定義
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -30,9 +31,7 @@ _INDUSTRY_AVG_LOAD_FACTOR_PCT = 38.0
 _TARGET_LOAD_FACTOR_PCT = 50.0
 
 _LOAD_FACTOR_SOURCE_LABEL = "自動車輸送統計年報（国土交通省・年次）"
-_LOAD_FACTOR_SOURCE_URL = (
-    "https://www.mlit.go.jp/k-toukei/jidousyayusou.html"
-)
+_LOAD_FACTOR_SOURCE_URL = "https://www.mlit.go.jp/k-toukei/jidousyayusou.html"
 _TRANSPORT_POLICY_BASIC_PLAN_URL = (
     "https://www.mlit.go.jp/sogoseisaku/transport/sosei_transport_tk_000146.html"
 )
@@ -43,15 +42,15 @@ _JILS_URL = "https://www.logistics.or.jp/survey/logistics_cost.html"
 class NumericTarget:
     """単一の数値目標。様式第3別紙の数値目標欄1項目に対応。"""
 
-    name: str                       # 指標名（例: "輸送量当たりCO2排出原単位"）
-    current_industry_avg: float | None      # 業界平均値（基準）
-    current_industry_avg_unit: str          # 業界平均値の単位
-    proposed_target: float                  # 提案目標値
-    proposed_target_unit: str               # 提案目標値の単位
-    base_year: int                          # 基準年
-    target_year: int                        # 目標年
-    rationale: str                          # 提案根拠
-    citation: Citation                      # 出典
+    name: str  # 指標名（例: "輸送量当たりCO2排出原単位"）
+    current_industry_avg: float | None  # 業界平均値（基準）
+    current_industry_avg_unit: str  # 業界平均値の単位
+    proposed_target: float  # 提案目標値
+    proposed_target_unit: str  # 提案目標値の単位
+    base_year: int  # 基準年
+    target_year: int  # 目標年
+    rationale: str  # 提案根拠
+    citation: Citation  # 出典
 
 
 @dataclass
@@ -117,8 +116,10 @@ def _build_load_factor_target() -> NumericTarget:
 def _build_modal_shift_target() -> NumericTarget:
     """モーダルシフト推進目標（鉄道貨物 + 内航海運）。"""
     rail_growth_pct = (
-        (MODAL_SHIFT_TARGET.rail_freight_tonkm_target_2030
-         - MODAL_SHIFT_TARGET.rail_freight_tonkm_base_2019)
+        (
+            MODAL_SHIFT_TARGET.rail_freight_tonkm_target_2030
+            - MODAL_SHIFT_TARGET.rail_freight_tonkm_base_2019
+        )
         / MODAL_SHIFT_TARGET.rail_freight_tonkm_base_2019
         * 100.0
     )
@@ -157,9 +158,7 @@ def _build_logistics_cost_target(
         return None  # 運輸業など荷主でない業種は対象外
 
     # 規模優位性に応じた削減目標（売上が業界平均の2倍以上ならスケール優位を活かす）
-    reduction_pt = (
-        0.5 if revenue_vs_avg_pct is not None and revenue_vs_avg_pct >= 200.0 else 0.3
-    )
+    reduction_pt = 0.5 if revenue_vs_avg_pct is not None and revenue_vs_avg_pct >= 200.0 else 0.3
 
     avg_pct = avg_ratio * 100.0
     target_pct = max(avg_pct - reduction_pt, 0.0)
@@ -219,9 +218,7 @@ def propose_targets(
         _build_modal_shift_target(),
     ]
 
-    cost_target = _build_logistics_cost_target(
-        entry.category, revenue_vs_industry_avg_pct
-    )
+    cost_target = _build_logistics_cost_target(entry.category, revenue_vs_industry_avg_pct)
     if cost_target is not None:
         targets.append(cost_target)
 

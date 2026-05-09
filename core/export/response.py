@@ -9,6 +9,7 @@
     - `citations`: 出典情報のリスト（必須）
     - `freshness_warnings`: 鮮度警告メッセージ
 """
+
 from __future__ import annotations
 
 import os

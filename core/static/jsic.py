@@ -13,6 +13,7 @@
     - 業種カテゴリ（manufacturing/wholesale/retail/transport/chain_franchise）で
       ベンチマーク分析の対象業種選択や記載事例集の選択に利用
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,11 +24,11 @@ from core.static._freshness import Freshness, register
 
 # 業種カテゴリ
 JsicCategory = Literal[
-    "manufacturing",     # 製造業（D）
-    "wholesale",         # 卸売業（I 51）
-    "retail",            # 小売業（I 56-60）
-    "transport",         # 運輸業（H）
-    "chain_franchise",   # フランチャイズ本部（連鎖化事業者の典型）
+    "manufacturing",  # 製造業（D）
+    "wholesale",  # 卸売業（I 51）
+    "retail",  # 小売業（I 56-60）
+    "transport",  # 運輸業（H）
+    "chain_franchise",  # フランチャイズ本部（連鎖化事業者の典型）
     "other",
 ]
 
@@ -36,8 +37,8 @@ JsicCategory = Literal[
 class JsicEntry:
     """JSIC 細分類1件分。"""
 
-    code: str            # 4桁コード（文字列。先頭ゼロ保持）
-    name: str            # 細分類名
+    code: str  # 4桁コード（文字列。先頭ゼロ保持）
+    name: str  # 細分類名
     category: JsicCategory
 
 
@@ -54,7 +55,6 @@ JSIC_ENTRIES: list[JsicEntry] = [
     JsicEntry("3111", "通信機械器具製造業", "manufacturing"),
     JsicEntry("3159", "その他の電子部品・デバイス製造業", "manufacturing"),
     JsicEntry("3211", "自動車製造業", "manufacturing"),
-
     # 卸売業（I 51）
     JsicEntry("5121", "繊維品卸売業", "wholesale"),
     JsicEntry("5141", "建築材料卸売業", "wholesale"),
@@ -63,14 +63,12 @@ JSIC_ENTRIES: list[JsicEntry] = [
     JsicEntry("5311", "農畜産物・水産物卸売業", "wholesale"),
     JsicEntry("5411", "食料・飲料卸売業", "wholesale"),
     JsicEntry("5514", "室内装飾繊維品卸売業", "wholesale"),
-
     # 小売業（I 56〜60）
     JsicEntry("5611", "百貨店、総合スーパー", "retail"),
     JsicEntry("5811", "各種食料品小売業", "retail"),
     JsicEntry("5891", "コンビニエンスストア（飲食料品を中心とするものに限る）", "chain_franchise"),
     JsicEntry("5911", "自動車小売業", "retail"),
     JsicEntry("6011", "ドラッグストア", "retail"),
-
     # 運輸業（H 大分類）— 運送業者
     JsicEntry("4411", "一般貨物自動車運送業", "transport"),
     JsicEntry("4441", "宅配便事業", "transport"),

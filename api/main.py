@@ -15,6 +15,7 @@ OpenAPI ドキュメント:
       （フェーズ4.5 で S3 プレサインド URL に置換予定）
     - CORS は開発時はワイルドカード、本番（AWS 移行時）は社内ドメインのみ許可
 """
+
 from __future__ import annotations
 
 import os

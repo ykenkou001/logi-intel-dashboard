@@ -3,6 +3,7 @@
 エリアコード（6桁）は都道府県コードとは別体系。
 例: 東京地方="130000", 大阪府="270000"
 """
+
 from __future__ import annotations
 
 from typing import Any, cast
@@ -11,8 +12,8 @@ from core import cache
 from core.clients.base import AsyncHTTPClient, HttpClientError
 
 _BASE_URL = "https://www.jma.go.jp/bosai/"
-_FORECAST_TTL = 30 * 60   # 30 分
-_WARNING_TTL = 30 * 60    # 30 分
+_FORECAST_TTL = 30 * 60  # 30 分
+_WARNING_TTL = 30 * 60  # 30 分
 
 # JMA 警報・注意報コード → 名称マッピング（bosai warning API は type フィールドを持たない）
 _WARNING_CODE_NAMES: dict[str, str] = {
@@ -84,9 +85,7 @@ class WeatherClient(AsyncHTTPClient):
         try:
             data = await self.get_json(f"forecast/data/forecast/{area_code}.json")
         except HttpClientError as exc:
-            raise WeatherApiError(
-                f"天気予報取得エラー (area_code={area_code}): {exc}"
-            ) from exc
+            raise WeatherApiError(f"天気予報取得エラー (area_code={area_code}): {exc}") from exc
 
         if not isinstance(data, list):
             raise WeatherApiError(f"予期しないレスポンス形式 (area_code={area_code})")
@@ -111,9 +110,7 @@ class WeatherClient(AsyncHTTPClient):
         try:
             data = await self.get_json(f"warning/data/warning/{area_code}.json")
         except HttpClientError as exc:
-            raise WeatherApiError(
-                f"警報情報取得エラー (area_code={area_code}): {exc}"
-            ) from exc
+            raise WeatherApiError(f"警報情報取得エラー (area_code={area_code}): {exc}") from exc
 
         result = cast(dict[str, Any], data)
         cache.store(cache_key, result, _WARNING_TTL)

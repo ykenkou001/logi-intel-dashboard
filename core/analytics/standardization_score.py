@@ -27,6 +27,7 @@ Codex 勧告で取り下げた点:
       profile に乗らないため未実装。decision_log/会議出席率と連動できる
       ようになった段階で再導入予定。
 """
+
 from __future__ import annotations
 
 from datetime import date
@@ -169,9 +170,7 @@ def compute_standardization_score(
         package=pkg,
     )
 
-    unmanaged_count = sum(
-        1 for e in entries if e.category == "unmanaged_deviation"
-    )
+    unmanaged_count = sum(1 for e in entries if e.category == "unmanaged_deviation")
     expired_count = sum(
         1
         for e in entries
@@ -179,11 +178,10 @@ def compute_standardization_score(
         and e.expires_at is not None
         and e.expires_at < today_d
     )
-    approved_count = sum(
-        1 for e in entries if e.category == "approved_better_practice"
-    )
+    approved_count = sum(1 for e in entries if e.category == "approved_better_practice")
     chain_loading_misuse = _chain_franchise_loading_misuse_count(
-        base_industry, entries,
+        base_industry,
+        entries,
     )
 
     penalty = (
@@ -191,11 +189,7 @@ def compute_standardization_score(
         + EXPIRED_TEMPORARY_PENALTY_PER_ENTRY * expired_count
         + UNMANAGED_PENALTY_PER_ENTRY * chain_loading_misuse
     )
-    bonus = (
-        APPROVED_PRACTICE_BONUS
-        if approved_count >= APPROVED_PRACTICE_BONUS_MIN_COUNT
-        else 0.0
-    )
+    bonus = APPROVED_PRACTICE_BONUS if approved_count >= APPROVED_PRACTICE_BONUS_MIN_COUNT else 0.0
 
     raw_score = coverage_pct - penalty + bonus
     score = max(0.0, min(100.0, raw_score))
@@ -239,8 +233,7 @@ def build_standardization_summary(result: StandardizationScoreResult) -> str:
     ]
     if result.chain_franchise_loading_misuse_count > 0:
         lines.append(
-            f"⚠️ 連鎖化で loading 系施策誤用: "
-            f"{result.chain_franchise_loading_misuse_count} 件",
+            f"⚠️ 連鎖化で loading 系施策誤用: {result.chain_franchise_loading_misuse_count} 件",
         )
     if result.missing_kpi_ids:
         lines.append(
@@ -263,7 +256,8 @@ def build_standardization_summary(result: StandardizationScoreResult) -> str:
 
 
 def _implemented_kpi_ids(
-    profile: CompanyProfile, package: IndustryPackage,
+    profile: CompanyProfile,
+    package: IndustryPackage,
 ) -> set[str]:
     """kpi_history に履歴が 1 件以上ある KPI の metric_id 集合。"""
     history_metric_ids = {entry.metric for entry in profile.kpi_history}

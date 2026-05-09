@@ -2,6 +2,7 @@
 
 ツール命名規則: logi_estat_* （docs/mcp_tools.md 参照）
 """
+
 from __future__ import annotations
 
 from typing import Any

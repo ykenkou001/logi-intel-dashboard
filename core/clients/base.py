@@ -1,4 +1,5 @@
 """httpx ベースの非同期 HTTP クライアント基底クラス。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -66,9 +67,7 @@ class AsyncHTTPClient:
             except httpx.HTTPStatusError as exc:
                 # 4xx はリトライしても無意味
                 if exc.response.status_code < 500:
-                    raise HttpClientError(
-                        f"HTTP {exc.response.status_code}: {path}"
-                    ) from exc
+                    raise HttpClientError(f"HTTP {exc.response.status_code}: {path}") from exc
                 last_exc = exc
             except httpx.RequestError as exc:
                 last_exc = exc
@@ -84,9 +83,7 @@ class AsyncHTTPClient:
                 )
                 await asyncio.sleep(wait)
 
-        raise HttpClientError(
-            f"{self._max_retries} 回リトライ後も失敗: {path}"
-        ) from last_exc
+        raise HttpClientError(f"{self._max_retries} 回リトライ後も失敗: {path}") from last_exc
 
     async def get_json(self, path: str, params: dict[str, Any] | None = None) -> Any:
         """リトライ・バックオフ付き GET リクエスト。レスポンスを JSON で返す。"""

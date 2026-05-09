@@ -16,6 +16,7 @@
 - `LOGI_S3_PREFIX`: S3 オブジェクトキーのプレフィックス（既定 ""）
 - `LOGI_S3_PRESIGNED_TTL`: プレサインド URL の有効期限秒（既定 300）
 """
+
 from __future__ import annotations
 
 import os
@@ -194,9 +195,7 @@ def get_storage() -> Storage:
     if backend == "s3":
         bucket = os.environ.get("LOGI_S3_BUCKET")
         if not bucket:
-            raise RuntimeError(
-                "LOGI_STORAGE_BACKEND=s3 のとき LOGI_S3_BUCKET 必須"
-            )
+            raise RuntimeError("LOGI_STORAGE_BACKEND=s3 のとき LOGI_S3_BUCKET 必須")
         prefix = os.environ.get("LOGI_S3_PREFIX", "")
         ttl_str = os.environ.get("LOGI_S3_PRESIGNED_TTL", "300")
         return S3Storage(

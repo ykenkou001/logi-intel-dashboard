@@ -12,6 +12,7 @@
     - 出力は `ValidationReport`（経営会議で「準拠率 X%」を言える形）
     - 連鎖化事業者は「荷役等時間短縮」を必須から除外
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -91,9 +92,9 @@ class ValidationReport:
 
     company_id: str
     company_name: str
-    overall_pass: bool                    # error が 0 件か
-    compliance_score_pct: float           # 法定様式準拠率（0〜100）
-    checked_files: dict[str, str]         # 検査対象ファイル
+    overall_pass: bool  # error が 0 件か
+    compliance_score_pct: float  # 法定様式準拠率（0〜100）
+    checked_files: dict[str, str]  # 検査対象ファイル
     issues: list[ValidationIssue] = field(default_factory=list)
 
     def errors(self) -> list[ValidationIssue]:
@@ -137,19 +138,23 @@ async def validate_submission(
     # 1. 様式第3 docx の網羅性
     docx_path = plan_draft.files.get("docx")
     if docx_path is None:
-        issues.append(ValidationIssue(
-            severity="error",
-            category="form3_completeness",
-            code="FORM3_FILE_MISSING",
-            message="様式第3別紙（docx）が生成されていません。",
-            suggestion="logi_clo_plan_draft を先に実行してください。",
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                category="form3_completeness",
+                code="FORM3_FILE_MISSING",
+                message="様式第3別紙（docx）が生成されていません。",
+                suggestion="logi_clo_plan_draft を先に実行してください。",
+            )
+        )
     else:
         is_chain = "chain_franchise" in (plan_draft.eligibility.categories or [])
-        issues.extend(_validate_form3_completeness(
-            Path(docx_path),
-            is_chain_franchise=is_chain,
-        ))
+        issues.extend(
+            _validate_form3_completeness(
+                Path(docx_path),
+                is_chain_franchise=is_chain,
+            )
+        )
 
     # 2. 数値整合性
     issues.extend(_validate_numeric_consistency(plan_draft))
@@ -184,12 +189,14 @@ def _validate_form3_completeness(
     issues: list[ValidationIssue] = []
 
     if not docx_path.exists():
-        issues.append(ValidationIssue(
-            severity="error",
-            category="form3_completeness",
-            code="FORM3_FILE_NOT_FOUND",
-            message=f"様式第3 docx が見つかりません: {docx_path}",
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                category="form3_completeness",
+                code="FORM3_FILE_NOT_FOUND",
+                message=f"様式第3 docx が見つかりません: {docx_path}",
+            )
+        )
         return issues
 
     doc = Document(str(docx_path))
@@ -200,16 +207,18 @@ def _validate_form3_completeness(
 
     for section_name in required:
         if not any(section_name in h for h in headings):
-            issues.append(ValidationIssue(
-                severity="error",
-                category="form3_completeness",
-                code=f"FORM3_SECTION_MISSING_{_to_code(section_name)}",
-                message=f"必須セクション「{section_name}」が様式第3 に含まれていません。",
-                suggestion=(
-                    f"core/analytics/plan_draft.py の _build_form3 で "
-                    f"PlanSection を「{section_name}」を含めて追加してください。"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    category="form3_completeness",
+                    code=f"FORM3_SECTION_MISSING_{_to_code(section_name)}",
+                    message=f"必須セクション「{section_name}」が様式第3 に含まれていません。",
+                    suggestion=(
+                        f"core/analytics/plan_draft.py の _build_form3 で "
+                        f"PlanSection を「{section_name}」を含めて追加してください。"
+                    ),
+                )
+            )
 
     # 各セクションの表の中身を検査
     for table in doc.tables:
@@ -228,32 +237,37 @@ def _validate_form3_completeness(
             for col in REQUIRED_COLUMNS:
                 value = cells.get(col, "").strip()
                 if not value or value in {"（記載なし）", "未定", "TBD", "-"}:
-                    issues.append(ValidationIssue(
-                        severity="error",
-                        category="form3_completeness",
-                        code="FORM3_CELL_EMPTY",
-                        message=(
-                            f"様式第3 の表で「{col}」欄が空欄（行 {row_idx}）です。"
-                            f"見出し: {heading_text[:60]}…"
-                        ),
-                        suggestion=f"「{col}」を具体的な値で埋めてください（提出不可）。",
-                    ))
+                    issues.append(
+                        ValidationIssue(
+                            severity="error",
+                            category="form3_completeness",
+                            code="FORM3_CELL_EMPTY",
+                            message=(
+                                f"様式第3 の表で「{col}」欄が空欄（行 {row_idx}）です。"
+                                f"見出し: {heading_text[:60]}…"
+                            ),
+                            suggestion=f"「{col}」を具体的な値で埋めてください（提出不可）。",
+                        )
+                    )
 
     # 表自体が見つからない場合
     has_measure_table = any(
         all(col in [c.text.strip() for c in t.rows[0].cells] for col in REQUIRED_COLUMNS)
-        for t in doc.tables if len(t.rows) >= 1
+        for t in doc.tables
+        if len(t.rows) >= 1
     )
     if not has_measure_table:
-        issues.append(ValidationIssue(
-            severity="error",
-            category="form3_completeness",
-            code="FORM3_MEASURE_TABLE_MISSING",
-            message="様式第3 に「実施措置／計画内容／実施時期」表が見つかりません。",
-            suggestion=(
-                "docx_form3_writer.write_form3 で sections に PlanSection を渡してください。"
-            ),
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                category="form3_completeness",
+                code="FORM3_MEASURE_TABLE_MISSING",
+                message="様式第3 に「実施措置／計画内容／実施時期」表が見つかりません。",
+                suggestion=(
+                    "docx_form3_writer.write_form3 で sections に PlanSection を渡してください。"
+                ),
+            )
+        )
 
     return issues
 
@@ -266,109 +280,123 @@ def _validate_numeric_consistency(plan: PlanDraftResult) -> list[ValidationIssue
         co2 = m.co2_reduction_kg_per_year
         if co2 is not None:
             if co2 < MIN_CO2_REDUCTION_KG_PER_YEAR:
-                issues.append(ValidationIssue(
-                    severity="error",
-                    category="numeric_consistency",
-                    code="CO2_NEGATIVE",
-                    message=(
-                        f"施策「{m.name}」のCO2削減量が負値: {co2:,.0f}kg"
-                    ),
-                    suggestion="計算ロジックの符号を確認してください。",
-                ))
+                issues.append(
+                    ValidationIssue(
+                        severity="error",
+                        category="numeric_consistency",
+                        code="CO2_NEGATIVE",
+                        message=(f"施策「{m.name}」のCO2削減量が負値: {co2:,.0f}kg"),
+                        suggestion="計算ロジックの符号を確認してください。",
+                    )
+                )
             elif co2 > MAX_CO2_REDUCTION_KG_PER_YEAR:
-                issues.append(ValidationIssue(
-                    severity="warning",
-                    category="numeric_consistency",
-                    code="CO2_EXCESSIVE",
-                    message=(
-                        f"施策「{m.name}」のCO2削減量 "
-                        f"{co2 / 1000:,.0f}t が上限 "
-                        f"{MAX_CO2_REDUCTION_KG_PER_YEAR / 1000:,.0f}t を超過。"
-                        "桁を確認してください。"
-                    ),
-                ))
+                issues.append(
+                    ValidationIssue(
+                        severity="warning",
+                        category="numeric_consistency",
+                        code="CO2_EXCESSIVE",
+                        message=(
+                            f"施策「{m.name}」のCO2削減量 "
+                            f"{co2 / 1000:,.0f}t が上限 "
+                            f"{MAX_CO2_REDUCTION_KG_PER_YEAR / 1000:,.0f}t を超過。"
+                            "桁を確認してください。"
+                        ),
+                    )
+                )
 
         cost = m.cost_saving_jpy_per_year
         if cost is not None and cost < 0:
-            issues.append(ValidationIssue(
-                severity="error",
-                category="numeric_consistency",
-                code="COST_NEGATIVE",
-                message=(
-                    f"施策「{m.name}」のコスト削減額が負値: {cost:,.0f}円"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    category="numeric_consistency",
+                    code="COST_NEGATIVE",
+                    message=(f"施策「{m.name}」のコスト削減額が負値: {cost:,.0f}円"),
+                )
+            )
         if cost is not None and cost > MAX_COST_SAVING_JPY_PER_YEAR:
-            issues.append(ValidationIssue(
-                severity="warning",
-                category="numeric_consistency",
-                code="COST_EXCESSIVE",
-                message=(
-                    f"施策「{m.name}」のコスト削減額 "
-                    f"{cost / 1e8:,.1f}億円が上限を超過。桁を確認してください。"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="warning",
+                    category="numeric_consistency",
+                    code="COST_EXCESSIVE",
+                    message=(
+                        f"施策「{m.name}」のコスト削減額 "
+                        f"{cost / 1e8:,.1f}億円が上限を超過。桁を確認してください。"
+                    ),
+                )
+            )
 
         if m.investment_jpy < 0:
-            issues.append(ValidationIssue(
-                severity="error",
-                category="numeric_consistency",
-                code="INVESTMENT_NEGATIVE",
-                message=f"施策「{m.name}」の投資額が負値: {m.investment_jpy:,.0f}円",
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    category="numeric_consistency",
+                    code="INVESTMENT_NEGATIVE",
+                    message=f"施策「{m.name}」の投資額が負値: {m.investment_jpy:,.0f}円",
+                )
+            )
         elif m.investment_jpy > MAX_INVESTMENT_JPY:
-            issues.append(ValidationIssue(
-                severity="warning",
-                category="numeric_consistency",
-                code="INVESTMENT_EXCESSIVE",
-                message=(
-                    f"施策「{m.name}」の投資額 {m.investment_jpy / 1e8:,.1f}億円が "
-                    f"上限 {MAX_INVESTMENT_JPY / 1e8:,.0f}億円を超過。桁を確認してください。"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="warning",
+                    category="numeric_consistency",
+                    code="INVESTMENT_EXCESSIVE",
+                    message=(
+                        f"施策「{m.name}」の投資額 {m.investment_jpy / 1e8:,.1f}億円が "
+                        f"上限 {MAX_INVESTMENT_JPY / 1e8:,.0f}億円を超過。桁を確認してください。"
+                    ),
+                )
+            )
 
         if m.payback_years is not None and m.payback_years > MAX_PAYBACK_YEARS:
-            issues.append(ValidationIssue(
-                severity="warning",
-                category="numeric_consistency",
-                code="PAYBACK_TOO_LONG",
-                message=(
-                    f"施策「{m.name}」の単純回収期間 {m.payback_years:.1f} 年が "
-                    f"目安 {MAX_PAYBACK_YEARS:.0f} 年を超過。経済性を再確認してください。"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="warning",
+                    category="numeric_consistency",
+                    code="PAYBACK_TOO_LONG",
+                    message=(
+                        f"施策「{m.name}」の単純回収期間 {m.payback_years:.1f} 年が "
+                        f"目安 {MAX_PAYBACK_YEARS:.0f} 年を超過。経済性を再確認してください。"
+                    ),
+                )
+            )
 
     # 数値目標の検査
     for t in plan.target_proposal.targets:
         if t.proposed_target_unit.startswith("%") and abs(t.proposed_target) > 100.0:
-            issues.append(ValidationIssue(
-                severity="error",
-                category="numeric_consistency",
-                code="TARGET_PCT_OUT_OF_RANGE",
-                message=(
-                    f"数値目標「{t.name}」の値 {t.proposed_target} は %換算で範囲外です。"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    category="numeric_consistency",
+                    code="TARGET_PCT_OUT_OF_RANGE",
+                    message=(
+                        f"数値目標「{t.name}」の値 {t.proposed_target} は %換算で範囲外です。"
+                    ),
+                )
+            )
 
     # 業界平均売上比の信頼性チェック
     # 業界統計の母集団（小規模事業所中心）と自社規模が乖離すると桁外れの値が出る。
     # 経営会議で単純表示すると defensibility が崩れるため warning を発行する。
     revenue_ratio = plan.benchmark.revenue_vs_avg_pct
     if revenue_ratio is not None and revenue_ratio > REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT:
-        issues.append(ValidationIssue(
-            severity="warning",
-            category="numeric_consistency",
-            code="BENCHMARK_RATIO_OUTLIER",
-            message=(
-                f"業界平均売上比 {revenue_ratio:.0f}% が信頼性しきい値 "
-                f"{REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT:.0f}% を超過。"
-                "業界統計の母集団と自社規模の乖離が大きく、経営会議では参考値として扱ってください。"
-            ),
-            suggestion=(
-                "業界平均比の単純表示は避け、相対参照（規模優位企業として上位帯）"
-                "に置き換えてください。"
-            ),
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="warning",
+                category="numeric_consistency",
+                code="BENCHMARK_RATIO_OUTLIER",
+                message=(
+                    f"業界平均売上比 {revenue_ratio:.0f}% が信頼性しきい値 "
+                    f"{REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT:.0f}% を超過。"
+                    "業界統計の母集団と自社規模の乖離が大きく、経営会議では参考値として扱ってください。"
+                ),
+                suggestion=(
+                    "業界平均比の単純表示は避け、相対参照（規模優位企業として上位帯）"
+                    "に置き換えてください。"
+                ),
+            )
+        )
 
     # 財務インパクトの業界感覚レンジ検証（過大評価/却下レベルの両方を捕捉）
     issues.extend(_validate_financial_sanity(plan))
@@ -390,62 +418,70 @@ def _validate_financial_sanity(plan: PlanDraftResult) -> list[ValidationIssue]:
     if base_op_profit > 0 and increase > 0:
         ratio = increase / base_op_profit
         if ratio > SANITY.operating_profit_increase_max_ratio:
-            issues.append(ValidationIssue(
-                severity="warning",
-                category="numeric_consistency",
-                code="OPERATING_PROFIT_INCREASE_EXCESSIVE",
-                message=(
-                    f"営業利益増加 {increase / 1e8:.2f}億円が現状営業利益の "
-                    f"{ratio * 100:.1f}% に達し、業界感覚しきい値 "
-                    f"{SANITY.operating_profit_increase_max_ratio * 100:.0f}% を超過。"
-                    "施策効果の重複や楽観前提が織り込まれていないか確認してください。"
-                ),
-                suggestion=(
-                    "Step 3 シナリオシミュレータで保守シナリオの値を併記し、"
-                    "CFO 質問に「最低でも保守シナリオで X 億円」と答えられる形にしてください。"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="warning",
+                    category="numeric_consistency",
+                    code="OPERATING_PROFIT_INCREASE_EXCESSIVE",
+                    message=(
+                        f"営業利益増加 {increase / 1e8:.2f}億円が現状営業利益の "
+                        f"{ratio * 100:.1f}% に達し、業界感覚しきい値 "
+                        f"{SANITY.operating_profit_increase_max_ratio * 100:.0f}% を超過。"
+                        "施策効果の重複や楽観前提が織り込まれていないか確認してください。"
+                    ),
+                    suggestion=(
+                        "Step 3 シナリオシミュレータで保守シナリオの値を併記し、"
+                        "CFO 質問に「最低でも保守シナリオで X 億円」と答えられる形にしてください。"
+                    ),
+                )
+            )
 
     if f.operating_profit_margin_lift_pp_total > SANITY.profit_margin_lift_max_pp:
-        issues.append(ValidationIssue(
-            severity="warning",
-            category="numeric_consistency",
-            code="PROFIT_MARGIN_LIFT_EXCESSIVE",
-            message=(
-                f"営業利益率改善幅 {f.operating_profit_margin_lift_pp_total:.2f}pp が"
-                f"業界感覚しきい値 {SANITY.profit_margin_lift_max_pp:.1f}pp を超過。"
-                "業界水準として極端な値です。"
-            ),
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="warning",
+                category="numeric_consistency",
+                code="PROFIT_MARGIN_LIFT_EXCESSIVE",
+                message=(
+                    f"営業利益率改善幅 {f.operating_profit_margin_lift_pp_total:.2f}pp が"
+                    f"業界感覚しきい値 {SANITY.profit_margin_lift_max_pp:.1f}pp を超過。"
+                    "業界水準として極端な値です。"
+                ),
+            )
+        )
 
     if f.total_investment_jpy > 0:
         npv_multiple = f.total_5y_npv_jpy / f.total_investment_jpy
         if npv_multiple > SANITY.npv_to_investment_max_multiple:
-            issues.append(ValidationIssue(
-                severity="warning",
-                category="numeric_consistency",
-                code="NPV_RATIO_EXCESSIVE",
-                message=(
-                    f"5年累積NPV / 必要投資 = {npv_multiple:.1f}倍 が業界感覚しきい値 "
-                    f"{SANITY.npv_to_investment_max_multiple:.0f}倍 を超過。"
-                    "投資額の桁・割引前提・効果の重複を確認してください。"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="warning",
+                    category="numeric_consistency",
+                    code="NPV_RATIO_EXCESSIVE",
+                    message=(
+                        f"5年累積NPV / 必要投資 = {npv_multiple:.1f}倍 が業界感覚しきい値 "
+                        f"{SANITY.npv_to_investment_max_multiple:.0f}倍 を超過。"
+                        "投資額の桁・割引前提・効果の重複を確認してください。"
+                    ),
+                )
+            )
         elif npv_multiple < SANITY.npv_to_investment_min_multiple:
-            issues.append(ValidationIssue(
-                severity="warning",
-                category="numeric_consistency",
-                code="NPV_RATIO_TOO_LOW",
-                message=(
-                    f"5年累積NPV / 必要投資 = {npv_multiple:.2f}倍 が業界感覚しきい値 "
-                    f"{SANITY.npv_to_investment_min_multiple:.1f}倍 を下回り、"
-                    "投資判断却下レベルです。"
-                ),
-                suggestion=(
-                    "施策の組合せ・段階導入・補助金活用で投資効率を引き上げるか、"
-                    "別の施策候補に差し替えを検討してください。"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="warning",
+                    category="numeric_consistency",
+                    code="NPV_RATIO_TOO_LOW",
+                    message=(
+                        f"5年累積NPV / 必要投資 = {npv_multiple:.2f}倍 が業界感覚しきい値 "
+                        f"{SANITY.npv_to_investment_min_multiple:.1f}倍 を下回り、"
+                        "投資判断却下レベルです。"
+                    ),
+                    suggestion=(
+                        "施策の組合せ・段階導入・補助金活用で投資効率を引き上げるか、"
+                        "別の施策候補に差し替えを検討してください。"
+                    ),
+                )
+            )
 
     return issues
 
@@ -455,45 +491,54 @@ def _validate_citations(plan: PlanDraftResult) -> list[ValidationIssue]:
     issues: list[ValidationIssue] = []
 
     if not plan.citations:
-        issues.append(ValidationIssue(
-            severity="error",
-            category="citation",
-            code="CITATIONS_EMPTY",
-            message="計画書ドラフトに出典が 1 件も付与されていません。",
-            suggestion="経営会議で「出典は？」と聞かれて即答できる状態を担保してください。",
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                category="citation",
+                code="CITATIONS_EMPTY",
+                message="計画書ドラフトに出典が 1 件も付与されていません。",
+                suggestion="経営会議で「出典は？」と聞かれて即答できる状態を担保してください。",
+            )
+        )
         return issues
 
     joined_text = " ".join(c.label + " " + c.url for c in plan.citations).lower()
     # 必須キーワード（CO2 と物流効率化法）— 改善基準は施策側でカバーされるため warning に留める
     if "co2" not in joined_text and "排出" not in joined_text and "ガイドライン" not in joined_text:
-        issues.append(ValidationIssue(
-            severity="warning",
-            category="citation",
-            code="CITATION_CO2_GUIDELINE_MISSING",
-            message="CO2排出量算定ガイドラインの出典が見当たりません。",
-            suggestion=(
-                "core/export/citation.py:co2_factors_citation() を citations に追加してください。"
-            ),
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="warning",
+                category="citation",
+                code="CITATION_CO2_GUIDELINE_MISSING",
+                message="CO2排出量算定ガイドラインの出典が見当たりません。",
+                suggestion=(
+                    "core/export/citation.py:co2_factors_citation() を "
+                    "citations に追加してください。"
+                ),
+            )
+        )
     if "物流効率化法" not in joined_text and "logistics" not in joined_text:
-        issues.append(ValidationIssue(
-            severity="error",
-            category="citation",
-            code="CITATION_EFFICIENCY_LAW_MISSING",
-            message="物流効率化法（根拠法）の出典が citations に含まれていません。",
-            suggestion="logistics_efficiency_law_citation() を citations に追加してください。",
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                category="citation",
+                code="CITATION_EFFICIENCY_LAW_MISSING",
+                message="物流効率化法（根拠法）の出典が citations に含まれていません。",
+                suggestion="logistics_efficiency_law_citation() を citations に追加してください。",
+            )
+        )
 
     # 各 citation の URL チェック
     for c in plan.citations:
         if not c.url or not c.url.startswith("http"):
-            issues.append(ValidationIssue(
-                severity="error",
-                category="citation",
-                code="CITATION_URL_INVALID",
-                message=f"出典「{c.label}」の URL が不正: '{c.url}'",
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    category="citation",
+                    code="CITATION_URL_INVALID",
+                    message=f"出典「{c.label}」の URL が不正: '{c.url}'",
+                )
+            )
 
     return issues
 
@@ -504,15 +549,17 @@ def _validate_compliance(plan: PlanDraftResult) -> list[ValidationIssue]:
 
     # CLO 選任義務の有無と計画書の整合性
     if not plan.eligibility.must_appoint_clo:
-        issues.append(ValidationIssue(
-            severity="info",
-            category="compliance",
-            code="CLO_NOT_REQUIRED",
-            message=(
-                "判定上 CLO 選任義務はありません。"
-                "それでも計画書ドラフトを提出する場合は任意の届出となります。"
-            ),
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="info",
+                category="compliance",
+                code="CLO_NOT_REQUIRED",
+                message=(
+                    "判定上 CLO 選任義務はありません。"
+                    "それでも計画書ドラフトを提出する場合は任意の届出となります。"
+                ),
+            )
+        )
 
     # CO2 削減目標が国家目標 ▲23.4% を下回っていないか
     co2_target = next(
@@ -520,16 +567,18 @@ def _validate_compliance(plan: PlanDraftResult) -> list[ValidationIssue]:
         None,
     )
     if co2_target is not None and abs(co2_target.proposed_target) < 23.0:
-        issues.append(ValidationIssue(
-            severity="warning",
-            category="compliance",
-            code="CO2_BELOW_NATIONAL_TARGET",
-            message=(
-                f"CO2 原単位削減目標 {co2_target.proposed_target}% が"
-                "物流分野国家目標 ▲23.4% を下回っています。"
-            ),
-            suggestion="国家目標と整合する水準まで引き上げを検討してください。",
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="warning",
+                category="compliance",
+                code="CO2_BELOW_NATIONAL_TARGET",
+                message=(
+                    f"CO2 原単位削減目標 {co2_target.proposed_target}% が"
+                    "物流分野国家目標 ▲23.4% を下回っています。"
+                ),
+                suggestion="国家目標と整合する水準まで引き上げを検討してください。",
+            )
+        )
 
     # 積載率目標が現実的範囲（業界平均 38% 未満や 100% 超）でないか
     load_target = next(
@@ -538,22 +587,26 @@ def _validate_compliance(plan: PlanDraftResult) -> list[ValidationIssue]:
     )
     if load_target is not None:
         if load_target.proposed_target > 100.0:
-            issues.append(ValidationIssue(
-                severity="error",
-                category="compliance",
-                code="LOAD_FACTOR_OVER_100",
-                message=f"積載率目標 {load_target.proposed_target}% が物理的上限 100% を超過。",
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="error",
+                    category="compliance",
+                    code="LOAD_FACTOR_OVER_100",
+                    message=f"積載率目標 {load_target.proposed_target}% が物理的上限 100% を超過。",
+                )
+            )
         elif load_target.proposed_target < (load_target.current_industry_avg or 0):
-            issues.append(ValidationIssue(
-                severity="warning",
-                category="compliance",
-                code="LOAD_FACTOR_BELOW_INDUSTRY_AVG",
-                message=(
-                    f"積載率目標 {load_target.proposed_target}% が業界平均 "
-                    f"{load_target.current_industry_avg}% を下回っています。"
-                ),
-            ))
+            issues.append(
+                ValidationIssue(
+                    severity="warning",
+                    category="compliance",
+                    code="LOAD_FACTOR_BELOW_INDUSTRY_AVG",
+                    message=(
+                        f"積載率目標 {load_target.proposed_target}% が業界平均 "
+                        f"{load_target.current_industry_avg}% を下回っています。"
+                    ),
+                )
+            )
 
     # 会社区分 × 引用条文の整合性検査（短期4・Codex 5 取込）
     issues.extend(_validate_law_article_consistency(plan))
@@ -587,66 +640,73 @@ def _validate_law_article_consistency(plan: PlanDraftResult) -> list[ValidationI
     wrong_article_str = f"第{wrong_article}条"
 
     citation_text = " ".join(
-        (c.label or "") + " " + (c.ordinance_number or "")
-        for c in plan.citations
+        (c.label or "") + " " + (c.ordinance_number or "") for c in plan.citations
     )
 
     # 1. 期待される条文が citations に含まれているか
     if correct_article_str not in citation_text:
         category_label = "特定連鎖化事業者" if is_chain else "特定荷主"
-        issues.append(ValidationIssue(
-            severity="error",
-            category="law_article_consistency",
-            code=f"LAW_ARTICLE_MISSING_{expected_article}",
-            message=(
-                f"自社区分（{category_label}）の根拠条文 物流効率化法 "
-                f"{correct_article_str} が citations に含まれていません。"
-            ),
-            suggestion=(
-                f"core/export/citation.py の "
-                f"logistics_efficiency_law_article{expected_article}_citation() "
-                "を citations に追加してください。"
-            ),
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="error",
+                category="law_article_consistency",
+                code=f"LAW_ARTICLE_MISSING_{expected_article}",
+                message=(
+                    f"自社区分（{category_label}）の根拠条文 物流効率化法 "
+                    f"{correct_article_str} が citations に含まれていません。"
+                ),
+                suggestion=(
+                    f"core/export/citation.py の "
+                    f"logistics_efficiency_law_article{expected_article}_citation() "
+                    "を citations に追加してください。"
+                ),
+            )
+        )
 
     # 2. 矛盾する条文が含まれていないか（連鎖化に第46条 / 荷主に第65条）
     if wrong_article_str in citation_text:
         category_label = "特定連鎖化事業者" if is_chain else "特定荷主"
-        issues.append(ValidationIssue(
-            severity="warning",
-            category="law_article_consistency",
-            code=f"LAW_ARTICLE_MISMATCH_{wrong_article}",
-            message=(
-                f"自社区分は{category_label}（{correct_article_str}適用）ですが、"
-                f"citations に {wrong_article_str} への参照が混入しています。"
-            ),
-            suggestion=(
-                f"{wrong_article_str} は別区分の条文です。"
-                "PPT/Word/Markdown 本文の文言切替を含めて確認してください。"
-            ),
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="warning",
+                category="law_article_consistency",
+                code=f"LAW_ARTICLE_MISMATCH_{wrong_article}",
+                message=(
+                    f"自社区分は{category_label}（{correct_article_str}適用）ですが、"
+                    f"citations に {wrong_article_str} への参照が混入しています。"
+                ),
+                suggestion=(
+                    f"{wrong_article_str} は別区分の条文です。"
+                    "PPT/Word/Markdown 本文の文言切替を含めて確認してください。"
+                ),
+            )
+        )
 
     # 3. CLO 選任義務がある場合、第66条への参照があるか
     if plan.eligibility.must_appoint_clo and "第66条" not in citation_text:
-        issues.append(ValidationIssue(
-            severity="warning",
-            category="law_article_consistency",
-            code="CLO_LAW_ARTICLE_66_MISSING",
-            message=(
-                "CLO 選任義務がありますが、citations に 物流効率化法 第66条 "
-                "（CLO 選任義務）への参照が見当たりません。"
-            ),
-            suggestion=(
-                "logistics_efficiency_law_article66_citation() を citations に追加し、"
-                "提出物に CLO 選任の法的根拠を明示してください。"
-            ),
-        ))
+        issues.append(
+            ValidationIssue(
+                severity="warning",
+                category="law_article_consistency",
+                code="CLO_LAW_ARTICLE_66_MISSING",
+                message=(
+                    "CLO 選任義務がありますが、citations に 物流効率化法 第66条 "
+                    "（CLO 選任義務）への参照が見当たりません。"
+                ),
+                suggestion=(
+                    "logistics_efficiency_law_article66_citation() を citations に追加し、"
+                    "提出物に CLO 選任の法的根拠を明示してください。"
+                ),
+            )
+        )
 
     return issues
 
 
 def _compute_compliance_score(
-    error_count: int, warning_count: int, total_checks: int,
+    error_count: int,
+    warning_count: int,
+    total_checks: int,
 ) -> float:
     """準拠率（0〜100%）を算出する。
 
