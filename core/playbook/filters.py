@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.export.formatter import format_jpy
 from core.playbook.measures import (
     ALL_MEASURES,
     Form3Section,
@@ -136,7 +137,7 @@ def build_search_summary(
         if filter_.industry:
             cond_parts.append(f"業種={filter_.industry}")
         if filter_.revenue_jpy:
-            cond_parts.append(f"売上≧{filter_.revenue_jpy / 1e8:.1f}億円")
+            cond_parts.append(f"売上≧{format_jpy(filter_.revenue_jpy)}")
         if filter_.freight_tons:
             cond_parts.append(f"取扱量≧{filter_.freight_tons:,.0f}トン")
         if filter_.max_difficulty:
@@ -155,8 +156,12 @@ def build_search_summary(
 
     for m in measures:
         section_label = section_labels.get(m.form3_section, m.form3_section)
-        invest_low = m.typical_investment_jpy_low / 1e4
-        invest_high = m.typical_investment_jpy_high / 1e4
+        invest_low = format_jpy(
+            m.typical_investment_jpy_low, unit="man", digits=0, thousand_sep=True
+        )
+        invest_high = format_jpy(
+            m.typical_investment_jpy_high, unit="man", digits=0, thousand_sep=True
+        )
         co2_str = (
             f"CO2 ▲{m.expected_co2_reduction_pct:.0f}%"
             if m.expected_co2_reduction_pct is not None
@@ -175,7 +180,7 @@ def build_search_summary(
         lines += [
             f"◆ [{m.measure_id}] {m.name}",
             f"  分類: {section_label} / 難易度 {m.implementation_difficulty}/5",
-            f"  投資: {invest_low:,.0f}〜{invest_high:,.0f}万円",
+            f"  投資: {invest_low}〜{invest_high}",
             f"  期待効果: {co2_str} / {cost_str} / {payback_str}",
             f"  概要: {m.description}",
         ]

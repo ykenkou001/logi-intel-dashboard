@@ -22,6 +22,7 @@ from typing import Literal
 from docx import Document
 
 from core.analytics.plan_draft import PlanDraftResult, generate_plan_draft
+from core.export.formatter import format_jpy
 from core.legal.article_resolver import expected_plan_article_number
 from core.static.industry_benchmarks import (
     REVENUE_VS_AVG_RELIABILITY_THRESHOLD_PCT,
@@ -322,7 +323,7 @@ def _validate_numeric_consistency(plan: PlanDraftResult) -> list[ValidationIssue
                     code="COST_EXCESSIVE",
                     message=(
                         f"施策「{m.name}」のコスト削減額 "
-                        f"{cost / 1e8:,.1f}億円が上限を超過。桁を確認してください。"
+                        f"{format_jpy(cost, thousand_sep=True)}が上限を超過。桁を確認してください。"
                     ),
                 )
             )
@@ -343,8 +344,10 @@ def _validate_numeric_consistency(plan: PlanDraftResult) -> list[ValidationIssue
                     category="numeric_consistency",
                     code="INVESTMENT_EXCESSIVE",
                     message=(
-                        f"施策「{m.name}」の投資額 {m.investment_jpy / 1e8:,.1f}億円が "
-                        f"上限 {MAX_INVESTMENT_JPY / 1e8:,.0f}億円を超過。桁を確認してください。"
+                        f"施策「{m.name}」の投資額 "
+                        f"{format_jpy(m.investment_jpy, thousand_sep=True)}が "
+                        f"上限 {format_jpy(MAX_INVESTMENT_JPY, digits=0, thousand_sep=True)}を"
+                        "超過。桁を確認してください。"
                     ),
                 )
             )
@@ -424,7 +427,7 @@ def _validate_financial_sanity(plan: PlanDraftResult) -> list[ValidationIssue]:
                     category="numeric_consistency",
                     code="OPERATING_PROFIT_INCREASE_EXCESSIVE",
                     message=(
-                        f"営業利益増加 {increase / 1e8:.2f}億円が現状営業利益の "
+                        f"営業利益増加 {format_jpy(increase, digits=2)}が現状営業利益の "
                         f"{ratio * 100:.1f}% に達し、業界感覚しきい値 "
                         f"{SANITY.operating_profit_increase_max_ratio * 100:.0f}% を超過。"
                         "施策効果の重複や楽観前提が織り込まれていないか確認してください。"
