@@ -311,6 +311,7 @@ Claude 単独で抱えず、**積極的に Codex に意見を求める**こと�
 - 不明な領域に手を入れる前に、健一に「これは Codex 領域では？」と確認する
 - `pyproject.toml` の dependencies は両者が触りうる共有領域。先に触る側が他方に通知する想定で、健一に都度確認する
 - **`main` 直接 push は禁止**。Codex も Claude も別ブランチ + PR 経由（branch protection で hook reject される）
+- **別セッションが作業中のリポジトリで checkout を切り替えない**。メインリポジトリで `git checkout` すると、別セッションの作業ツリーが巻き込まれて事故になる。並列で動くときは **`git worktree`** を使い、独立した作業ディレクトリで進める（手順は [docs/git_workflow.md](docs/git_workflow.md) §並行セッションでは git worktree を使う を参照）
 
 ### 9.4 Codex の助言を取り込む際の作法
 

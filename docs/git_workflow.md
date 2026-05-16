@@ -52,6 +52,39 @@ git branch -d fix/lambda-deploy-zip
 - 互いの作業境界は `HANDOFF_NEXT_SESSION.md` の冒頭表を参照
 - main マージ後は他方のセッションで `git pull` してから作業を続ける
 
+#### 並行セッションでは git worktree を使う（推奨）
+
+別セッションが作業中（特定ブランチを checkout 済み）の状態で、別タスクに着手する場合は、
+**現在ブランチを切り替えず** に `git worktree` で独立した作業ディレクトリを作る。
+これでメインリポジトリの index / working tree に一切触れず、別セッションを邪魔せずに
+並列開発できる。
+
+```powershell
+# 1. main を最新化（メインリポジトリ側）
+git fetch origin
+
+# 2. main から派生した新ブランチ用 worktree を作成
+#    パス命名: <repo-root>.<topic>（同階層にぶら下げる）
+git worktree add ../logi-intel-dashboard.<topic> -b <branch-name> origin/main
+
+# 3. worktree 内で作業（Edit / commit / push は worktree ディレクトリで実行）
+#    Bash / git コマンドは絶対パスか `git -C <worktree-path>` で実行する
+
+# 4. PR 作成・マージ後、worktree を片付ける
+git worktree remove ../logi-intel-dashboard.<topic>
+git branch -d <branch-name>      # ローカルブランチ削除（origin から fetch すれば復元可）
+git worktree prune               # 念のため stale entries を掃除
+```
+
+**ルール**:
+
+- worktree のパスは必ずリポジトリ外（親階層や別ドライブ）に作る。リポジトリ内に作ると `.gitignore` 管理が混乱する
+- worktree ごとに別ブランチ。同じブランチを 2 つの worktree に checkout はできない（git が拒否する）
+- 1 つの worktree が触れるファイル領域は CLAUDE.md §9.2 / §9.3 の役割分担に従う
+- マージ後の片付け（remove + prune）まで責任を持つ。放置すると `git worktree list` が肥大化する
+- 緊急時の停止方法: worktree の作業を捨てたい場合は `git worktree remove --force <path>` でブランチごと削除
+- **AI セッションで使う場合**: 「別セッションが X ブランチで作業中」と確認したら、まず worktree を立てる。`git checkout <other-branch>` でメインリポを乗っ取らない
+
 ---
 
 ## ブランチ戦略
