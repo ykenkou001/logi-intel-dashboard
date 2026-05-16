@@ -1,11 +1,15 @@
 """国税庁 法人番号 API クライアント。
 
 認証: クエリパラメータ id（環境変数 CORP_NUMBER_APP_ID）
-エンドポイント: https://api.houjin-bangou.nta.go.jp/4/
+エンドポイント: https://api.houjin-bangou.nta.go.jp/4/name
+書式: type=02（CSV / UTF-8）で取得し、仕様書で定義された 30 列の項目順に従って
+      dict 化する。v4 API は JSON 形式を提供しない（type=12 は XML）ため CSV を採用。
 """
 
 from __future__ import annotations
 
+import csv
+import io
 from typing import Any, cast
 
 from core import cache
@@ -14,6 +18,40 @@ from core.secrets import get_secret
 
 _BASE_URL = "https://api.houjin-bangou.nta.go.jp/4/"
 _TTL_SECONDS = 30 * 24 * 60 * 60  # 30 日
+
+# 法人番号 Web-API v4 仕様 §3「提供データの内容」の corporation 行の項目順
+_CORP_COLUMNS: tuple[str, ...] = (
+    "sequenceNumber",
+    "corporateNumber",
+    "process",
+    "correct",
+    "updateDate",
+    "changeDate",
+    "name",
+    "nameImageId",
+    "kind",
+    "prefectureName",
+    "cityName",
+    "streetNumber",
+    "addressImageId",
+    "prefectureCode",
+    "cityCode",
+    "postCode",
+    "addressOutside",
+    "addressOutsideImageId",
+    "closeDate",
+    "closeCause",
+    "successorCorporateNumber",
+    "changeCause",
+    "assignmentDate",
+    "latest",
+    "enName",
+    "enPrefectureName",
+    "enCityName",
+    "enAddressOutside",
+    "furigana",
+    "hihyoji",
+)
 
 
 class CorpNumberApiError(Exception):
@@ -40,7 +78,8 @@ class CorpNumberClient(AsyncHTTPClient):
         return {k: "***" if k == "id" else v for k, v in base.items()}
 
     def _base_params(self) -> dict[str, str]:
-        return {"id": self._app_id, "type": "12"}  # type=12 は JSON 形式
+        # type=02: CSV UTF-8。v4 API には JSON 形式が存在しないため CSV を採用。
+        return {"id": self._app_id, "type": "02"}
 
     async def search_by_name(
         self,
@@ -53,22 +92,21 @@ class CorpNumberClient(AsyncHTTPClient):
         """法人名で検索する。
 
         Args:
-            name: 法人名（部分一致）
+            name: 法人名（前方一致）
             prefecture_code: 都道府県コード（"13"=東京, 省略可）
             kind: 法人種別（"01"=国の機関, "02"=地方公共団体, "03"=設立登記法人）
-            page: ページ番号（1 始まり）
-            count: 1ページあたりの件数（最大 2000）
+            page: 分割ページ番号（1 始まり / NTA API の `divide` に対応）
+            count: 呼び出し側に返す件数の上限（API は最大 4000 件/ページ固定。
+                クライアント側でスライスする）
 
         Returns:
-            corporation リスト。各要素に corporateNumber・name・prefectureName 等が入る。
+            corporation 情報の dict リスト。各要素は _CORP_COLUMNS の項目名をキーに持つ。
         """
         params: dict[str, Any] = {
             **self._base_params(),
             "name": name,
             "kind": kind,
-            "from": str((page - 1) * count + 1),
-            "count": str(count),
-            "close": "0",
+            "divide": str(page),
         }
         if prefecture_code:
             params["prefecture"] = prefecture_code
@@ -76,16 +114,34 @@ class CorpNumberClient(AsyncHTTPClient):
         cache_key = cache.make_key("corp:name", {k: v for k, v in params.items() if k != "id"})
         cached = cache.get(cache_key)
         if cached is not None:
-            return cast(list[dict[str, Any]], cached)
+            return cast(list[dict[str, Any]], cached)[:count]
 
         try:
-            data = await self.get_json("name.json", params)
+            text = await self.get_html("name", params)
         except HttpClientError as exc:
             raise CorpNumberApiError(f"法人名検索エラー: {exc}") from exc
 
-        corporations = data.get("corporation", [])
-        if isinstance(corporations, dict):
-            corporations = [corporations]
-
+        corporations = _parse_csv(text)
         cache.store(cache_key, corporations, _TTL_SECONDS)
-        return cast(list[dict[str, Any]], corporations)
+        return corporations[:count]
+
+
+def _parse_csv(text: str) -> list[dict[str, Any]]:
+    """NTA v4 法人番号 API の CSV レスポンスを dict のリストへ変換する。
+
+    1 行目は `lastUpdateDate, count, divideNumber, divideSize` のサマリヘッダ。
+    2 行目以降が 法人情報レコード（_CORP_COLUMNS の項目順）。
+    """
+    reader = csv.reader(io.StringIO(text))
+    rows = list(reader)
+    if len(rows) <= 1:
+        return []
+    corporations: list[dict[str, Any]] = []
+    for row in rows[1:]:
+        if not row:
+            continue
+        record: dict[str, Any] = {
+            col: (row[i] if i < len(row) else "") for i, col in enumerate(_CORP_COLUMNS)
+        }
+        corporations.append(record)
+    return corporations
