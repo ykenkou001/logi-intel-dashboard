@@ -4,6 +4,20 @@
 
 ---
 
+## 2026-05-16 — `fix/corp-number-csv-endpoint`（NTA 法人番号 API クライアントのバグ修正）
+
+- **[2026-05-16] [外部 API 仕様] 国税庁 法人番号 v4 API は JSON を提供しない**
+  - 問題: 既存実装が `type=12 は JSON 形式` と誤認しエンドポイントを `/4/name.json` で叩いていた。実機では `/4/name.json → 404`、`/4/name?type=12 → XML`、`/4/name?type=02 → CSV(UTF-8)`、`/4/name?type=01 → CSV(Shift_JIS)`。JSON オプションは v4/v5/v6 とも存在しない
+  - 解決策: パスを `name` に修正 + `type=02` (CSV UTF-8) に切替 + `csv.reader` で 30 列を `_CORP_COLUMNS` の項目順に dict 化
+  - 適用: 外部 API クライアントを「申請待ち」状態で実装する場合、API 仕様のレスポンス形式は **取得前提のドキュメントだけで決め打ちしない**。仕様書の表記が古い・誤訳である可能性も疑う
+
+- **[2026-05-16] [テスト戦略] 実 API 未到達のまま `get_json` を全件 mock すると致命的バグを見逃す**
+  - 問題: `tests/core/test_corp_number.py` の全 3 テストが `patch.object(CorpNumberClient, "get_json", ...)` で実 API を一切叩かず通っていた。フェーズ2 の API ID 申請待ち期間中に書いたコードがエンドポイント誤り + フォーマット誤りを抱えたまま本番投入直前まで残った
+  - 解決策: 申請待ちで実機検証できない API クライアントには (1) API ID 取得後の **最初の作業でスモークテストを実 API に投げる手順** をチェックリスト化、(2) mock 対象を `_get` ではなく `get_html` 等の **HTTP 層の 1 段下** に揃え、レスポンス文字列の構文解析もテストに含める
+  - 適用: 「mock テストが通る = 実装が動く」ではない。Tier 1 の外部 API（e-Stat / NTA / 気象庁 等）は実 API スモークテストを CI とは別に手動チェックリストへ載せる
+
+---
+
 ## 2026-05-09 — `refactor/codebase-cleanup-202605`（whole-repo リファクタ PR）
 
 - **[2026-05-09] [リファクタ運用] スナップショットテストが多い領域では「基盤関数の追加」と「callsites 置換」を別 PR に分ける**
