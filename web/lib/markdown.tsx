@@ -9,13 +9,23 @@ type Block =
   | { type: "code"; code: string };
 
 const headingClass: Record<number, string> = {
-  1: "text-2xl md:text-3xl font-bold text-gray-950 mt-0 mb-4",
-  2: "text-xl md:text-2xl font-bold text-[#1F4E79] mt-10 mb-4 pb-2 border-b border-blue-100",
-  3: "text-lg font-bold text-gray-900 mt-8 mb-3",
-  4: "text-base font-bold text-gray-800 mt-6 mb-2",
-  5: "text-sm font-bold text-gray-700 mt-5 mb-2",
-  6: "text-sm font-bold text-gray-700 mt-5 mb-2",
+  1: "text-2xl md:text-3xl font-bold text-gray-950 mt-0 mb-4 scroll-mt-24",
+  2: "text-xl md:text-2xl font-bold text-[#1F4E79] mt-10 mb-4 pb-2 border-b border-blue-100 scroll-mt-24",
+  3: "text-lg font-bold text-gray-900 mt-8 mb-3 scroll-mt-24",
+  4: "text-base font-bold text-gray-800 mt-6 mb-2 scroll-mt-24",
+  5: "text-sm font-bold text-gray-700 mt-5 mb-2 scroll-mt-24",
+  6: "text-sm font-bold text-gray-700 mt-5 mb-2 scroll-mt-24",
 };
+
+function slugify(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^\p{L}\p{N}-]/gu, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 export function parseMarkdown(markdown: string): Block[] {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
@@ -195,43 +205,44 @@ export function renderMarkdown(markdown: string): ReactNode {
 
 function renderHeading(level: number, text: string, key: number): ReactNode {
   const className = headingClass[level];
+  const id = slugify(text);
   if (level === 1) {
     return (
-      <h1 key={key} className={className}>
+      <h1 key={key} id={id} className={className}>
         {renderInline(text)}
       </h1>
     );
   }
   if (level === 2) {
     return (
-      <h2 key={key} className={className}>
+      <h2 key={key} id={id} className={className}>
         {renderInline(text)}
       </h2>
     );
   }
   if (level === 3) {
     return (
-      <h3 key={key} className={className}>
+      <h3 key={key} id={id} className={className}>
         {renderInline(text)}
       </h3>
     );
   }
   if (level === 4) {
     return (
-      <h4 key={key} className={className}>
+      <h4 key={key} id={id} className={className}>
         {renderInline(text)}
       </h4>
     );
   }
   if (level === 5) {
     return (
-      <h5 key={key} className={className}>
+      <h5 key={key} id={id} className={className}>
         {renderInline(text)}
       </h5>
     );
   }
   return (
-    <h6 key={key} className={className}>
+    <h6 key={key} id={id} className={className}>
       {renderInline(text)}
     </h6>
   );
@@ -259,7 +270,9 @@ function splitTableRow(line: string): string[] {
 }
 
 function renderInline(text: string): ReactNode[] {
-  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*)/g).filter(Boolean);
+  const parts = text
+    .split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\([^)]+\))/g)
+    .filter(Boolean);
   return parts.map((part, index) => {
     if (part.startsWith("`") && part.endsWith("`")) {
       return (
@@ -277,6 +290,24 @@ function renderInline(text: string): ReactNode[] {
         <strong key={index} className="font-bold text-gray-950">
           {part.slice(2, -2)}
         </strong>
+      );
+    }
+    const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(part);
+    if (link) {
+      const [, label, href] = link;
+      const isAnchor = href.startsWith("#");
+      const isExternal = /^https?:\/\//.test(href);
+      return (
+        <a
+          key={index}
+          href={href}
+          className="text-[#2E73AC] underline-offset-2 hover:underline hover:text-[#1F4E79]"
+          {...(isExternal && !isAnchor
+            ? { target: "_blank", rel: "noreferrer" }
+            : {})}
+        >
+          {label}
+        </a>
       );
     }
     return <span key={index}>{part}</span>;
