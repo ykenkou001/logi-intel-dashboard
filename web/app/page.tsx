@@ -166,31 +166,39 @@ export default function HomePage() {
               )
             )}
           </div>
-          <Link
-            href="/dashboard/plan-draft"
-            className="inline-flex items-center gap-2 bg-white text-[#1F4E79] font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-blue-50 transition-colors shadow-md"
-          >
-            計画書ドラフトを生成する
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/check"
+              className="inline-flex items-center gap-2 bg-white text-[#1F4E79] font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-blue-50 transition-colors shadow-md"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-              />
-            </svg>
-          </Link>
-          <Link
-            href="/guide"
-            className="ml-3 inline-flex items-center gap-2 border border-white/30 bg-white/10 text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-white/20 transition-colors"
-          >
-            まず使い方を見る
-          </Link>
+              まず対象か 30 秒チェック
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+                />
+              </svg>
+            </Link>
+            <Link
+              href="/dashboard/plan-draft"
+              className="inline-flex items-center gap-2 border border-white/40 bg-white/10 text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-white/20 transition-colors"
+            >
+              計画書ドラフトを生成する
+            </Link>
+            <Link
+              href="/guide"
+              className="inline-flex items-center gap-2 border border-white/30 bg-white/5 text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-white/15 transition-colors"
+            >
+              まず使い方を見る
+            </Link>
+          </div>
         </div>
       </section>
 
