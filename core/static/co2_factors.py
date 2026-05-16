@@ -48,11 +48,14 @@ CO2_FACTORS = Co2EmissionFactors()
 
 FRESHNESS = Freshness(
     label="CO2 排出原単位（共同ガイドライン Ver.3.2）",
-    last_updated=date(2023, 6, 1),  # 共同ガイドライン Ver.3.2 発行月
+    last_updated=date(2026, 5, 16),  # Ver.3.2 が現行最新版である旨を公式サイトで再確認した日
     update_cadence="biennial",
     source_url="https://www.greenpartnership.jp/guideline_ver3_2.pdf",
     notes=(
-        "経産省・国交省共同ガイドライン Ver.3.2（2023年6月）。"
+        "経産省・国交省共同ガイドライン Ver.3.2（2023年6月発行）。"
+        "2026-05-16 にグリーン物流パートナーシップ会議公式サイト "
+        "(https://www.greenpartnership.jp/co2) で Ver.3.2 が現行最新版であることを確認。"
+        "Ver.3.3 / Ver.4 等の上位バージョンは未公表。"
         "Ver.3.0→3.1→3.2 のリリース実績から概ね 2 年間隔で改訂チェック。"
     ),
 )
