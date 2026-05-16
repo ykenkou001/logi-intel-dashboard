@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import clo, company, files, macro
+from api.routers import check, clo, company, files, macro
 
 load_dotenv()
 
@@ -53,6 +53,7 @@ app.include_router(macro.router)
 app.include_router(clo.router)
 app.include_router(company.router)
 app.include_router(files.router)
+app.include_router(check.router)
 
 
 @app.get("/health", tags=["meta"])

@@ -655,3 +655,67 @@ export async function fetchWasteTraps(
     },
   );
 }
+
+// ─── CLO 義務対象スクリーニング（/check 画面）─────────────────
+//
+// `api/routers/check.py` の Pydantic スキーマと一致させる。
+export type CheckIndustryHint =
+  | "food"
+  | "chemical"
+  | "retail"
+  | "chain_franchise"
+  | "transport"
+  | "warehouse"
+  | "other";
+export type CheckFreightTonsBand =
+  | "lt_10k"
+  | "10k_50k"
+  | "50k_90k"
+  | "ge_90k"
+  | "unknown";
+export type CheckVehiclesBand = "lt_50" | "50_150" | "ge_150" | "none";
+export type CheckWarehouseTonsBand = "lt_100k" | "100k_700k" | "ge_700k" | "none";
+export type CheckCloStatus = "appointed" | "planning" | "not_considered";
+export type CheckVerdict = "applies" | "gray_zone" | "not_applies";
+export type CheckCategory =
+  | "shipper"
+  | "chain_franchise"
+  | "warehouse"
+  | "freight_transport";
+
+export interface CheckRequest {
+  industry: CheckIndustryHint;
+  freight_tons_band: CheckFreightTonsBand;
+  vehicles_band: CheckVehiclesBand;
+  warehouse_tons_band: CheckWarehouseTonsBand;
+  annual_revenue_jpy?: number | null;
+  clo_status: CheckCloStatus;
+  is_chain_franchise: boolean;
+}
+
+export interface CategoryFinding {
+  category: CheckCategory;
+  verdict: CheckVerdict;
+  reason: string;
+  legal_article: string;
+  threshold_label: string;
+}
+
+export interface CheckMetadata {
+  overall_verdict: CheckVerdict;
+  findings: CategoryFinding[];
+  notes: string[];
+  days_until_deadline: number;
+  submission_deadline: string;
+  enforcement_date: string;
+  penalty: Record<string, string>;
+}
+
+export async function runEligibilityCheck(
+  body: CheckRequest,
+): Promise<ToolResponse> {
+  return request<ToolResponse>("/api/v1/check", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
