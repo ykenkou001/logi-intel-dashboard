@@ -427,16 +427,26 @@ function ResultSection({
           >
             {overallStyle.label}
           </span>
-          <span className="text-xs text-gray-600">
-            初回提出期限まで{" "}
-            <strong
-              className="tabular-nums text-base text-[#1F4E79]"
-              style={{ fontFamily: "var(--font-mono)" }}
+          <div className="text-xs text-gray-600 md:text-right">
+            <div>
+              初回提出期限まで{" "}
+              <strong
+                className="tabular-nums text-base text-[#1F4E79]"
+                style={{ fontFamily: "var(--font-mono)" }}
+              >
+                {metadata.days_until_deadline}
+              </strong>{" "}
+              日（{metadata.submission_deadline_label}）
+            </div>
+            <a
+              href={metadata.submission_deadline_source_url}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-block text-[#1F4E79] underline underline-offset-2 hover:text-[#173C5C]"
             >
-              {metadata.days_until_deadline}
-            </strong>{" "}
-            日（{metadata.submission_deadline}）
-          </span>
+              出典: {metadata.submission_deadline_source_label}
+            </a>
+          </div>
         </div>
         <p className="text-sm text-gray-800 leading-relaxed">
           {OVERALL_HEADLINE[overall]}

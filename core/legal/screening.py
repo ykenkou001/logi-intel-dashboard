@@ -11,10 +11,11 @@
     - 別途規定: 特定倉庫業者（年間入庫貨物 70 万トン以上）約 70 社
     - 別途規定: 特定貨物自動車運送事業者等（保有車両 150 台以上）約 790 社
 
-    出典: 国交省ポータル
+    出典: 国交省ポータルおよび国交省掲載の命令附則
         https://www.revised-logistics-act-portal.mlit.go.jp/designation/
+        https://www.mlit.go.jp/seisakutokatsu/freight/content/250829_ninushi.pdf
     施行日: 2026-04-01
-    初回計画提出期限: 2026-10-31
+    初回計画提出期限: 2026年度指定事業者は経過措置により2026年10月末日
     罰則:
         - CLO 未選任 100 万円以下の罰金
         - 届出懈怠 20 万円以下の過料
@@ -70,7 +71,7 @@ CHAIN_FRANCHISE_THRESHOLD_JPY: int = 100_000_000_000
 """特定連鎖化事業者の閾値（年間売上・円・暫定値）。"""
 
 SUBMISSION_DEADLINE: date = date(2026, 10, 31)
-"""初回中長期計画 提出期限。"""
+"""2026年度指定事業者の初回中長期計画提出期限（10月末日）。"""
 
 ENFORCEMENT_DATE: date = date(2026, 4, 1)
 """改正物流効率化法 施行日。"""
