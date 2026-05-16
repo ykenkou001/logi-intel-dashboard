@@ -36,6 +36,9 @@ from core.legal.screening import (
 
 router = APIRouter(prefix="/api/v1/check", tags=["check"])
 
+DEADLINE_SOURCE_LABEL = "国交省掲載の命令附則（2026年度の経過措置）"
+DEADLINE_SOURCE_URL = "https://www.mlit.go.jp/seisakutokatsu/freight/content/250829_ninushi.pdf"
+
 
 # ─── Pydantic 入力 ────────────────────────────────────────────────────
 
@@ -83,6 +86,9 @@ class CheckMetadata(BaseModel):
     notes: list[str]
     days_until_deadline: int
     submission_deadline: str = "2026-10-31"
+    submission_deadline_label: str = "2026年度指定事業者: 2026年10月末日"
+    submission_deadline_source_label: str = DEADLINE_SOURCE_LABEL
+    submission_deadline_source_url: str = DEADLINE_SOURCE_URL
     enforcement_date: str = "2026-04-01"
     penalty: dict[str, str] = Field(
         default_factory=lambda: {
@@ -114,7 +120,11 @@ def _build_summary(result: ScreeningResult) -> str:
     lines: list[str] = ["=== CLO 義務対象 スクリーニング判定 ==="]
     lines.append("")
     lines.append(f"【総合判定】{_VERDICT_LABEL[result.overall_verdict]}")
-    lines.append(f"【初回提出期限まで】残り {result.days_until_deadline} 日（2026-10-31）")
+    lines.append(
+        "【初回提出期限まで】"
+        f"残り {result.days_until_deadline} 日"
+        "（2026年度指定事業者: 2026年10月末日 / 2026-10-31）"
+    )
     lines.append("")
     lines.append("【区分別判定】")
     for f in result.findings:
@@ -135,6 +145,7 @@ def _build_summary(result: ScreeningResult) -> str:
     lines.append("")
     lines.append("【出典】国土交通省「物資の流通の効率化に関する法律」ポータル")
     lines.append("  https://www.revised-logistics-act-portal.mlit.go.jp/designation/")
+    lines.append(f"  {DEADLINE_SOURCE_LABEL}: {DEADLINE_SOURCE_URL}")
     return "\n".join(lines)
 
 
@@ -182,6 +193,11 @@ async def run_check(
             label="特定事業者の指定（物流効率化法ポータル）",
             url="https://www.revised-logistics-act-portal.mlit.go.jp/designation/",
             accessed_via="国土交通省ポータル",
+        ),
+        Citation(
+            label=DEADLINE_SOURCE_LABEL,
+            url=DEADLINE_SOURCE_URL,
+            accessed_via="国土交通省掲載PDF",
         ),
     ]
 

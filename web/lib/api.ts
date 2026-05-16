@@ -707,6 +707,9 @@ export interface CheckMetadata {
   notes: string[];
   days_until_deadline: number;
   submission_deadline: string;
+  submission_deadline_label: string;
+  submission_deadline_source_label: string;
+  submission_deadline_source_url: string;
   enforcement_date: string;
   penalty: Record<string, string>;
 }

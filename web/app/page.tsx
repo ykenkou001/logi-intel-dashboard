@@ -119,6 +119,9 @@ const DEMO_FLOW = [
   { href: "/dashboard/plan-draft", label: "計画書" },
 ] as const;
 
+const DEADLINE_SOURCE_URL =
+  "https://www.mlit.go.jp/seisakutokatsu/freight/content/250829_ninushi.pdf";
+
 export default function HomePage() {
   const today = new Date();
   const deadline = new Date("2026-10-31");
@@ -135,7 +138,7 @@ export default function HomePage() {
         <div className="relative">
           <div className="inline-flex items-center gap-2 border border-red-400/40 bg-red-900/20 text-red-200 rounded-full px-3 py-1 text-xs mb-5">
             <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-            初回計画提出期限 2026年10月31日 — 残り{" "}
+            2026年度 初回計画提出期限 2026年10月末日 — 残り{" "}
             <strong
               className="tabular-nums"
               style={{ fontFamily: "var(--font-mono)" }}
@@ -143,6 +146,17 @@ export default function HomePage() {
               {daysLeft}
             </strong>{" "}
             日
+          </div>
+          <div className="-mt-3 mb-5 text-[11px] leading-relaxed text-blue-100">
+            公式根拠: 通常年度は7月末、2026年度は経過措置により10月末日まで。{" "}
+            <a
+              href={DEADLINE_SOURCE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="font-semibold underline decoration-blue-200 underline-offset-2 hover:text-white"
+            >
+              国交省掲載の命令附則
+            </a>
           </div>
           <h2
             className="text-2xl md:text-3xl font-bold mb-3 leading-snug"

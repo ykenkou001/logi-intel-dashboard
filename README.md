@@ -2,7 +2,7 @@
 
 日本のオープンデータ（e-Stat / 国税庁法人番号 / xROAD / 気象庁 / 燃料価格）と自社物流データを統合し、**CLO（物流統括管理者）の意思決定・中長期計画・定期報告を徹底的に支援する**分析基盤。
 
-Claude Desktop/Code から MCP ツール（32 本）として呼び出せるほか、FastAPI REST API と Next.js ダッシュボード（13 画面）から、PPT / Word / Excel / Markdown の成果物ファイルを生成・ダウンロードできる。
+Claude Desktop/Code から MCP ツール（32 本）として呼び出せるほか、FastAPI REST API と Next.js ダッシュボード（13 画面）+ `/check` 対象企業判定画面から、PPT / Word / Excel / HTML / Markdown の成果物ファイルを生成・ダウンロードできる。
 
 **現在のフェーズ**: フェーズ 5.5 — 公開・記事化（MeasureExecutionRecord 永続化 + AWS 運用ハーデニング 完了済）
 
@@ -32,6 +32,7 @@ Claude Desktop/Code から MCP ツール（32 本）として呼び出せるほ�
 
 ### CLO 計画策定支援
 
+- CLO 義務対象スクリーニング（`/check`）— 特定荷主・特定連鎖化事業者・特定倉庫業者・特定貨物自動車運送事業者等の 4 区分を 30 秒で一次判定
 - **業種別 CLO 標準パッケージ**（製造業 / 卸売業 / 小売業 / 連鎖化事業者）— 推奨 KPI・施策・月次会議議題・定期報告データ項目・Override 4 分類
 - ベンチマーク位置分析（業種・規模別の業界平均比）
 - ドライバー需給ギャップ分析（都道府県別）
@@ -55,6 +56,7 @@ Claude Desktop/Code から MCP ツール（32 本）として呼び出せるほ�
 - 様式第 5 定期報告書ドラフト（Word）
 - 経営会議向け PPT（python-pptx、エグゼクティブサマリー付き）
 - Excel 数値表（出典シート付き）
+- HTML 詳細閲覧版（self-contained、印刷・社内ポータル掲載向け）
 - 法令根拠付き Markdown — 全数値に出典 URL（e-Stat 統計表 ID / 告示番号 / 省令番号）
 
 ### 自社データ取込
@@ -149,16 +151,17 @@ npm install
 
 ## Web ダッシュボードの使い方
 
-各画面（13 機能）の入力・出力・読み方・推奨利用順は **[docs/dashboard_feature_guide.md](docs/dashboard_feature_guide.md)** にまとめている。
+各ダッシュボード画面（13 機能）の入力・出力・読み方・推奨利用順は **[docs/dashboard_feature_guide.md](docs/dashboard_feature_guide.md)** にまとめている。
 本番ダッシュボード（CloudFront）からも、トップページの「機能別利用ガイド」リンクおよびアプリ内 `/guide` で同じ内容を参照できる。
 
 初見ユーザーは次の順で確認すると全体像を掴みやすい:
 
-1. ホーム（`/`） — 機能一覧
-2. 業種別 CLO 標準パッケージ（`/dashboard/industry-package`）
-3. F2 標準化スコア（`/dashboard/standardization`）
-4. 施策評価（`/dashboard/measure-eval`）
-5. 計画書生成（`/dashboard/plan-draft`）
+1. 対象企業判定（`/check`） — CLO 義務対象かを 4 区分で一次判定
+2. ホーム（`/`） — 機能一覧
+3. 業種別 CLO 標準パッケージ（`/dashboard/industry-package`）
+4. F2 標準化スコア（`/dashboard/standardization`）
+5. 施策評価（`/dashboard/measure-eval`）
+6. 計画書生成（`/dashboard/plan-draft`）
 
 ---
 
@@ -201,7 +204,7 @@ pwsh scripts/dev_web.ps1            # Next.js :3000（API_BASE=localhost:8000）
 ## 開発コマンド
 
 ```bash
-uv run pytest                        # テスト全実行（現在 835 件）
+uv run pytest                        # テスト全実行（現在 915 件）
 uv run pytest --cov=core             # カバレッジ付き
 uv run ruff check .                  # Lint
 uv run ruff format .                 # フォーマット
@@ -240,16 +243,16 @@ GitHub Actions で PR と `main` へのマージ後デプロイを管理する�
 |------|------|
 | `core/` | ビジネスロジック、分析、静的データ、成果物生成（CLO 支援の本体） |
 | `core/analytics/` | ベンチマーク・シナリオ・スコアリング等の分析モジュール |
-| `core/export/` | PPT / Word / Excel / Markdown 出力（CLO に届く価値の最終地点） |
+| `core/export/` | PPT / Word / Excel / HTML / Markdown 出力（CLO に届く価値の最終地点） |
 | `core/playbook/` | 業種別 CLO 標準パッケージ・施策プレイブック |
 | `core/static/` | CO2 係数・改善基準告示・標準運賃等の静的データ（鮮度管理付き） |
 | `mcp_server/` | Claude Desktop/Code 向け FastMCP ツール層 |
-| `api/` | FastAPI REST API 層（21 エンドポイント） |
-| `web/` | Next.js ダッシュボード（13 画面） |
+| `api/` | FastAPI REST API 層（27 エンドポイント） |
+| `web/` | Next.js ダッシュボード（13 画面）+ `/check` 対象企業判定 |
 | `lambda/` | AWS Lambda 用エントリ・依存定義 |
 | `infra/` | Terraform IaC |
 | `docs/` | 設計、ロードマップ、API、CLO ドメイン知識 |
-| `outputs/` | ローカル実行時の生成成果物（PPT / Word / Excel / Markdown） |
+| `outputs/` | ローカル実行時の生成成果物（PPT / Word / Excel / HTML / Markdown） |
 
 ---
 
