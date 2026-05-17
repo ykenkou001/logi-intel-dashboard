@@ -26,6 +26,8 @@ import httpx
 from fastapi import APIRouter, Body, Response, status
 from pydantic import BaseModel, Field
 
+from core.secrets import get_secret
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
@@ -87,8 +89,10 @@ async def collect(
 
     GA4 設定が無い場合でも 204 を返し、クライアント側の処理を妨げない。
     """
-    measurement_id = os.environ.get("GA4_MEASUREMENT_ID")
-    api_secret = os.environ.get("GA4_API_SECRET")
+    # ESTAT_APP_ID 等と同じく core.secrets.get_secret() で env / SSM を切り替える。
+    # Lambda 本番では LOGI_SECRETS_BACKEND=ssm のため SSM Parameter Store から取得。
+    measurement_id = get_secret("GA4_MEASUREMENT_ID")
+    api_secret = get_secret("GA4_API_SECRET")
     if not measurement_id or not api_secret:
         logger.warning(
             "[analytics] GA4 disabled (measurement_id=%s api_secret=%s)",
