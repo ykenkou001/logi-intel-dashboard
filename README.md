@@ -20,95 +20,91 @@ Claude Desktop/Code から MCP ツール（32 本）として呼び出せるほ�
 
 ---
 
-## 主な機能
+## CLO の意思決定フロー（このアプリの主な使い方）
 
-### データ取得（オープンデータ統合）
+本アプリは **CLO の中長期計画策定と継続運用** を、5 ステップの意思決定フローで支援する。各ステップで「何が問われるか」「使うツール」「成果物」を業務フロー順に並べた。
 
-- e-Stat 統計表検索・データ取得（物流特化 7 統計カタログ付き）
-- 国税庁法人番号 API による企業情報検索
-- xROAD リアルタイム / バウンディングボックス交通量
-- 気象庁 JSON 予報・警報
-- 燃料価格（軽油・ガソリン）
+### Step 1: 対象判定 — あなたの会社は CLO 義務対象か（30 秒）
 
-### CLO 計画策定支援
+> **問い**: 自社は特定第一種荷主・特定連鎖化事業者・特定倉庫業者・特定貨物自動車運送事業者等のどれに該当するか
 
-- CLO 義務対象スクリーニング（`/check`）— 特定荷主・特定連鎖化事業者・特定倉庫業者・特定貨物自動車運送事業者等の 4 区分を 30 秒で一次判定
-- **業種別 CLO 標準パッケージ**（製造業 / 卸売業 / 小売業 / 連鎖化事業者）— 推奨 KPI・施策・月次会議議題・定期報告データ項目・Override 4 分類
-- ベンチマーク位置分析（業種・規模別の業界平均比）
-- ドライバー需給ギャップ分析（都道府県別）
-- CLO 適用判定（第一種 / 第二種 / 連鎖化の 3 区分）
-- 施策目標値の自動提案（改善基準告示・国目標値準拠）
-- 施策プレイブック検索（投資レンジ・補助金・失敗パターン付き）
-- 施策 4 軸スコアリング + Top 3 推薦（`logi_clo_measure_eval`）
-- 施策実行可否チェック（緑 / 黄 / 赤判定 + 積載率 KPI 到達可能性）
-- シナリオシミュレーション（燃料 +20% 等 7 ストレス × 3 区分）
+| 項目 | 内容 |
+|---|---|
+| MCP ツール | `logi_clo_eligibility` |
+| Web 画面 | `/check`（30 秒判定）/ `/dashboard/driver-gap` |
+| 入力 | 業種・売上・年間取扱貨物量・保有車両数・倉庫保管量 |
+| 出力 | 該当区分判定 / CLO 選任義務有無 / 中長期計画提出義務有無 |
 
-### 意思決定支援（差別化の核心）
+### Step 2: 業界比較 — 自社の位置を知る
 
-- **F2 標準化スコア** — 自社の CLO 標準への準拠度を 0–100 で定量化
-- **J2 罠スコア** — 施策効果の誤検知を 6 軸セーフガードで抑止（立ち上げ期間 / データ欠損 / サンプル数 / 季節性 / 外部要因 / 投資回収前）
-- **J3 デイリーコックピット** — CLO の「今日の 3 判断」を意思決定軸 A/B/C で提示、想定反論 3 件付き
-- 経営会議向け財務翻訳（施策別 P&L 影響 / 炭素回避レンジ / 5 年 NPV）
+> **問い**: 自社の物流 KPI（積載率・荷待ち時間・物流コスト比率）は業界平均と比べてどうか。業種別 CLO 標準パッケージへの準拠度はどの程度か
 
-### 成果物出力（CLO が経営会議に持ち込めるもの）
+| 項目 | 内容 |
+|---|---|
+| MCP ツール | `logi_clo_benchmark_position` / `logi_clo_driver_gap` / `logi_clo_industry_package` / `logi_clo_standardization_score` / `logi_macro_overview` |
+| Web 画面 | `/dashboard/benchmark` / `/dashboard/macro` / `/dashboard/industry-package` / `/dashboard/standardization` |
+| 入力 | 業種（JSIC コード）・地域・自社プロフィール |
+| 出力 | 全国・地域別シェア / 業界平均比 / F2 標準化スコア（0–100）/ ドライバー需給ギャップ |
 
-- 国交省様式第 3 別紙 中長期計画書ドラフト（Word + Markdown）
-- 様式第 5 定期報告書ドラフト（Word）
-- 経営会議向け PPT（python-pptx、エグゼクティブサマリー付き）
-- Excel 数値表（出典シート付き）
-- HTML 詳細閲覧版（self-contained、印刷・社内ポータル掲載向け）
-- 法令根拠付き Markdown — 全数値に出典 URL（e-Stat 統計表 ID / 告示番号 / 省令番号）
+### Step 3: 施策評価 — 何をやれば一番効くか（差別化の核心）
 
-### 自社データ取込
+> **問い**: 10〜30 ある施策候補のうち、自社にとって今やるべき Top 3 はどれか。なぜ他の施策を選ばなかったか（**選外理由まで説明できる状態**）
 
-- Excel / CSV テンプレ記入 → `logi_clo_load_company` で取込
-- サンプル 3 社（製造業 / 卸売業 / 連鎖化）で即試用可能
+| 項目 | 内容 |
+|---|---|
+| MCP ツール | `logi_clo_playbook_search` / `logi_clo_measure_eval` / `logi_clo_feasibility_check` / `logi_clo_target_proposal` / `logi_clo_simulate_measures` / `logi_clo_scenario_sim` / `logi_clo_waste_traps` |
+| Web 画面 | `/dashboard/playbook` / `/dashboard/measure-eval` / `/dashboard/scenario-sim` / `/dashboard/waste-traps` |
+| 入力 | 自社プロフィール（Step 1〜2 で確定）+ 業種別 CLO 標準パッケージ |
+| 出力 | Top 3 推薦 + ROI / 実装可能性 / 法令適合度 / 補助金マッチ / **不採用理由**（Bottom 3）/ 罠スコア（誤検知抑止）/ 燃料高騰等 7 ストレス × 3 区分シミュ |
+
+### Step 4: 計画書ドラフト — 経営会議で説明する
+
+> **問い**: 国交省様式に準拠した中長期計画書ドラフトを、PPT / Word / Excel で出力できるか。準拠率は何 % か
+
+| 項目 | 内容 |
+|---|---|
+| MCP ツール | `logi_clo_financial_translate` / `logi_clo_plan_draft` / `logi_clo_executive_brief` / `logi_clo_submission_validate` |
+| Web 画面 | `/dashboard/plan-draft` |
+| 入力 | Step 3 で確定した施策セット |
+| 出力 | 様式第 3 別紙 Word / 経営会議用 PPT（エグゼクティブサマリー付き）/ 詳細データ Excel / 提出前準拠率レポート / 法令根拠付き Markdown |
+
+### Step 5: 継続運用 — 翌年度報告まで支える
+
+> **問い**: 2026-10-31 提出後、毎年度 7 月末日の定期報告でどう品質を維持するか。経営会議で「なぜこの施策？」「なぜ選ばなかった？」に毎回答えられるか
+
+| 項目 | 内容 |
+|---|---|
+| MCP ツール | `logi_clo_today_decisions` / `logi_clo_periodic_report_draft` / `logi_clo_wait_heatmap` / `logi_clo_certified_match` / `logi_clo_load_company` / `logi_clo_generate_template` |
+| Web 画面 | `/dashboard/cockpit` / `/dashboard/wait-heatmap` / `/dashboard/company` |
+| 入力 | 月次 KPI 実績 / 施策実行記録 |
+| 出力 | デイリーコックピット（今日の 3 判断 + 想定反論 3 件）/ 様式第 5 定期報告書 Word / 荷待ち・荷役時間ヒートマップ |
+
+### 出口層（Step 4〜5 共通）
+
+5 ステップのどこからでも、以下の成果物形式で出力できる。**全数値に出典 URL**（e-Stat 統計表 ID / 告示番号 / 省令番号）を付与する。
+
+- **PPT**（経営会議向け、最優先）— python-pptx、エグゼクティブサマリースライド固定配置
+- **Word** — 様式第 3 別紙 / 様式第 5 法定様式に準拠
+- **Excel** — サマリーシート + 詳細表 + 出典シートの 3 層構造
+- **HTML** — self-contained、印刷・社内ポータル掲載向け
+- **Markdown** — 社内 Wiki / レビュー / PR 貼り付け向け
 
 ---
 
-## MCP ツール一覧（Claude Desktop / Code から使用）
+## 機能カバレッジ（参考）
 
-### オープンデータ系（10 本）
+| カテゴリ | 内容 |
+|---|---|
+| **オープンデータ統合** | e-Stat（物流特化 7 統計カタログ）/ 国税庁法人番号 / xROAD（交通量）/ 気象庁（予報・警報）/ 燃料価格 |
+| **MCP ツール** | 計 32 本（オープンデータ系 10 / CLO 支援系 22） |
+| **REST API** | FastAPI、27 エンドポイント |
+| **Web ダッシュボード** | Next.js、13 機能画面 + `/check` 対象判定 + `/guide` 利用ガイド |
+| **業種別パッケージ** | 製造業 / 卸売業 / 小売業 / 連鎖化事業者（連鎖化は `第 65 条` 強制ガード付き） |
+| **法令ロジック** | 改正物流効率化法（第 5 条 / 第 46 条 / 第 65 条）/ 改善基準告示 2024-04 / 標準的運賃 2024-03 改定版 |
+| **意思決定支援の核** | F2 標準化スコア（0–100）/ J2 罠スコア（6 軸セーフガード）/ J3 デイリーコックピット（今日の 3 判断）/ 経営会議向け財務翻訳（P&L / NPV） |
+| **自社データ取込** | Excel / CSV テンプレ → `logi_clo_load_company` / サンプル 3 社（製造 / 卸売 / 連鎖化）で即試用可能 |
 
-| ツール | 概要 |
-|--------|------|
-| `logi_estat_search` | e-Stat 統計表キーワード検索 |
-| `logi_estat_get_data` | e-Stat 統計表データ取得 |
-| `logi_estat_get_meta` | e-Stat 統計表メタデータ取得 |
-| `logi_corp_search` | 国税庁法人番号 API 企業検索 |
-| `logi_traffic_realtime` | xROAD リアルタイム交通量 |
-| `logi_traffic_by_bbox` | xROAD バウンディングボックス交通量 |
-| `logi_weather_forecast` | 気象庁 天気予報 |
-| `logi_weather_warning` | 気象庁 警報・注意報 |
-| `logi_fuel_price` | 燃料価格（軽油・ガソリン） |
-| `logi_macro_overview` | 都道府県 物流マクロ概況（上記を統合） |
-
-### CLO 支援系（22 本）
-
-| ツール | 概要 |
-|--------|------|
-| `logi_clo_load_company` | 自社データ（Excel/CSV）取込 |
-| `logi_clo_generate_template` | 入力テンプレ生成（daily / monthly / annual） |
-| `logi_clo_eligibility` | CLO 適用判定（3 区分） |
-| `logi_clo_benchmark_position` | 業界平均比ベンチマーク |
-| `logi_clo_driver_gap` | ドライバー需給ギャップ分析 |
-| `logi_clo_target_proposal` | 施策目標値の自動提案 |
-| `logi_clo_playbook_search` | 施策プレイブック検索 |
-| `logi_clo_measure_eval` | 施策 4 軸スコアリング + Top 3 推薦 |
-| `logi_clo_simulate_measures` | 施策効果シミュレーション |
-| `logi_clo_feasibility_check` | 施策実行可否チェック |
-| `logi_clo_scenario_sim` | シナリオ分析（燃料高騰等 7 ストレス） |
-| `logi_clo_financial_translate` | 施策別財務翻訳（P&L / NPV） |
-| `logi_clo_plan_draft` | 中長期計画書ドラフト生成 |
-| `logi_clo_submission_validate` | 計画書提出前バリデーション |
-| `logi_clo_periodic_report_draft` | 様式第 5 定期報告書ドラフト生成 |
-| `logi_clo_certified_match` | 物流効率化法 認定事業者マッチング |
-| `logi_clo_executive_brief` | 経営会議向けエグゼクティブブリーフ |
-| `logi_clo_today_decisions` | デイリーコックピット（今日の 3 判断） |
-| `logi_clo_wait_heatmap` | 荷待ち・荷役時間ヒートマップ |
-| `logi_clo_industry_package` | 業種別 CLO 標準パッケージ |
-| `logi_clo_standardization_score` | F2 標準化スコア |
-| `logi_clo_waste_traps` | J2 罠スコア（施策効果の誤検知抑止） |
+MCP ツールと REST エンドポイントの完全な一覧は [docs/api_endpoints.md](docs/api_endpoints.md) と [docs/mcp_tools.md](docs/mcp_tools.md) を参照。
 
 ---
 
@@ -154,14 +150,14 @@ npm install
 各ダッシュボード画面（13 機能）の入力・出力・読み方・推奨利用順は **[docs/dashboard_feature_guide.md](docs/dashboard_feature_guide.md)** にまとめている。
 本番ダッシュボード（CloudFront）からも、トップページの「機能別利用ガイド」リンクおよびアプリ内 `/guide` で同じ内容を参照できる。
 
-初見ユーザーは次の順で確認すると全体像を掴みやすい:
+初見ユーザーは「CLO の意思決定フロー」5 ステップの順で触ると全体像を掴みやすい:
 
-1. 対象企業判定（`/check`） — CLO 義務対象かを 4 区分で一次判定
-2. ホーム（`/`） — 機能一覧
-3. 業種別 CLO 標準パッケージ（`/dashboard/industry-package`）
-4. F2 標準化スコア（`/dashboard/standardization`）
-5. 施策評価（`/dashboard/measure-eval`）
-6. 計画書生成（`/dashboard/plan-draft`）
+1. 対象企業判定（`/check`） — Step 1
+2. 業種別 CLO 標準パッケージ（`/dashboard/industry-package`） — Step 2
+3. F2 標準化スコア（`/dashboard/standardization`） — Step 2
+4. 施策評価（`/dashboard/measure-eval`） — Step 3
+5. 計画書生成（`/dashboard/plan-draft`） — Step 4
+6. デイリーコックピット（`/dashboard/cockpit`） — Step 5
 
 ---
 
@@ -271,6 +267,7 @@ GitHub Actions で PR と `main` へのマージ後デプロイを管理する�
 | [docs/ppt_design.md](docs/ppt_design.md) | PPT デザイン方針・スライドファミリー定義 |
 | [docs/git_workflow.md](docs/git_workflow.md) | ブランチ・PR 運用 |
 | [docs/testing.md](docs/testing.md) | テストレベル・モック方針・カバレッジ目標 |
+| [plans/phase55_update_proposal.md](plans/phase55_update_proposal.md) | フェーズ 5.5 アップデート案（Codex 二者議論で確定した束ね直し方針） |
 
 ---
 
