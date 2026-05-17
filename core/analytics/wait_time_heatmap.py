@@ -11,17 +11,26 @@ J3 デイリーコックピット（フェーズ4.5）の前提となる可視�
     - severity 判定は core.static.improvement_standards.WAIT_TIME_STANDARD を参照
       （30 分以下=green / 30〜90 分=yellow / 90 分超=red / 未計測=none）
     - 計測便数が少ない場合（measurement_minimum_runs 未満）は confidence_low フラグ
+
+フェーズ 5.5 Tier S3 拡張:
+    - build_wait_time_heatmap(profile, facility=...) で施設単位フィルタを追加
+      （facility=None なら既存挙動の全社集計、後方互換完全維持）
+    - Facility.site_name を WaitTimeRow.site_name と一致させてフィルタする
+      （CompanyProfile を破壊変更しない設計判断、plans/facility_store.md §3.3）
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from core.export.citation import Citation, improvement_standards_citation
 from core.static._freshness import all_warnings, get
 from core.static.improvement_standards import WAIT_TIME_STANDARD
 from core.static.sample_company import CompanyProfile, WaitTimeRow
+
+if TYPE_CHECKING:
+    from core.io.facility_store import Facility
 
 Severity = Literal["green", "yellow", "red", "none"]
 """ヒートマップセルの severity:
@@ -60,7 +69,12 @@ class HeatmapCell:
 
 @dataclass
 class HeatmapResult:
-    """ヒートマップ全体結果。"""
+    """ヒートマップ全体結果。
+
+    フェーズ 5.5 Tier S3 で施設フィルタ用フィールドを追加（既存利用箇所は
+    facility_* / measurement_* / is_consigned_warehouse / consigned_notice を
+    無視できる: default 値で全社集計と互換）。
+    """
 
     company_id: str
     company_name: str
@@ -74,6 +88,16 @@ class HeatmapResult:
     citations: list[Citation] = field(default_factory=list)
     freshness_warnings: list[str] = field(default_factory=list)
     summary: str = ""
+    # --- Tier S3: 施設フィルタ時の補足情報（facility 指定なしのときは None / 空） ---
+    facility_id: str | None = None
+    facility_name: str | None = None
+    measurement_period_label: str | None = None
+    """例: '2025-04-01 〜 2026-03-31（月次）'"""
+    measurement_conditions: list[str] = field(default_factory=list)
+    exclusion_reasons: list[str] = field(default_factory=list)
+    is_consigned_warehouse: bool = False
+    consigned_notice: str | None = None
+    """寄託先施設の場合に表示する自社測定外バナー文言。"""
 
 
 def _classify_severity(avg_minutes: float | None) -> Severity:
@@ -100,19 +124,49 @@ def _aggregate_rows(rows: list[WaitTimeRow]) -> tuple[float | None, float | None
     return avg, max_min, total_count, over_2h_sum
 
 
-def build_wait_time_heatmap(profile: CompanyProfile) -> HeatmapResult:
+def build_wait_time_heatmap(
+    profile: CompanyProfile,
+    facility: Facility | None = None,
+) -> HeatmapResult:
     """CompanyProfile.wait_time_rows を拠点 × 時間帯 4 区分で集計する。
 
     Args:
         profile: 自社プロフィール（wait_time_rows を持つ）
+        facility: 指定時はその施設の site_name に紐付く行のみで集計する
+            （フェーズ 5.5 Tier S3 で追加）。facility.site_name が None の場合は
+            ValueError（測定単位が未紐付け＝集計不能）。
 
     Returns:
         HeatmapResult: ヒートマップ表示に必要な構造化データ
+            facility 指定時は facility_id / facility_name / measurement_period_label /
+            exclusion_reasons / is_consigned_warehouse / consigned_notice が設定される。
+
+    Raises:
+        ValueError: facility.site_name が None の場合
+        ValueError: facility.company_id が profile.company_id と一致しない場合
     """
+    # Tier S3: 施設フィルタ事前検証
+    target_site_name: str | None = None
+    if facility is not None:
+        if facility.company_id != profile.company_id:
+            raise ValueError(
+                f"facility.company_id={facility.company_id!r} は "
+                f"profile.company_id={profile.company_id!r} と一致しません"
+            )
+        if facility.site_name is None:
+            raise ValueError(
+                f"facility_id={facility.facility_id!r} は site_name が未設定です。"
+                "wait_time_rows との連結キーが必要です（plans/facility_store.md §3.3）"
+            )
+        target_site_name = facility.site_name
+
     # 1. site_name 指定行のみ抽出（拠点別レーンを構成）
     site_rows: dict[str, dict[str, list[WaitTimeRow]]] = {}
     for row in profile.wait_time_rows:
         if row.site_name is None:
+            continue
+        # Tier S3: facility 指定時は対象 site_name のみ
+        if target_site_name is not None and row.site_name != target_site_name:
             continue
         slot_key: str = row.time_slot if row.time_slot is not None else "all_day"
         site_rows.setdefault(row.site_name, {}).setdefault(slot_key, []).append(row)
@@ -154,8 +208,10 @@ def build_wait_time_heatmap(profile: CompanyProfile) -> HeatmapResult:
                 )
             )
 
-    # 5. 全体集計（ヘッダ表示用）
+    # 5. 全体集計（ヘッダ表示用）— facility 指定時は対象 site_name のみで集計
     all_rows = [r for r in profile.wait_time_rows if r.site_name is not None]
+    if target_site_name is not None:
+        all_rows = [r for r in all_rows if r.site_name == target_site_name]
     overall_avg, overall_max, _, _ = _aggregate_rows(all_rows)
 
     # 6. 出典・鮮度
@@ -192,6 +248,32 @@ def build_wait_time_heatmap(profile: CompanyProfile) -> HeatmapResult:
             else "計測データが拠点別に整備されていません（site_name 指定の行を追加してください）。"
         )
 
+    # 8. Tier S3: facility 指定時の補足情報
+    facility_id_out: str | None = None
+    facility_name_out: str | None = None
+    measurement_period_label: str | None = None
+    measurement_conditions: list[str] = []
+    exclusion_reasons: list[str] = []
+    is_consigned_warehouse = False
+    consigned_notice: str | None = None
+    if facility is not None:
+        facility_id_out = facility.facility_id
+        facility_name_out = facility.name
+        period = facility.measurement_period
+        measurement_period_label = (
+            f"{period.start_on.isoformat()} 〜 {period.end_on.isoformat()}"
+            f"（{period.unit_label}）"
+        )
+        measurement_conditions = list(facility.measurement_conditions)
+        exclusion_reasons = list(facility.exclusion_reasons)
+        is_consigned_warehouse = facility.is_consigned_warehouse
+        if facility.is_consigned_warehouse:
+            consigned_notice = (
+                f"⚠️ {facility.name} は寄託先施設（自社測定外）です。"
+                "計測値は委託先報告に基づくため、様式第5 提出時は「測定実施者」を"
+                "明示し、責任主体（自社・寄託先）を区別して注記してください。"
+            )
+
     return HeatmapResult(
         company_id=profile.company_id,
         company_name=profile.name,
@@ -205,4 +287,11 @@ def build_wait_time_heatmap(profile: CompanyProfile) -> HeatmapResult:
         citations=citations,
         freshness_warnings=list(warnings),
         summary=summary,
+        facility_id=facility_id_out,
+        facility_name=facility_name_out,
+        measurement_period_label=measurement_period_label,
+        measurement_conditions=measurement_conditions,
+        exclusion_reasons=exclusion_reasons,
+        is_consigned_warehouse=is_consigned_warehouse,
+        consigned_notice=consigned_notice,
     )

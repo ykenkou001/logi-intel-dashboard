@@ -91,6 +91,12 @@ from core.io.company_loader import (
     load_company_profile_from_excel,
 )
 from core.io.company_store import save_company_profile
+from core.io.facility_store import (
+    Facility,
+    load_facilities,
+    load_facility,
+    upsert_facility,
+)
 from core.io.measure_run_store import load_runs, merge_with_stored, save_runs
 from core.io.override_store import load_override
 from core.io.profile_resolver import ProfileNotFoundError, resolve_profile
@@ -307,7 +313,10 @@ def register_tools(mcp: FastMCP) -> None:
         return response.to_dict()
 
     @mcp.tool()
-    async def logi_clo_wait_heatmap(company_id: str) -> dict[str, object]:
+    async def logi_clo_wait_heatmap(
+        company_id: str,
+        facility_id: str | None = None,
+    ) -> dict[str, object]:
         """拠点 × 時間帯（朝/昼/夕/夜）の荷待ち時間ヒートマップを生成します。
 
         フェーズ4.1 a.1。CLO が「どの拠点が朝混むか」を 5 秒で把握し、
@@ -320,9 +329,15 @@ def register_tools(mcp: FastMCP) -> None:
             - severity: green ≤30 分（目標）/ yellow ≤90 分 / red >90 分 / none 未計測
             - 計測便数 100 未満は confidence_low フラグ（統計的有意性に注意）
 
+        フェーズ 5.5 Tier S3: facility_id 指定時は、その施設の site_name に紐付く
+        wait_time_rows のみで集計し、measurement_period / exclusion_reasons /
+        is_consigned_warehouse 等の測定単位情報を summary に追記する。
+
         Args:
             company_id: サンプル企業ID（"sample_retail_01" などヒートマップ対応）。
                 site_name 未指定の wait_time_rows のみを持つ会社では cells が空になる
+            facility_id: 施設フィルタ。指定時は対象施設の site_name のみで集計。
+                未指定なら従来挙動（全社集計）。
 
         Returns:
             ToolResponse 構造:
@@ -335,9 +350,43 @@ def register_tools(mcp: FastMCP) -> None:
         except ProfileNotFoundError as exc:
             return ToolResponse(summary=str(exc)).to_dict()
 
-        result: HeatmapResult = build_wait_time_heatmap(profile)
+        facility_obj: Facility | None = None
+        if facility_id is not None:
+            facility_obj = load_facility(facility_id, company_id=company_id)
+            if facility_obj is None:
+                return ToolResponse(
+                    summary=(
+                        f"❌ facility_id={facility_id!r} は company_id="
+                        f"{company_id!r} に登録されていません。"
+                        "logi_clo_facility_register で登録してください。"
+                    )
+                ).to_dict()
+
+        try:
+            result: HeatmapResult = build_wait_time_heatmap(
+                profile, facility=facility_obj
+            )
+        except ValueError as exc:
+            return ToolResponse(summary=f"❌ {exc}").to_dict()
         # detail テキストを summary に追加
         detail_lines = [result.summary, ""]
+        if result.consigned_notice:
+            detail_lines.append(result.consigned_notice)
+            detail_lines.append("")
+        if result.facility_id and result.measurement_period_label:
+            detail_lines.append(
+                f"🏭 施設: {result.facility_name}（{result.facility_id}）"
+            )
+            detail_lines.append(f"📅 測定期間: {result.measurement_period_label}")
+            if result.measurement_conditions:
+                detail_lines.append(
+                    "🔍 把握条件: " + " / ".join(result.measurement_conditions)
+                )
+            if result.exclusion_reasons:
+                detail_lines.append(
+                    "⛔ 除外理由: " + " / ".join(result.exclusion_reasons)
+                )
+            detail_lines.append("")
         detail_lines.append(
             f"📊 全体平均 {result.overall_avg_minutes:.0f} 分・最大 "
             f"{result.overall_max_minutes:.0f} 分（基準 {result.threshold_minutes} 分／"
@@ -1352,3 +1401,97 @@ def register_tools(mcp: FastMCP) -> None:
             freshness_warnings=list(result.freshness_warnings),
             data_source=profile.data_source,
         ).to_dict()
+
+    # ─── Tier S3: 施設マスタ管理 ─────────────────────────────────
+    @mcp.tool()
+    async def logi_clo_facility_register(
+        facility: dict[str, object],
+    ) -> dict[str, object]:
+        """報告単位 1 施設を登録 / 更新します（upsert）。
+
+        フェーズ 5.5 Tier S3。様式第5 定期報告で求められる「測定対象施設・
+        測定期間・把握条件・除外理由」を構造化して管理する。同一 facility_id が
+        既に存在する場合は updated_at を更新して上書きする。
+
+        facility は Facility モデルのフィールド一式（dict）で渡す。具体的には:
+            - facility_id: str（英数字・アンダースコア・ハイフン）
+            - company_id: str（CompanyProfile.company_id への参照）
+            - name / address / prefecture: str
+            - industry_code: str（JSIC 4 桁）
+            - site_name: str | None（CompanyProfile.sites[].name と一致させる）
+            - measurement_period: {start_on, end_on, unit_label}
+            - measurement_conditions: list[str]
+            - exclusion_reasons: list[str]
+            - is_consigned_warehouse: bool（寄託先か）
+            - notes: str | None
+
+        Returns:
+            ToolResponse 構造:
+            - summary: 登録結果（新規 or 更新の判別、保存先パス）
+        """
+        try:
+            model = Facility.model_validate(facility)
+        except Exception as exc:  # ValidationError 含む全例外を summary に転載
+            return ToolResponse(
+                summary=f"❌ Facility バリデーション失敗: {exc}"
+            ).to_dict()
+
+        existing = load_facility(model.facility_id, company_id=model.company_id)
+        path = upsert_facility(model)
+        action = "更新" if existing is not None else "新規登録"
+
+        return ToolResponse(
+            summary=(
+                f"✅ 施設を{action}しました: {model.name}（{model.facility_id}）\n"
+                f"📁 保存先: {path}"
+            ),
+        ).to_dict()
+
+    @mcp.tool()
+    async def logi_clo_facility_list(
+        company_id: str,
+    ) -> dict[str, object]:
+        """指定企業の施設一覧を返します（測定期間 / 除外理由 / 寄託先フラグ込み）。
+
+        フェーズ 5.5 Tier S3。CLO が「自社が報告対象として認識している施設」を
+        一覧で確認し、報告漏れ / 重複登録 / 寄託先の取り扱い区分を点検するための
+        ツール。
+
+        Args:
+            company_id: サンプル/取込済 企業 ID
+
+        Returns:
+            ToolResponse 構造:
+            - summary: 件数サマリ + 各施設の name / site_name / 測定期間 /
+              寄託先フラグ
+        """
+        facilities = load_facilities(company_id)
+        if not facilities:
+            return ToolResponse(
+                summary=(
+                    f"company_id={company_id!r} に登録された施設はありません。"
+                    "logi_clo_facility_register で登録してください。"
+                )
+            ).to_dict()
+
+        consigned_count = sum(1 for f in facilities if f.is_consigned_warehouse)
+        lines = [
+            f"📋 {company_id} の登録施設: {len(facilities)} 件"
+            f"（うち寄託先 {consigned_count} 件）",
+            "",
+        ]
+        for f in facilities:
+            consigned_mark = "🟦 寄託先" if f.is_consigned_warehouse else "🏭 自社"
+            site_mark = (
+                f"[site={f.site_name}]"
+                if f.site_name
+                else "[site 未連結（heatmap 不可）]"
+            )
+            period = f.measurement_period
+            lines.append(
+                f"{consigned_mark} {f.facility_id}: {f.name} {site_mark} "
+                f"｜ {period.start_on.isoformat()} 〜 {period.end_on.isoformat()}"
+                f"（{period.unit_label}）"
+            )
+
+        return ToolResponse(summary="\n".join(lines)).to_dict()

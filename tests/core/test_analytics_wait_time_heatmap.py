@@ -206,3 +206,119 @@ def test_all_day_lane_appears_when_time_slot_unknown() -> None:
     )
     result = build_wait_time_heatmap(profile)
     assert "all_day" in result.time_slots
+
+
+# ---------------------------------------------------------------------------
+# Tier S3: Facility フィルタ拡張テスト
+# ---------------------------------------------------------------------------
+
+
+def _make_test_facility(
+    *,
+    facility_id: str = "fac_kanto",
+    company_id: str = "sample_retail_01",
+    site_name: str | None = "関東地域DC",
+    is_consigned: bool = False,
+):
+    from datetime import date
+
+    from core.io.facility_store import Facility, FacilityMeasurementPeriod
+
+    return Facility(
+        facility_id=facility_id,
+        company_id=company_id,
+        name="関東 DC（テスト施設）",
+        address="東京都江東区豊洲 1-1-1",
+        prefecture="東京都",
+        industry_code="5411",
+        site_name=site_name,
+        measurement_period=FacilityMeasurementPeriod(
+            start_on=date(2025, 4, 1),
+            end_on=date(2026, 3, 31),
+            unit_label="月次",
+        ),
+        measurement_conditions=["パレット便のみ"],
+        exclusion_reasons=["2025-08 改修工事中"],
+        is_consigned_warehouse=is_consigned,
+    )
+
+
+def test_facility_filter_narrows_to_target_site() -> None:
+    """facility 指定時は site_name 一致行のみで集計される（拠点 1 件分のセル）。"""
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    facility = _make_test_facility(site_name="関東地域DC")
+    result = build_wait_time_heatmap(profile, facility=facility)
+
+    assert result.site_names == ["関東地域DC"]
+    assert result.facility_id == "fac_kanto"
+    assert result.facility_name == "関東 DC（テスト施設）"
+    # 4 時間帯のみ（all_day 無し）→ 4 セル
+    assert len(result.cells) == 4
+    assert all(c.site_name == "関東地域DC" for c in result.cells)
+
+
+def test_facility_filter_includes_period_label() -> None:
+    """facility 指定時は measurement_period_label がフォーマットされる。"""
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    facility = _make_test_facility()
+    result = build_wait_time_heatmap(profile, facility=facility)
+
+    assert result.measurement_period_label is not None
+    assert "2025-04-01" in result.measurement_period_label
+    assert "2026-03-31" in result.measurement_period_label
+    assert "月次" in result.measurement_period_label
+    assert result.measurement_conditions == ["パレット便のみ"]
+    assert result.exclusion_reasons == ["2025-08 改修工事中"]
+
+
+def test_facility_without_site_name_raises_value_error() -> None:
+    """site_name=None の Facility は wait_time_rows と紐付かないので ValueError。"""
+    import pytest
+
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    facility = _make_test_facility(site_name=None)
+    with pytest.raises(ValueError, match="site_name が未設定"):
+        build_wait_time_heatmap(profile, facility=facility)
+
+
+def test_facility_company_id_mismatch_raises_value_error() -> None:
+    """profile.company_id と facility.company_id が一致しなければ ValueError。"""
+    import pytest
+
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    facility = _make_test_facility(company_id="different_company")
+    with pytest.raises(ValueError, match="一致しません"):
+        build_wait_time_heatmap(profile, facility=facility)
+
+
+def test_facility_consigned_warehouse_emits_notice() -> None:
+    """is_consigned_warehouse=True で consigned_notice が出力される。集計は通常通り。"""
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    facility = _make_test_facility(is_consigned=True)
+    result = build_wait_time_heatmap(profile, facility=facility)
+
+    assert result.is_consigned_warehouse is True
+    assert result.consigned_notice is not None
+    assert "寄託先施設" in result.consigned_notice
+    assert "自社測定外" in result.consigned_notice
+    # 集計はそのまま実行される（Codex 二者議論で「警告付き集計」案を採用）
+    assert len(result.cells) == 4
+
+
+def test_facility_none_preserves_legacy_behavior() -> None:
+    """facility=None（デフォルト）は既存挙動と完全互換（後方互換確認）。"""
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    result_default = build_wait_time_heatmap(profile)
+    result_explicit_none = build_wait_time_heatmap(profile, facility=None)
+
+    assert result_default.cells == result_explicit_none.cells
+    assert result_default.site_names == result_explicit_none.site_names
+    assert result_default.facility_id is None
+    assert result_default.consigned_notice is None
+    assert result_default.is_consigned_warehouse is False

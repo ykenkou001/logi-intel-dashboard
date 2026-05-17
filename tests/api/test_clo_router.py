@@ -76,6 +76,133 @@ def test_wait_heatmap_unknown_company_returns_404() -> None:
     assert resp.status_code == 404
 
 
+# ─── Tier S3: 施設マスタ + wait-heatmap?facility_id ───────────
+
+
+def _facility_payload(
+    *,
+    facility_id: str = "fac_api_kanto",
+    company_id: str = "sample_retail_01",
+    site_name: str | None = "関東地域DC",
+    is_consigned: bool = False,
+) -> dict[str, object]:
+    return {
+        "facility_id": facility_id,
+        "company_id": company_id,
+        "name": "API テスト関東 DC",
+        "address": "東京都江東区豊洲 1-1-1",
+        "prefecture": "東京都",
+        "industry_code": "5411",
+        "site_name": site_name,
+        "measurement_period": {
+            "start_on": "2025-04-01",
+            "end_on": "2026-03-31",
+            "unit_label": "月次",
+        },
+        "measurement_conditions": ["パレット便のみ"],
+        "exclusion_reasons": ["改修工事中除外"],
+        "is_consigned_warehouse": is_consigned,
+        "notes": None,
+    }
+
+
+def test_facility_round_trip_via_rest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """POST → GET /facilities の round trip。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+
+    payload = _facility_payload(facility_id="fac_rt", company_id="rt_company")
+    post = client.post("/api/v1/clo/facilities", json=payload)
+    assert post.status_code == 200
+    body = post.json()
+    _assert_tool_response_shape(body)
+    assert body["metadata"]["action"] == "新規登録"
+
+    got = client.get("/api/v1/clo/facilities", params={"company_id": "rt_company"})
+    assert got.status_code == 200
+    md = got.json()["metadata"]
+    assert md["count"] == 1
+    assert md["facilities"][0]["facility_id"] == "fac_rt"
+
+
+def test_wait_heatmap_with_facility_id_filters_to_site(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """facility_id 指定で site_name 一致行のみ集計 + metadata に施設情報が乗る。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+
+    client.post(
+        "/api/v1/clo/facilities",
+        json=_facility_payload(
+            facility_id="fac_kanto_only",
+            company_id="sample_retail_01",
+            site_name="関東地域DC",
+        ),
+    )
+
+    resp = client.get(
+        "/api/v1/clo/wait-heatmap",
+        params={
+            "company_id": "sample_retail_01",
+            "facility_id": "fac_kanto_only",
+        },
+    )
+    assert resp.status_code == 200
+    md = resp.json()["metadata"]
+    assert md["site_names"] == ["関東地域DC"]
+    assert md["facility_id"] == "fac_kanto_only"
+    assert "2025-04-01" in (md["measurement_period_label"] or "")
+    # 関東のみ 4 時間帯 = 4 セル
+    assert len(md["cells"]) == 4
+
+
+def test_wait_heatmap_unknown_facility_id_returns_404(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    resp = client.get(
+        "/api/v1/clo/wait-heatmap",
+        params={
+            "company_id": "sample_retail_01",
+            "facility_id": "fac_never_registered",
+        },
+    )
+    assert resp.status_code == 404
+
+
+def test_facility_consigned_warehouse_emits_notice_in_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """寄託先フラグ True で consigned_notice が metadata に乗る。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+
+    client.post(
+        "/api/v1/clo/facilities",
+        json=_facility_payload(
+            facility_id="fac_consigned",
+            company_id="sample_retail_01",
+            site_name="関東地域DC",
+            is_consigned=True,
+        ),
+    )
+    resp = client.get(
+        "/api/v1/clo/wait-heatmap",
+        params={
+            "company_id": "sample_retail_01",
+            "facility_id": "fac_consigned",
+        },
+    )
+    assert resp.status_code == 200
+    md = resp.json()["metadata"]
+    assert md["is_consigned_warehouse"] is True
+    assert "寄託先施設" in (md["consigned_notice"] or "")
+
+
 def test_executive_brief_generates_three_slide_pptx() -> None:
     """フェーズ4.1 a.3: 3 スライド経営会議要約 PPT を REST で生成。"""
     resp = client.get("/api/v1/clo/executive-brief/sample_mfg_01")

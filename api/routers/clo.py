@@ -61,6 +61,12 @@ from core.export.citation import Citation, logistics_efficiency_law_citation
 from core.export.formatter import format_jpy
 from core.export.ppt_writer import write_clo_executive_brief
 from core.export.response import ToolResponse
+from core.io.facility_store import (
+    Facility,
+    load_facilities,
+    load_facility,
+    upsert_facility,
+)
 from core.io.measure_run_store import load_runs, merge_with_stored, save_runs
 from core.io.override_store import load_override
 from core.io.profile_resolver import ProfileNotFoundError, resolve_profile
@@ -245,15 +251,46 @@ async def executive_brief(company_id: str) -> ToolResponseModel:
 @router.get("/wait-heatmap", response_model=ToolResponseModel)
 async def wait_heatmap(
     company_id: Annotated[str, Query(description="サンプル/取込済 企業ID")],
+    facility_id: Annotated[
+        str | None,
+        Query(
+            description=(
+                "施設フィルタ（Tier S3）。指定時はその施設の site_name に紐付く"
+                "wait_time_rows のみで集計し、metadata に測定単位情報を載せる"
+            ),
+        ),
+    ] = None,
 ) -> ToolResponseModel:
     """拠点 × 時間帯（朝/昼/夕/夜）の荷待ち時間ヒートマップを生成する。
 
     cells / site_names / time_slots / overall_* / threshold_* / avg_target_* を
     ToolResponseModel.metadata 経由で渡し、Web フロント（wait-heatmap/page.tsx）が
     可視化する。summary はテキスト要約として軸 A 表示にも使う。
+
+    フェーズ 5.5 Tier S3: facility_id 指定時は該当施設の site_name のみで集計し、
+    facility / measurement_period / exclusion_reasons / is_consigned_warehouse を
+    metadata に追加して、Web 側で「測定単位の説明責任」を可視化できるようにする。
     """
     profile = _resolve_profile_or_404(company_id)
-    result: HeatmapResult = build_wait_time_heatmap(profile)
+
+    facility_obj: Facility | None = None
+    if facility_id is not None:
+        facility_obj = load_facility(facility_id, company_id=company_id)
+        if facility_obj is None:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"facility_id={facility_id!r} は company_id={company_id!r} に"
+                    "登録されていません"
+                ),
+            )
+
+    try:
+        result: HeatmapResult = build_wait_time_heatmap(
+            profile, facility=facility_obj
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     response = ToolResponse(
         summary=result.summary,
@@ -285,6 +322,75 @@ async def wait_heatmap(
         "overall_max_minutes": result.overall_max_minutes,
         "threshold_minutes": result.threshold_minutes,
         "avg_target_minutes": result.avg_target_minutes,
+        # Tier S3: 施設フィルタ時のみ意味のあるフィールド
+        "facility_id": result.facility_id,
+        "facility_name": result.facility_name,
+        "measurement_period_label": result.measurement_period_label,
+        "measurement_conditions": result.measurement_conditions,
+        "exclusion_reasons": result.exclusion_reasons,
+        "is_consigned_warehouse": result.is_consigned_warehouse,
+        "consigned_notice": result.consigned_notice,
+    }
+    return model
+
+
+# ─── フェーズ 5.5 Tier S3: 施設マスタ管理 ─────────────────────────
+@router.post("/facilities", response_model=ToolResponseModel)
+async def register_facility(
+    facility: Annotated[Facility, Body(description="登録する施設（id 重複は upsert）")],
+) -> ToolResponseModel:
+    """報告単位 1 施設を登録 / 更新する（upsert）。
+
+    様式第5 Ⅳ セクションの「測定対象施設・測定期間・把握条件・除外理由」を
+    構造化して管理する Tier S3 機能。同一 facility_id があれば updated_at を
+    更新して上書きする。
+    """
+    existing = load_facility(facility.facility_id, company_id=facility.company_id)
+    path = upsert_facility(facility)
+    action = "更新" if existing is not None else "新規登録"
+
+    response = ToolResponse(
+        summary=(
+            f"✅ 施設を{action}しました: {facility.name}（{facility.facility_id}）\n"
+            f"📁 保存先: {path}"
+        ),
+    )
+    model = to_model(response)
+    # facility 全フィールドを metadata に乗せて Web で確認できるようにする
+    reloaded = load_facility(facility.facility_id, company_id=facility.company_id)
+    model.metadata = {
+        "action": action,
+        "facility": reloaded.model_dump(mode="json") if reloaded else None,
+    }
+    return model
+
+
+@router.get("/facilities", response_model=ToolResponseModel)
+async def list_facilities(
+    company_id: Annotated[str, Query(description="所属企業 ID")],
+) -> ToolResponseModel:
+    """指定企業の施設一覧を返す。"""
+    facilities = load_facilities(company_id)
+    consigned_count = sum(1 for f in facilities if f.is_consigned_warehouse)
+
+    if not facilities:
+        summary = (
+            f"company_id={company_id!r} に登録された施設はありません。"
+            "POST /facilities で登録してください。"
+        )
+    else:
+        summary = (
+            f"📋 {company_id} の登録施設: {len(facilities)} 件"
+            f"（うち寄託先 {consigned_count} 件）"
+        )
+
+    response = ToolResponse(summary=summary)
+    model = to_model(response)
+    model.metadata = {
+        "company_id": company_id,
+        "count": len(facilities),
+        "consigned_count": consigned_count,
+        "facilities": [f.model_dump(mode="json") for f in facilities],
     }
     return model
 

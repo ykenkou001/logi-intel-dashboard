@@ -7,8 +7,11 @@ import {
   ToolResponseDisplay,
 } from "@/components/ToolResponseDisplay";
 import {
+  fetchFacilities,
   fetchSamples,
   fetchWaitHeatmap,
+  type Facility,
+  type FacilityListMetadata,
   type HeatmapCell,
   type HeatmapMetadata,
   type SampleCompany,
@@ -44,6 +47,8 @@ function findCell(
 export default function WaitHeatmapPage() {
   const [samples, setSamples] = useState<SampleCompany[]>([]);
   const [companyId, setCompanyId] = useState<string>("sample_retail_01");
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [facilityId, setFacilityId] = useState<string>(""); // 空文字 = 全社集計
   const { data: result, loading, error, run } = useFetchTool<ToolResponse>();
 
   useEffect(() => {
@@ -52,8 +57,21 @@ export default function WaitHeatmapPage() {
       .catch(() => setSamples([]));
   }, []);
 
+  // company 切替時に施設一覧を再ロード
+  useEffect(() => {
+    setFacilityId("");
+    fetchFacilities(companyId)
+      .then((res) => {
+        const md = res.metadata as FacilityListMetadata | undefined;
+        setFacilities(md?.facilities ?? []);
+      })
+      .catch(() => setFacilities([]));
+  }, [companyId]);
+
   async function handleSubmit() {
-    await run(() => fetchWaitHeatmap(companyId));
+    await run(() =>
+      fetchWaitHeatmap(companyId, facilityId === "" ? undefined : facilityId),
+    );
   }
 
   const heatmap = useMemo<HeatmapMetadata | null>(() => {
@@ -80,7 +98,7 @@ export default function WaitHeatmapPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-100 p-6">
-        <label className="block mb-5">
+        <label className="block mb-4">
           <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
             会社 ID（time_slot 付き wait_time_rows を持つ会社が対象）
           </span>
@@ -99,6 +117,35 @@ export default function WaitHeatmapPage() {
             ))}
           </select>
         </label>
+
+        {/* Tier S3: 報告単位 Facility フィルタ */}
+        <label className="block mb-5">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
+            報告単位 施設フィルタ（Tier S3）
+          </span>
+          <select
+            value={facilityId}
+            onChange={(e) => setFacilityId(e.target.value)}
+            disabled={facilities.length === 0}
+            className="w-full border border-gray-200 rounded-lg px-4 py-2.5 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2E73AC]/40 focus:border-[#2E73AC] transition disabled:bg-gray-50 disabled:text-gray-400"
+          >
+            <option value="">全社集計（既定 / 施設フィルタなし）</option>
+            {facilities.map((f) => (
+              <option key={f.facility_id} value={f.facility_id}>
+                {f.is_consigned_warehouse ? "🟦 [寄託先] " : "🏭 "}
+                {f.name}（{f.facility_id}）
+                {f.site_name ? ` — site=${f.site_name}` : " — site 未連結"}
+              </option>
+            ))}
+          </select>
+          {facilities.length === 0 && (
+            <span className="block mt-1.5 text-[11px] text-gray-500">
+              この企業には施設が登録されていません。POST /api/v1/clo/facilities または
+              logi_clo_facility_register で登録できます。
+            </span>
+          )}
+        </label>
+
         <button
           onClick={handleSubmit}
           disabled={loading}
@@ -115,6 +162,35 @@ export default function WaitHeatmapPage() {
       </div>
 
       {error && <ErrorBanner message={error} />}
+
+      {/* Tier S3: 寄託先施設バナー（自社測定外注意喚起） */}
+      {heatmap && heatmap.consigned_notice && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-900 rounded-xl p-4 text-sm">
+          {heatmap.consigned_notice}
+        </div>
+      )}
+
+      {/* Tier S3: 施設フィルタ時の測定単位情報 */}
+      {heatmap && heatmap.facility_id && heatmap.measurement_period_label && (
+        <div className="bg-white border border-gray-100 rounded-xl p-4 text-xs space-y-1.5">
+          <div className="text-sm font-semibold text-[#1F4E79]">
+            🏭 {heatmap.facility_name}（{heatmap.facility_id}）
+          </div>
+          <div className="text-gray-700">
+            📅 測定期間: <strong>{heatmap.measurement_period_label}</strong>
+          </div>
+          {heatmap.measurement_conditions.length > 0 && (
+            <div className="text-gray-700">
+              🔍 把握条件: {heatmap.measurement_conditions.join(" / ")}
+            </div>
+          )}
+          {heatmap.exclusion_reasons.length > 0 && (
+            <div className="text-amber-800">
+              ⛔ 除外理由: {heatmap.exclusion_reasons.join(" / ")}
+            </div>
+          )}
+        </div>
+      )}
 
       {heatmap && heatmap.cells.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 p-6 overflow-x-auto">
