@@ -24,7 +24,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import check, clo, company, files, macro
+from api.routers import analytics, check, clo, company, files, macro
 
 load_dotenv()
 
@@ -40,7 +40,10 @@ app = FastAPI(
 )
 
 # 開発時は全 origin 許可。AWS 移行時に社内 VPN ドメインのみへ絞り込む。
-_cors_origins = os.environ.get("LOGI_API_CORS_ORIGINS", "*").split(",")
+# `LOGI_API_CORS_ORIGINS=""`（空文字）が `.env` に残っていると split で [""] になり
+# 全 origin が弾かれてしまうため、空要素を除去してから空なら ["*"] にフォールバックする。
+_raw_cors = os.environ.get("LOGI_API_CORS_ORIGINS", "*")
+_cors_origins = [o.strip() for o in _raw_cors.split(",") if o.strip()] or ["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -54,6 +57,7 @@ app.include_router(clo.router)
 app.include_router(company.router)
 app.include_router(files.router)
 app.include_router(check.router)
+app.include_router(analytics.router)
 
 
 @app.get("/health", tags=["meta"])

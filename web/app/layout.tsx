@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Noto_Serif_JP, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import Link from "next/link";
+import { Suspense } from "react";
+import { Analytics } from "./analytics";
 
 const notoSerif = Noto_Serif_JP({
   subsets: ["latin"],
@@ -78,10 +80,16 @@ export default function RootLayout({
             </nav>
           </div>
         </header>
+        <Suspense fallback={null}>
+          <Analytics />
+        </Suspense>
         <main className="max-w-6xl mx-auto px-6 py-8">{children}</main>
-        <footer className="border-t border-gray-200 mt-12 py-6">
+        <footer className="border-t border-gray-200 mt-12 py-6 space-y-1">
           <p className="text-center text-xs text-gray-400">
             物流効率化法 第46条／第65条 · 改善基準告示 2024年4月施行版に準拠
+          </p>
+          <p className="text-center text-[10px] text-gray-400">
+            アクセス解析のため利用情報を Google Analytics へ送信しています（改正電気通信事業法 外部送信規律対応）。
           </p>
         </footer>
       </body>
