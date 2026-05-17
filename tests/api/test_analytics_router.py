@@ -54,7 +54,7 @@ def test_collect_strips_query_string(monkeypatch: pytest.MonkeyPatch) -> None:
         def __init__(self, *args: Any, **kwargs: Any) -> None:
             pass
 
-        async def __aenter__(self) -> "_FakeClient":
+        async def __aenter__(self) -> _FakeClient:
             return self
 
         async def __aexit__(self, *args: Any) -> None:

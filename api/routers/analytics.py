@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
 
-# GA4 Measurement Protocol。`GA4_DEBUG=1` で validation errors を返す debug エンドポイントに切り替え。
+# GA4 Measurement Protocol。
+# `GA4_DEBUG=1` で validation errors を返す debug エンドポイントに切り替え。
 GA4_ENDPOINT = "https://www.google-analytics.com/mp/collect"
 GA4_DEBUG_ENDPOINT = "https://www.google-analytics.com/debug/mp/collect"
 
