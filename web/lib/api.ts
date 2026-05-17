@@ -55,6 +55,45 @@ export interface HeatmapMetadata {
   overall_max_minutes: number | null;
   threshold_minutes: number;
   avg_target_minutes: number;
+  // Tier S3: 施設フィルタ時のみ意味のあるフィールド
+  facility_id: string | null;
+  facility_name: string | null;
+  measurement_period_label: string | null;
+  measurement_conditions: string[];
+  exclusion_reasons: string[];
+  is_consigned_warehouse: boolean;
+  consigned_notice: string | null;
+}
+
+// ─── Tier S3: 報告単位 Facility（施設マスタ）─────────────────
+export interface FacilityMeasurementPeriod {
+  start_on: string;       // YYYY-MM-DD
+  end_on: string;         // YYYY-MM-DD
+  unit_label: string;     // 月次 / 四半期 / 年次 等
+}
+
+export interface Facility {
+  facility_id: string;
+  company_id: string;
+  name: string;
+  address: string;
+  prefecture: string;
+  industry_code: string;
+  site_name: string | null;
+  measurement_period: FacilityMeasurementPeriod;
+  measurement_conditions: string[];
+  exclusion_reasons: string[];
+  is_consigned_warehouse: boolean;
+  notes: string | null;
+  created_at: string;     // ISO datetime
+  updated_at: string;     // ISO datetime
+}
+
+export interface FacilityListMetadata {
+  company_id: string;
+  count: number;
+  consigned_count: number;
+  facilities: Facility[];
 }
 
 export interface SampleCompany {
@@ -228,10 +267,30 @@ export async function fetchDriverGap(prefecture: string): Promise<ToolResponse> 
   });
 }
 
-// ─── 拠点別待機時間ヒートマップ（フェーズ4.1 a.1）─────────────
-export async function fetchWaitHeatmap(companyId: string): Promise<ToolResponse> {
+// ─── 拠点別待機時間ヒートマップ（フェーズ4.1 a.1 / Tier S3 で施設フィルタ追加）─
+export async function fetchWaitHeatmap(
+  companyId: string,
+  facilityId?: string,
+): Promise<ToolResponse> {
   return request<ToolResponse>("/api/v1/clo/wait-heatmap", {
+    searchParams: { company_id: companyId, facility_id: facilityId },
+  });
+}
+
+// ─── Tier S3: 施設マスタ ──────────────────────────────────────
+export async function fetchFacilities(companyId: string): Promise<ToolResponse> {
+  return request<ToolResponse>("/api/v1/clo/facilities", {
     searchParams: { company_id: companyId },
+  });
+}
+
+export async function registerFacility(
+  facility: Omit<Facility, "created_at" | "updated_at"> &
+    Partial<Pick<Facility, "created_at" | "updated_at">>,
+): Promise<ToolResponse> {
+  return request<ToolResponse>("/api/v1/clo/facilities", {
+    method: "POST",
+    body: JSON.stringify(facility),
   });
 }
 
