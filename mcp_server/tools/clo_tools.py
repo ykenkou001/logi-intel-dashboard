@@ -316,6 +316,7 @@ def register_tools(mcp: FastMCP) -> None:
     async def logi_clo_wait_heatmap(
         company_id: str,
         facility_id: str | None = None,
+        include_consigned: bool = False,
     ) -> dict[str, object]:
         """拠点 × 時間帯（朝/昼/夕/夜）の荷待ち時間ヒートマップを生成します。
 
@@ -338,6 +339,9 @@ def register_tools(mcp: FastMCP) -> None:
                 site_name 未指定の wait_time_rows のみを持つ会社では cells が空になる
             facility_id: 施設フィルタ。指定時は対象施設の site_name のみで集計。
                 未指定なら従来挙動（全社集計）。
+            include_consigned: 全社集計時に寄託先施設の site も含めるか（既定 False）。
+                facility_id 指定時は無視。Codex §8.4-2 反映: 自社管理施設の主集計に
+                寄託先を既定混入させないことで責任境界を明確化する。
 
         Returns:
             ToolResponse 構造:
@@ -364,7 +368,9 @@ def register_tools(mcp: FastMCP) -> None:
 
         try:
             result: HeatmapResult = build_wait_time_heatmap(
-                profile, facility=facility_obj
+                profile,
+                facility=facility_obj,
+                include_consigned=include_consigned,
             )
         except ValueError as exc:
             return ToolResponse(summary=f"❌ {exc}").to_dict()
@@ -386,6 +392,15 @@ def register_tools(mcp: FastMCP) -> None:
                 detail_lines.append(
                     "⛔ 除外理由: " + " / ".join(result.exclusion_reasons)
                 )
+            detail_lines.append("")
+        # 全社集計時のみ寄託先除外を併記（facility 直接指定時は意味なし）
+        if facility_obj is None and result.excluded_consigned_site_count > 0:
+            excluded_label = "、".join(result.excluded_consigned_site_names)
+            mode_label = "含む" if result.include_consigned else "除外"
+            detail_lines.append(
+                f"🟦 寄託先 {result.excluded_consigned_site_count} 件を主集計から"
+                f"{mode_label}: {excluded_label}"
+            )
             detail_lines.append("")
         detail_lines.append(
             f"📊 全体平均 {result.overall_avg_minutes:.0f} 分・最大 "

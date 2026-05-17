@@ -322,3 +322,113 @@ def test_facility_none_preserves_legacy_behavior() -> None:
     assert result_default.facility_id is None
     assert result_default.consigned_notice is None
     assert result_default.is_consigned_warehouse is False
+
+
+# ---------------------------------------------------------------------------
+# Tier S3 フォロー PR: include_consigned 引数（Codex §8.4-2 反映）
+# ---------------------------------------------------------------------------
+
+
+def test_include_consigned_false_excludes_consigned_site() -> None:
+    """全社集計（既定）で寄託先 site が除外される。"""
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    # 関東地域DC を寄託先として登録
+    facilities = [
+        _make_test_facility(
+            facility_id="fac_consigned_kanto",
+            site_name="関東地域DC",
+            is_consigned=True,
+        )
+    ]
+    result = build_wait_time_heatmap(
+        profile, include_consigned=False, facilities=facilities
+    )
+
+    # 関東地域DC は除外され、中部 + 関西の 2 拠点のみ集計
+    assert "関東地域DC" not in result.site_names
+    assert result.excluded_consigned_site_count == 1
+    assert "関東地域DC" in result.excluded_consigned_site_names
+    assert result.include_consigned is False
+    assert result.primary_aggregated_site_count == len(result.site_names)
+
+
+def test_include_consigned_true_keeps_consigned_site() -> None:
+    """include_consigned=True で寄託先 site も主集計に含まれる。"""
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    facilities = [
+        _make_test_facility(
+            facility_id="fac_consigned_kanto",
+            site_name="関東地域DC",
+            is_consigned=True,
+        )
+    ]
+    result = build_wait_time_heatmap(
+        profile, include_consigned=True, facilities=facilities
+    )
+
+    # 関東地域DC も含めて全 3 拠点が集計対象
+    assert "関東地域DC" in result.site_names
+    assert result.include_consigned is True
+    # excluded_consigned_site_count は 0（除外していないので）
+    assert result.excluded_consigned_site_count == 0
+
+
+def test_include_consigned_ignored_when_facility_specified() -> None:
+    """facility 直接指定時は include_consigned が無視され、対象 site のみ集計。"""
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    facility = _make_test_facility(site_name="関東地域DC", is_consigned=True)
+    # facilities 一覧（無視されることを確認）
+    facilities_pool = [facility]
+
+    result = build_wait_time_heatmap(
+        profile,
+        facility=facility,
+        include_consigned=False,  # 通常なら除外だが facility 指定優先
+        facilities=facilities_pool,
+    )
+    # facility=facility のとき対象 site のみで集計（除外ロジック非適用）
+    assert result.site_names == ["関東地域DC"]
+    assert result.include_consigned is False
+    assert result.excluded_consigned_site_count == 0
+
+
+def test_overall_avg_excludes_consigned_rows_in_default_mode() -> None:
+    """全社集計（既定）の overall_avg は寄託先 site の行を含めない。"""
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    facilities_with_consigned = [
+        _make_test_facility(
+            facility_id="fac_consigned_kanto",
+            site_name="関東地域DC",
+            is_consigned=True,
+        )
+    ]
+    result_excluded = build_wait_time_heatmap(
+        profile, include_consigned=False, facilities=facilities_with_consigned
+    )
+    result_included = build_wait_time_heatmap(
+        profile, include_consigned=True, facilities=facilities_with_consigned
+    )
+
+    # 関東を除外した overall_avg は含めたものと異なる
+    assert result_excluded.overall_avg_minutes is not None
+    assert result_included.overall_avg_minutes is not None
+    # 関東 DC は朝便平均 42 分（yellow）で全体平均を上げる方向に作用
+    # 除外時の方が平均が下がる（少なくとも一致しない）
+    assert result_excluded.overall_avg_minutes != result_included.overall_avg_minutes
+
+
+def test_no_facilities_means_no_exclusion() -> None:
+    """寄託先 Facility 未登録なら除外は発生しない（旧挙動と等価）。"""
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    result = build_wait_time_heatmap(
+        profile, include_consigned=False, facilities=[]
+    )
+    assert result.excluded_consigned_site_count == 0
+    assert result.excluded_consigned_site_names == []
+    # 3 拠点全部が集計対象
+    assert len(result.site_names) == 3

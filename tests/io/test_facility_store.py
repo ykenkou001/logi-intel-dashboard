@@ -13,6 +13,16 @@
     10. facility_id の文字種チェック（日本語混入で ValidationError）
     11. base_dir 実行時解決（DEFAULT を汚染しない）
     12. JSON 直接編集に対する model_validate（前方互換）
+
+Tier S3 フォロー PR（Codex §8.4 反映）:
+    13. facility_control_type 未指定で is_consigned=True → 'consigned' に同期
+    14. facility_control_type 未指定で is_consigned=False → 'owned' に同期
+    15. facility_control_type='consigned' → is_consigned_warehouse=True に同期
+    16. 既存 JSON（control_type フィールドなし）の前方互換マイグレーション
+    17. default_consigned_disclaimer — 標準文言（partner 名あり/なし）
+    18. upsert_facility — 寄託先 + conditions 空で自動付与
+    19. upsert_facility — 寄託先 + conditions 入力済では自動付与しない
+    20. is_consigned_for_aggregation プロパティの判定
 """
 
 from __future__ import annotations
@@ -28,6 +38,7 @@ from pydantic import ValidationError
 from core.io.facility_store import (
     Facility,
     FacilityMeasurementPeriod,
+    default_consigned_disclaimer,
     load_facilities,
     load_facility,
     save_facilities,
@@ -259,3 +270,142 @@ def test_load_ignores_unknown_field_in_json(tmp_path: Path) -> None:
     loaded = load_facilities("sample_retail_01", base_dir=tmp_path)
     assert len(loaded) == 1
     assert loaded[0].facility_id == facility.facility_id
+
+
+# ---------------------------------------------------------------------------
+# 13-20. Tier S3 フォロー PR — Codex §8.4 反映の拡張テスト
+# ---------------------------------------------------------------------------
+
+
+def test_control_type_defaults_to_consigned_when_is_consigned_true() -> None:
+    """facility_control_type 未指定で is_consigned_warehouse=True → 'consigned' に同期。"""
+    f = _make_facility(is_consigned_warehouse=True)
+    assert f.facility_control_type == "consigned"
+    assert f.is_consigned_warehouse is True
+    assert f.is_consigned_for_aggregation is True
+
+
+def test_control_type_defaults_to_owned_when_is_consigned_false() -> None:
+    """facility_control_type 未指定で is_consigned_warehouse=False → 'owned' に同期。"""
+    f = _make_facility(is_consigned_warehouse=False)
+    assert f.facility_control_type == "owned"
+    assert f.is_consigned_warehouse is False
+    assert f.is_consigned_for_aggregation is False
+
+
+def test_control_type_consigned_forces_is_consigned_flag() -> None:
+    """facility_control_type='consigned' 指定で is_consigned_warehouse=True に同期。"""
+    f = Facility(
+        facility_id="fac_sync",
+        company_id="sample_retail_01",
+        name="同期検証施設",
+        prefecture="東京都",
+        industry_code="5411",
+        site_name="関東地域DC",
+        facility_control_type="consigned",
+        is_consigned_warehouse=False,  # 矛盾を入力 → control_type 側に揃う
+        measurement_period=FacilityMeasurementPeriod(
+            start_on=date(2025, 4, 1),
+            end_on=date(2026, 3, 31),
+            unit_label="月次",
+        ),
+        measurement_conditions=["test"],
+    )
+    assert f.is_consigned_warehouse is True
+    assert f.facility_control_type == "consigned"
+
+
+def test_legacy_json_without_control_type_is_migrated(tmp_path: Path) -> None:
+    """既存 JSON（facility_control_type フィールドなし）も読み込み時に同期される。"""
+    # フィールドなしの JSON を直書きする
+    raw_payload = [
+        {
+            "facility_id": "legacy_fac",
+            "company_id": "legacy_co",
+            "name": "旧形式施設",
+            "address": "",
+            "prefecture": "東京都",
+            "industry_code": "5411",
+            "site_name": "関東",
+            "measurement_period": {
+                "start_on": "2025-04-01",
+                "end_on": "2026-03-31",
+                "unit_label": "月次",
+            },
+            "measurement_conditions": ["legacy"],
+            "exclusion_reasons": [],
+            "is_consigned_warehouse": True,
+            "notes": None,
+            "created_at": "2025-01-01T00:00:00Z",
+            "updated_at": "2025-01-01T00:00:00Z",
+            # facility_control_type / measurement_source 等は欠落
+        },
+    ]
+    path = tmp_path / "legacy_co.json"
+    path.write_text(json.dumps(raw_payload, ensure_ascii=False), encoding="utf-8")
+
+    loaded = load_facilities("legacy_co", base_dir=tmp_path)
+    assert len(loaded) == 1
+    assert loaded[0].facility_control_type == "consigned"
+    assert loaded[0].is_consigned_warehouse is True
+
+
+def test_default_consigned_disclaimer_with_partner_name() -> None:
+    """partner_name 指定で文言が差し込まれる。"""
+    text = default_consigned_disclaimer("○○倉庫株式会社")
+    assert "○○倉庫株式会社から提供を受けた参考値" in text
+    assert "自社直接計測外" in text
+
+
+def test_default_consigned_disclaimer_without_partner_name() -> None:
+    """partner_name 省略時は汎用 '寄託先' 表記。"""
+    text = default_consigned_disclaimer()
+    assert "寄託先から提供を受けた参考値" in text
+    assert "自社直接計測外" in text
+
+
+def test_upsert_facility_auto_injects_disclaimer_for_empty_conditions(
+    tmp_path: Path,
+) -> None:
+    """寄託先 + measurement_conditions 空 → default_consigned_disclaimer が自動付与。"""
+    f = Facility(
+        facility_id="fac_consigned_blank",
+        company_id="sample_retail_01",
+        name="寄託先DC（条件未入力）",
+        prefecture="東京都",
+        industry_code="5411",
+        site_name="関東地域DC",
+        is_consigned_warehouse=True,
+        consigned_partner_name="○○物流",
+        measurement_period=FacilityMeasurementPeriod(
+            start_on=date(2025, 4, 1),
+            end_on=date(2026, 3, 31),
+            unit_label="月次",
+        ),
+        measurement_conditions=[],
+        exclusion_reasons=[],
+    )
+    upsert_facility(f, base_dir=tmp_path)
+    loaded = load_facility(
+        "fac_consigned_blank", "sample_retail_01", base_dir=tmp_path
+    )
+    assert loaded is not None
+    assert len(loaded.measurement_conditions) == 1
+    assert "○○物流から提供を受けた参考値" in loaded.measurement_conditions[0]
+
+
+def test_upsert_facility_skips_disclaimer_when_conditions_filled(
+    tmp_path: Path,
+) -> None:
+    """寄託先 + measurement_conditions 入力済 → 自動付与しない（ユーザー入力を尊重）。"""
+    f = _make_facility(
+        facility_id="fac_consigned_filled",
+        is_consigned_warehouse=True,
+    )
+    # _make_facility は measurement_conditions に値を入れている
+    upsert_facility(f, base_dir=tmp_path)
+    loaded = load_facility(
+        "fac_consigned_filled", "sample_retail_01", base_dir=tmp_path
+    )
+    assert loaded is not None
+    assert loaded.measurement_conditions == ["ドライバー手動計測", "パレット便のみ対象"]

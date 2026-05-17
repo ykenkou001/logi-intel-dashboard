@@ -203,6 +203,102 @@ def test_facility_consigned_warehouse_emits_notice_in_metadata(
     assert "寄託先施設" in (md["consigned_notice"] or "")
 
 
+# ─── Tier S3 フォロー PR: include_consigned + control_type (Codex §8.4) ───
+
+
+def test_wait_heatmap_default_excludes_consigned_site(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """全社集計（既定: include_consigned=False）で寄託先 site が除外される。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+
+    # 関東地域DC を寄託先として登録
+    client.post(
+        "/api/v1/clo/facilities",
+        json=_facility_payload(
+            facility_id="fac_consigned_kanto",
+            company_id="sample_retail_01",
+            site_name="関東地域DC",
+            is_consigned=True,
+        ),
+    )
+
+    resp = client.get(
+        "/api/v1/clo/wait-heatmap",
+        params={"company_id": "sample_retail_01"},
+    )
+    assert resp.status_code == 200
+    md = resp.json()["metadata"]
+    # 関東は除外される
+    assert "関東地域DC" not in md["site_names"]
+    assert md["excluded_consigned_site_count"] == 1
+    assert md["excluded_consigned_site_names"] == ["関東地域DC"]
+    assert md["include_consigned"] is False
+
+
+def test_wait_heatmap_include_consigned_true_keeps_site(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """include_consigned=true で寄託先 site も含む。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+
+    client.post(
+        "/api/v1/clo/facilities",
+        json=_facility_payload(
+            facility_id="fac_consigned_kanto",
+            company_id="sample_retail_01",
+            site_name="関東地域DC",
+            is_consigned=True,
+        ),
+    )
+
+    resp = client.get(
+        "/api/v1/clo/wait-heatmap",
+        params={
+            "company_id": "sample_retail_01",
+            "include_consigned": "true",
+        },
+    )
+    assert resp.status_code == 200
+    md = resp.json()["metadata"]
+    assert "関東地域DC" in md["site_names"]
+    assert md["include_consigned"] is True
+    assert md["excluded_consigned_site_count"] == 0
+
+
+def test_facility_control_type_round_trip_via_rest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """facility_control_type + consigned_partner_name が POST → GET で永続化される。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+
+    payload = _facility_payload(
+        facility_id="fac_3pl",
+        company_id="ct_company",
+        site_name="3PL運用拠点",
+    )
+    payload["facility_control_type"] = "operated_by_3pl"
+    payload["measurement_source"] = "3PL報告書"
+    payload["consigned_partner_name"] = "△△ロジスティクス"
+    payload["contract_scope_note"] = "在庫管理のみ委託"
+
+    post = client.post("/api/v1/clo/facilities", json=payload)
+    assert post.status_code == 200
+
+    got = client.get("/api/v1/clo/facilities", params={"company_id": "ct_company"})
+    assert got.status_code == 200
+    md = got.json()["metadata"]
+    assert md["facilities"][0]["facility_control_type"] == "operated_by_3pl"
+    assert md["facilities"][0]["measurement_source"] == "3PL報告書"
+    assert md["facilities"][0]["consigned_partner_name"] == "△△ロジスティクス"
+    assert md["facilities"][0]["contract_scope_note"] == "在庫管理のみ委託"
+    # operated_by_3pl は寄託先ではない
+    assert md["facilities"][0]["is_consigned_warehouse"] is False
+
+
 def test_executive_brief_generates_three_slide_pptx() -> None:
     """フェーズ4.1 a.3: 3 スライド経営会議要約 PPT を REST で生成。"""
     resp = client.get("/api/v1/clo/executive-brief/sample_mfg_01")

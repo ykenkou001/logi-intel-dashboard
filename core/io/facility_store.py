@@ -20,10 +20,20 @@ import json
 import os
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 DEFAULT_FACILITIES_DIR = Path(os.environ.get("LOGI_OUTPUTS_DIR", "outputs")) / "facilities"
+
+FacilityControlType = Literal["owned", "leased", "operated_by_3pl", "consigned"]
+"""施設管理形態（責任境界）:
+
+- "owned":          自社所有・自社運用
+- "leased":         自社賃借・自社運用（賃借契約あり）
+- "operated_by_3pl": 自社所有/賃借だが運用は 3PL に委託（自社測定可）
+- "consigned":      寄託先（特定倉庫業者等）に管理を委ね、自社直接計測外
+"""
 
 
 # ---------------------------------------------------------------------------
@@ -115,11 +125,73 @@ class Facility(BaseModel):
         description=(
             "寄託先（特定倉庫業者・物流子会社）か。True なら自社測定外として "
             "wait_time_heatmap 上でバナー表示し、責任主体を明示する。"
+            "facility_control_type='consigned' と等価で、後方互換のため両方残す。"
+        ),
+    )
+    facility_control_type: FacilityControlType | None = Field(
+        default=None,
+        description=(
+            "施設管理形態（責任境界）。owned/leased/operated_by_3pl/consigned。"
+            "未指定なら is_consigned_warehouse から逆算（True→consigned, False→owned）。"
+            "Codex 二者議論で追加（plans/facility_store.md §8.4）。"
+        ),
+    )
+    measurement_source: str | None = Field(
+        default=None,
+        description=(
+            "測定主体名（例: '自社ドライバー手動', '寄託先WMS自動連携', '3PL報告書'）。"
+            "様式第5 Ⅳ で「誰が計測したか」を明示するための補助項目。"
+        ),
+    )
+    consigned_partner_name: str | None = Field(
+        default=None,
+        description=(
+            "寄託契約相手の事業者名（facility_control_type='consigned' のとき必須的）。"
+            "標準ディスクレーマー文言の差込にも使う。"
+        ),
+    )
+    contract_scope_note: str | None = Field(
+        default=None,
+        description=(
+            "寄託契約のスコープ注記（例: 'パレット便のみ寄託・バラ便は自社運用'）。"
+            "様式第5 で連携状況・把握範囲を説明する根拠として使う。"
         ),
     )
     notes: str | None = Field(default=None, description="補足（個別事情）")
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @model_validator(mode="after")
+    def _sync_control_type_and_consigned_flag(self) -> Facility:
+        """facility_control_type と is_consigned_warehouse を同期する。
+
+        後方互換ルール:
+            1. facility_control_type が None なら is_consigned_warehouse から逆算
+               （True→'consigned', False→'owned'）
+            2. facility_control_type が指定済なら is_consigned_warehouse を上書き
+               （control_type='consigned' ⇒ is_consigned_warehouse=True）
+            3. 既存 JSON（facility_control_type フィールドなし）も model_validate で
+               自動的に正しい値に同期される（マイグレーション）
+        """
+        if self.facility_control_type is None:
+            self.facility_control_type = (
+                "consigned" if self.is_consigned_warehouse else "owned"
+            )
+        else:
+            # control_type が指定済 → is_consigned_warehouse を制御値に揃える
+            self.is_consigned_warehouse = self.facility_control_type == "consigned"
+        return self
+
+    @property
+    def is_consigned_for_aggregation(self) -> bool:
+        """全社集計時に寄託先として扱うべきか。
+
+        facility_control_type='consigned' または旧 is_consigned_warehouse=True なら True。
+        集計分離（include_consigned 引数）の判定に使う。
+        """
+        return (
+            self.facility_control_type == "consigned" or self.is_consigned_warehouse
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -145,6 +217,26 @@ def _facilities_path(company_id: str, base_dir: Path) -> Path:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+def default_consigned_disclaimer(partner_name: str | None = None) -> str:
+    """寄託先施設の標準ディスクレーマー文言を返す。
+
+    様式第5 Ⅳ で「寄託先提供値」を扱う際の防御的注記。Codex 二者議論 §8.4-3
+    で確定した推奨文言（plans/facility_store.md）。
+
+    Args:
+        partner_name: 寄託契約相手の事業者名。None なら "寄託先" と汎用表記。
+
+    Returns:
+        "{partner}から提供を受けた参考値。計測期間・対象運行・計測方法は
+        寄託先記録に基づく（自社直接計測外）。"
+    """
+    partner_label = partner_name if partner_name else "寄託先"
+    return (
+        f"{partner_label}から提供を受けた参考値。計測期間・対象運行・"
+        "計測方法は寄託先記録に基づく（自社直接計測外）。"
+    )
 
 
 def save_facilities(
@@ -202,30 +294,40 @@ def upsert_facility(
     facility: Facility,
     base_dir: Path | None = None,
 ) -> Path:
-    """施設マスタを upsert する。同一 facility_id があれば updated_at を更新して上書き。"""
+    """施設マスタを upsert する。同一 facility_id があれば updated_at を更新して上書き。
+
+    寄託先施設（is_consigned_for_aggregation=True）かつ measurement_conditions が
+    空の場合、default_consigned_disclaimer() を自動付与する（Codex §8.4-3 反映）。
+    """
     existing = load_facilities(facility.company_id, base_dir)
     now = datetime.now(UTC)
+
+    # Codex §8.4-3: 寄託先施設で計測条件未入力なら標準文言を自動付与
+    incoming = facility
+    if incoming.is_consigned_for_aggregation and not incoming.measurement_conditions:
+        disclaimer = default_consigned_disclaimer(incoming.consigned_partner_name)
+        incoming = incoming.model_copy(update={"measurement_conditions": [disclaimer]})
 
     # 既存検索
     found_idx: int | None = None
     for idx, f in enumerate(existing):
-        if f.facility_id == facility.facility_id:
+        if f.facility_id == incoming.facility_id:
             found_idx = idx
             break
 
     if found_idx is None:
         # 新規追加。created_at は incoming のものを尊重、未指定なら now
-        new_record = facility.model_copy(update={"updated_at": now})
+        new_record = incoming.model_copy(update={"updated_at": now})
         existing.append(new_record)
     else:
         # 上書き。created_at は既存を尊重、updated_at は now
         prior = existing[found_idx]
-        new_record = facility.model_copy(
+        new_record = incoming.model_copy(
             update={"created_at": prior.created_at, "updated_at": now}
         )
         existing[found_idx] = new_record
 
-    return save_facilities(facility.company_id, existing, base_dir)
+    return save_facilities(incoming.company_id, existing, base_dir)
 
 
 # ---------------------------------------------------------------------------
@@ -262,8 +364,11 @@ def _maybe_fetch_from_s3(company_id: str) -> str | None:
 
 
 __all__ = [
+    "DEFAULT_FACILITIES_DIR",
     "Facility",
+    "FacilityControlType",
     "FacilityMeasurementPeriod",
+    "default_consigned_disclaimer",
     "load_facilities",
     "load_facility",
     "save_facilities",

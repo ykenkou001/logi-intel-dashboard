@@ -49,6 +49,7 @@ export default function WaitHeatmapPage() {
   const [companyId, setCompanyId] = useState<string>("sample_retail_01");
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [facilityId, setFacilityId] = useState<string>(""); // 空文字 = 全社集計
+  const [includeConsigned, setIncludeConsigned] = useState<boolean>(false);
   const { data: result, loading, error, run } = useFetchTool<ToolResponse>();
 
   useEffect(() => {
@@ -70,7 +71,13 @@ export default function WaitHeatmapPage() {
 
   async function handleSubmit() {
     await run(() =>
-      fetchWaitHeatmap(companyId, facilityId === "" ? undefined : facilityId),
+      fetchWaitHeatmap(
+        companyId,
+        facilityId === "" ? undefined : facilityId,
+        // facility 指定時は include_consigned は無視（既存挙動）。
+        // 全社集計時のみチェックボックスの値を反映。
+        facilityId === "" ? includeConsigned : undefined,
+      ),
     );
   }
 
@@ -146,6 +153,25 @@ export default function WaitHeatmapPage() {
           )}
         </label>
 
+        {/* Tier S3 フォロー PR: 全社集計時のみ寄託先も含めるかチェック */}
+        <label className="flex items-start gap-2 mb-5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={includeConsigned}
+            onChange={(e) => setIncludeConsigned(e.target.checked)}
+            disabled={facilityId !== ""}
+            className="mt-0.5 disabled:cursor-not-allowed"
+          />
+          <div className="text-xs text-gray-700 leading-relaxed">
+            <span className="font-semibold">寄託先施設も含めて全社集計する</span>
+            <span className="block text-[11px] text-gray-500 mt-0.5">
+              既定は <strong>寄託先除外</strong>。Codex §8.4-2 反映 — 自社管理施設の主集計に
+              寄託先（特定倉庫業者・物流子会社）を混入させないことで責任境界を明確化します。
+              施設フィルタ選択中は無効（直接指定が優先）。
+            </span>
+          </div>
+        </label>
+
         <button
           onClick={handleSubmit}
           disabled={loading}
@@ -189,6 +215,22 @@ export default function WaitHeatmapPage() {
               ⛔ 除外理由: {heatmap.exclusion_reasons.join(" / ")}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tier S3 フォロー PR: 全社集計時に寄託先除外件数を可視化 */}
+      {heatmap && !heatmap.facility_id && heatmap.excluded_consigned_site_count > 0 && (
+        <div className="bg-sky-50 border border-sky-200 text-sky-900 rounded-xl p-4 text-xs space-y-1">
+          <div>
+            🟦 寄託先 <strong>{heatmap.excluded_consigned_site_count}</strong> 件を主集計から
+            {heatmap.include_consigned ? "含めています" : "除外しています"}:{" "}
+            {heatmap.excluded_consigned_site_names.join("、")}
+          </div>
+          <div className="text-[11px] text-sky-700">
+            主集計対象拠点数: <strong>{heatmap.primary_aggregated_site_count}</strong> 件
+            {!heatmap.include_consigned &&
+              "（チェックボックスで寄託先も参考表示できます）"}
+          </div>
         </div>
       )}
 
