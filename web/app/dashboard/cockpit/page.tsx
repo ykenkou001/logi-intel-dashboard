@@ -7,6 +7,7 @@ import {
   ToolResponseDisplay,
 } from "@/components/ToolResponseDisplay";
 import {
+  fetchDecisionLogEntries,
   fetchSamples,
   fetchTodayDecisions,
   logDecision,
@@ -14,7 +15,10 @@ import {
   type CockpitItem,
   type CockpitMetadata,
   type DecisionAxis,
+  type DecisionLogEntry,
+  type DecisionLogQueryResponse,
   type DecisionStatus,
+  type DecisionType,
   type SampleCompany,
   type ToolResponse,
   type VerdictLevel,
@@ -305,6 +309,7 @@ export default function CockpitPage() {
   const [companyId, setCompanyId] = useState<string>("sample_wholesale_01");
   const { data: result, loading, error, run } = useFetchTool<ToolResponse>();
   const [decisionError, setDecisionError] = useState<string | null>(null);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   useEffect(() => {
     fetchSamples()
@@ -446,7 +451,8 @@ export default function CockpitPage() {
                 item={item}
                 companyId={cockpit.company_id}
                 onDecisionLogged={() => {
-                  /* I2 ログ記録の即時反映は次の生成時に days_pending に出る */
+                  /* Tier S1: ボタン押下後、履歴ペインを即時 refetch */
+                  setHistoryRefreshKey((k) => k + 1);
                 }}
                 onError={setDecisionError}
               />
@@ -500,7 +506,134 @@ export default function CockpitPage() {
         </>
       )}
 
+      {/* Tier S1: 過去の意思決定（新 jsonl + 旧 jsonl 統合） */}
+      <DecisionHistoryPane
+        companyId={companyId}
+        refreshKey={historyRefreshKey}
+      />
+
       {result && <ToolResponseDisplay response={result} />}
     </div>
+  );
+}
+
+// ─── Tier S1: 過去の意思決定ペイン ──────────────────────────────────────
+
+const DECISION_TYPE_LABEL: Record<DecisionType, string> = {
+  cockpit_single: "コックピット判断",
+  measure_eval_topbottom: "施策 Top/Bottom 採択",
+  scenario_sim_baseline: "シナリオ baseline 採択",
+  plan_draft_freeze: "計画書凍結",
+  free_form: "自由記述",
+};
+
+function measureLabel(measureId: string): string {
+  // labels.ts に MEASURE_LABEL が将来追加されたら import に切替。Tier S1 は raw id 表示。
+  return measureId;
+}
+
+function DecisionHistoryPane({
+  companyId,
+  refreshKey,
+}: {
+  companyId: string;
+  refreshKey: number;
+}) {
+  const [data, setData] = useState<DecisionLogQueryResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [paneError, setPaneError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setPaneError(null);
+    fetchDecisionLogEntries(companyId, { limit: 20 })
+      .then((res) => {
+        if (!cancelled) setData(res);
+      })
+      .catch((e) => {
+        if (!cancelled)
+          setPaneError(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [companyId, refreshKey]);
+
+  return (
+    <section className="mt-2 p-5 rounded-xl border border-gray-100 bg-white">
+      <h3
+        className="text-lg font-bold text-[#1F4E79] mb-3"
+        style={{ fontFamily: "var(--font-serif)" }}
+      >
+        過去の意思決定
+      </h3>
+      <p className="text-xs text-gray-500 mb-4">
+        様式第 5 定期報告の「経営判断の証跡」として参照可能（最新 20 件）
+      </p>
+      {loading && <Spinner />}
+      {paneError && <ErrorBanner message={paneError} />}
+      {!loading && !paneError && data && data.entries.length === 0 && (
+        <p className="text-sm text-gray-500">
+          まだ記録された意思決定はありません。
+        </p>
+      )}
+      {!loading && !paneError && data && data.entries.length > 0 && (
+        <ul className="space-y-2">
+          {data.entries.map((entry) => (
+            <DecisionHistoryRow key={entry.entry_id} entry={entry} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function DecisionHistoryRow({ entry }: { entry: DecisionLogEntry }) {
+  return (
+    <li className="border border-gray-100 rounded-md p-3 hover:bg-gray-50 transition-colors">
+      <div className="flex items-start justify-between gap-2 text-xs text-gray-600 mb-1">
+        <span style={{ fontFamily: "var(--font-mono)" }}>
+          {new Date(entry.decided_at).toLocaleString("ja-JP")}
+        </span>
+        <span className="flex items-center gap-1.5 flex-wrap">
+          <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap">
+            {DECISION_TYPE_LABEL[entry.decision_type]}
+          </span>
+          {entry.legacy_source && (
+            <span
+              title="旧 outputs/decisions/*.jsonl 由来の cockpit 単発判断"
+              className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap"
+            >
+              （旧仕様）
+            </span>
+          )}
+          <span className="text-gray-500 whitespace-nowrap">
+            by {entry.decided_by}
+          </span>
+        </span>
+      </div>
+      <div className="text-sm font-medium text-gray-900">{entry.headline}</div>
+      {entry.rationale && (
+        <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+          {entry.rationale}
+        </p>
+      )}
+      {entry.selected_measures.length > 0 && (
+        <div className="mt-1 text-[11px] text-emerald-700">
+          採用:{" "}
+          {entry.selected_measures.map((m) => measureLabel(m)).join(" / ")}
+        </div>
+      )}
+      {entry.rejected_measures.length > 0 && (
+        <div className="text-[11px] text-rose-700">
+          不採用:{" "}
+          {entry.rejected_measures.map((m) => measureLabel(m)).join(" / ")}
+        </div>
+      )}
+    </li>
   );
 }

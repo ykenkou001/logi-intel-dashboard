@@ -46,6 +46,17 @@ from core.export.citation import (
     logistics_efficiency_law_citation,
 )
 from core.export.formatter import format_jpy
+
+# DecisionRecord / DecisionStatus / append_decision は core/io/decision_log_store.py へ移動済。
+# 後方互換維持のため re-export する（Tier S1 / フェーズ 5.5）。
+from core.io.decision_log_store import (
+    DecisionRecord,
+    DecisionStatus,
+    append_decision,
+)
+from core.io.decision_log_store import (
+    load_pending_decisions as _load_pending_decisions,
+)
 from core.legal.improvement_check import (
     ComplianceItem,
     ComplianceReport,
@@ -91,9 +102,6 @@ ObjectionRole = Literal["cfo", "sales", "operation", "partner", "board"]
 
 EvidenceAxis = Literal["cost", "legal", "supply", "brand_risk"]
 """反論案の論拠軸（経営会議で使う説得カテゴリ）。"""
-
-DecisionStatus = Literal["pending", "adopt", "postpone", "reject", "escalate"]
-"""I2 意思決定ログのステータス。append-only で履歴保持する。"""
 
 VerdictLevel = Literal["green", "yellow", "red"]
 """総合健全性 overall_health の 3 値。feasibility_check.VerdictLevel と同形。"""
@@ -281,35 +289,8 @@ class OperationKpiSnapshot(BaseModel):
     )
 
 
-class DecisionRecord(BaseModel):
-    """I2 意思決定ログの 1 行。append-only の jsonl で保持する。
-
-    UI でカードを開いた時点で status="pending" を append し、ボタン押下時に
-    新しいレコードを追記する（直前レコード書換ではない、履歴を残すため）。
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    record_id: str = Field(description="UUID4")
-    company_id: str
-    cockpit_item_id: str = Field(description="CockpitItem.item_id への参照")
-    decided_at: datetime
-    decided_by: str = Field(description="決定者（CLO 名 or 'system'）")
-    decision: DecisionStatus
-
-    rationale: str = Field(default="", description="決定の根拠（短文）")
-    expected_effect_jpy: int | None = Field(
-        default=None,
-        description="採用時の想定経営効果（円）",
-    )
-    review_due: date | None = Field(
-        default=None,
-        description="次回レビュー期日（postpone/escalate 時）",
-    )
-    linked_alerts: list[str] = Field(
-        default_factory=list,
-        description="H1 ギャップアラート ID への参照（一方向）",
-    )
+# NOTE: class DecisionRecord は core/io/decision_log_store.py に移動済（Tier S1 / フェーズ 5.5）。
+# 後方互換のため上部の re-export 経由で参照可能。
 
 
 class CockpitResult(BaseModel):
@@ -1141,42 +1122,8 @@ def _load_prior_snapshot(
     )
 
 
-def _load_pending_decisions(company_id: str) -> list[DecisionRecord]:
-    """outputs/decisions/<id>.jsonl から status=pending の最新レコードを返す。
-
-    同 cockpit_item_id の中で最新（decided_at 最大）を pending と判定し、
-    その値が "pending" のもののみ集約する。Append-only ログの解釈仕様。
-    """
-    path = _outputs_root() / "decisions" / f"{company_id}.jsonl"
-    if not path.is_file():
-        return []
-    latest_per_item: dict[str, DecisionRecord] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            record = DecisionRecord.model_validate_json(line)
-        except (ValueError, TypeError):
-            continue  # 壊れた行はスキップ（前方互換）
-        existing = latest_per_item.get(record.cockpit_item_id)
-        if existing is None or record.decided_at > existing.decided_at:
-            latest_per_item[record.cockpit_item_id] = record
-    return [r for r in latest_per_item.values() if r.decision == "pending"]
-
-
-def append_decision(record: DecisionRecord) -> Path:
-    """DecisionRecord を outputs/decisions/<id>.jsonl に append する。
-
-    Public API（b.6 で REST POST から呼ぶ）。
-    """
-    base = _outputs_root() / "decisions"
-    base.mkdir(parents=True, exist_ok=True)
-    path = base / f"{record.company_id}.jsonl"
-    with path.open("a", encoding="utf-8") as fp:
-        fp.write(record.model_dump_json())
-        fp.write("\n")
-    return path
+# NOTE: _load_pending_decisions / append_decision は core/io/decision_log_store.py に移動済。
+# 後方互換のため上部の re-export 経由で参照可能（Tier S1 / フェーズ 5.5）。
 
 
 def _days_pending_of(

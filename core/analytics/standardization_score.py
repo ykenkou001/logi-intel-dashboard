@@ -273,7 +273,12 @@ def _implemented_measure_ids(
 
     暫定ルール: target_kind="measure" かつ category が
     approved_better_practice / required_localization のものを採用済とみなす。
-    decision_log との連動は次 PR の課題（DecisionRecord に measure_id が無い）。
+
+    Tier S1（フェーズ 5.5）で `core/io/decision_log_store.query_decision_log_entries()`
+    が利用可能になったが、本モジュールでは未連携。F2 算定ロジック側で
+    DecisionLogEntry.selected_measures / rejected_measures から bonus/penalty を
+    算出する変更は別 PR で `compute_standardization_score` の入力・F2 計算・テストを
+    まとめて行う。
     """
     adopted_categories = {"approved_better_practice", "required_localization"}
     package_ids = set(package.measure_ids)

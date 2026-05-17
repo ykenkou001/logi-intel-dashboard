@@ -781,3 +781,111 @@ export async function runEligibilityCheck(
     body: JSON.stringify(body),
   });
 }
+
+// ─── Tier S1: DecisionLog 永続化 ─────────────────────────────────────────
+// Tier S1 PR でのみ追加。並列セッション B/C は本セクションをスキップして良い。
+
+export type DecisionType =
+  | "cockpit_single"
+  | "measure_eval_topbottom"
+  | "scenario_sim_baseline"
+  | "plan_draft_freeze"
+  | "free_form";
+
+export interface ContextSnapshotPayload {
+  snapshot_date: string; // ISO date YYYY-MM-DD
+  load_factor_pct: number | null;
+  wait_time_avg_min: number | null;
+  wait_time_max_min: number | null;
+  handling_time_avg_min: number | null;
+  over_2h_count_total: number | null;
+  co2_intensity_g_per_tonkm: number | null;
+  f2_score: number | null;
+  j2_trap_count_high: number | null;
+  related_kpi_name: string | null;
+  compliance_overall: ComplianceStatus | null;
+  feasibility_kpi_level: VerdictLevel | null;
+  extra: Record<string, number | string | string[] | null>;
+}
+
+export interface DecisionLogEntry {
+  entry_id: string;
+  company_id: string;
+  decision_type: DecisionType;
+  decided_at: string; // ISO datetime
+  decided_by: string;
+  headline: string;
+  rationale: string;
+  selected_measures: string[];
+  rejected_measures: string[];
+  sources: Citation[];
+  context_snapshot: ContextSnapshotPayload;
+  linked_cockpit_record_id: string | null;
+  review_due: string | null;
+  tags: string[];
+  legacy_source: boolean;
+}
+
+export interface DecisionLogQueryResponse {
+  company_id: string;
+  count: number;
+  entries: DecisionLogEntry[];
+}
+
+export interface DecisionLogRecordRequest {
+  decision_type: DecisionType;
+  decided_by: string;
+  headline: string;
+  rationale?: string;
+  selected_measures?: string[];
+  rejected_measures?: string[];
+  sources?: Citation[];
+  context_snapshot: ContextSnapshotPayload;
+  linked_cockpit_record_id?: string | null;
+  review_due?: string | null;
+  tags?: string[];
+}
+
+export async function fetchDecisionLogEntries(
+  companyId: string,
+  opts: {
+    decisionType?: DecisionType;
+    fromDate?: string;
+    toDate?: string;
+    decidedBy?: string;
+    includeLegacyCockpit?: boolean;
+    limit?: number;
+  } = {},
+): Promise<DecisionLogQueryResponse> {
+  const qs = new URLSearchParams();
+  if (opts.decisionType) qs.set("decision_type", opts.decisionType);
+  if (opts.fromDate) qs.set("from_date", opts.fromDate);
+  if (opts.toDate) qs.set("to_date", opts.toDate);
+  if (opts.decidedBy) qs.set("decided_by", opts.decidedBy);
+  if (opts.includeLegacyCockpit === false)
+    qs.set("include_legacy_cockpit", "false");
+  if (opts.limit) qs.set("limit", String(opts.limit));
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<DecisionLogQueryResponse>(
+    `/api/v1/clo/decision-logs/${encodeURIComponent(companyId)}${suffix}`,
+  );
+}
+
+export async function recordDecisionLogEntry(
+  companyId: string,
+  body: DecisionLogRecordRequest,
+): Promise<{
+  entry_id: string;
+  company_id: string;
+  decision_type: DecisionType;
+  log_path: string;
+}> {
+  return request(
+    `/api/v1/clo/decision-logs/${encodeURIComponent(companyId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+}

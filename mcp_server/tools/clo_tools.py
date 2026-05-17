@@ -1506,3 +1506,214 @@ def register_tools(mcp: FastMCP) -> None:
             )
 
         return ToolResponse(summary="\n".join(lines)).to_dict()
+
+    # ─── Tier S1: DecisionLog 永続化 ─────────────────────────────────────
+    # Tier S1 PR でのみ追加。並列セッション B/C は本セクションをスキップして良い。
+    from datetime import UTC
+    from datetime import date as _date
+    from datetime import datetime as _datetime
+    from uuid import uuid4 as _uuid4
+
+    from core.export.citation import Citation as _Citation
+    from core.io.decision_log_store import (
+        ContextSnapshot as _ContextSnapshot,
+    )
+    from core.io.decision_log_store import (
+        DecisionLogEntry as _DecisionLogEntry,
+    )
+    from core.io.decision_log_store import (
+        append_decision_log_entry as _append_decision_log_entry,
+    )
+    from core.io.decision_log_store import (
+        query_decision_log_entries as _query_decision_log_entries,
+    )
+
+    @mcp.tool()
+    async def logi_clo_decision_log_record(
+        company_id: str,
+        decision_type: str,
+        decided_by: str,
+        headline: str,
+        rationale: str = "",
+        selected_measures: list[str] | None = None,
+        rejected_measures: list[str] | None = None,
+        sources: list[dict[str, str]] | None = None,
+        snapshot_date: str | None = None,
+        snapshot_load_factor_pct: float | None = None,
+        snapshot_wait_time_avg_min: float | None = None,
+        snapshot_wait_time_max_min: float | None = None,
+        snapshot_handling_time_avg_min: float | None = None,
+        snapshot_over_2h_count_total: int | None = None,
+        snapshot_co2_intensity_g_per_tonkm: float | None = None,
+        snapshot_f2_score: float | None = None,
+        snapshot_j2_trap_count_high: int | None = None,
+        snapshot_related_kpi_name: str | None = None,
+        snapshot_compliance_overall: str | None = None,
+        snapshot_feasibility_kpi_level: str | None = None,
+        snapshot_extra: dict[str, object] | None = None,
+        linked_cockpit_record_id: str | None = None,
+        review_due: str | None = None,
+        tags: list[str] | None = None,
+    ) -> dict[str, object]:
+        """経営意思決定 1 件を outputs/decision_logs/<id>.jsonl に append します（Tier S1）。
+
+        様式第 5 定期報告の証跡として後日 logi_clo_decision_log_query で引用可能。
+        snapshot_* 引数は判断時点の数値スナップショット（軽量埋込）。
+
+        Args:
+            company_id: 対象企業 ID
+            decision_type: cockpit_single / measure_eval_topbottom /
+                scenario_sim_baseline / plan_draft_freeze / free_form のいずれか
+            decided_by: 決定者（CLO 名 / 取締役会 / system）
+            headline: 1 行要約
+            rationale: 判断の根拠（任意）
+            selected_measures / rejected_measures: 採用/不採用とした measure_id 一覧
+            snapshot_date: 判断時点の YYYY-MM-DD（未指定時は今日）
+            snapshot_*: ContextSnapshot 各フィールド（任意）
+            linked_cockpit_record_id: 既存 DecisionRecord と紐付けたい時のみ
+            review_due: 次回レビュー期日（YYYY-MM-DD）
+            tags: 検索用タグ
+
+        Returns:
+            ToolResponse: 記録した entry_id とパスを summary に含む
+        """
+        snap_date_obj = _date.fromisoformat(snapshot_date) if snapshot_date else _date.today()
+        review_due_obj = _date.fromisoformat(review_due) if review_due else None
+        snap_extra_raw = dict(snapshot_extra) if snapshot_extra else {}
+        # extra は dict[str, float | str | int | list[str] | None] に絞る
+        snap_extra: dict[str, float | str | int | list[str] | None] = {}
+        for k, v in snap_extra_raw.items():
+            if v is None or isinstance(v, (float, str, int, list)):
+                snap_extra[k] = v
+
+        snapshot = _ContextSnapshot(
+            snapshot_date=snap_date_obj,
+            load_factor_pct=snapshot_load_factor_pct,
+            wait_time_avg_min=snapshot_wait_time_avg_min,
+            wait_time_max_min=snapshot_wait_time_max_min,
+            handling_time_avg_min=snapshot_handling_time_avg_min,
+            over_2h_count_total=snapshot_over_2h_count_total,
+            co2_intensity_g_per_tonkm=snapshot_co2_intensity_g_per_tonkm,
+            f2_score=snapshot_f2_score,
+            j2_trap_count_high=snapshot_j2_trap_count_high,
+            related_kpi_name=snapshot_related_kpi_name,
+            compliance_overall=snapshot_compliance_overall,  # type: ignore[arg-type]
+            feasibility_kpi_level=snapshot_feasibility_kpi_level,  # type: ignore[arg-type]
+            extra=snap_extra,
+        )
+        # Codex 最終レビュー指摘 2: sources を Citation に変換して保存
+        sources_objs: list[_Citation] = []
+        for s in sources or []:
+            label = s.get("label")
+            url = s.get("url")
+            if not label or not url:
+                continue  # label/url が無い source はスキップ（防御的検証）
+            sources_objs.append(
+                _Citation(
+                    label=label,
+                    url=url,
+                    stats_data_id=s.get("stats_data_id"),
+                    notice_number=s.get("notice_number"),
+                    ordinance_number=s.get("ordinance_number"),
+                    accessed_via=s.get("accessed_via", ""),
+                )
+            )
+
+        entry = _DecisionLogEntry(
+            entry_id=str(_uuid4()),
+            company_id=company_id,
+            decision_type=decision_type,  # type: ignore[arg-type]
+            decided_at=_datetime.now(UTC),
+            decided_by=decided_by,
+            headline=headline,
+            rationale=rationale,
+            selected_measures=list(selected_measures or []),
+            rejected_measures=list(rejected_measures or []),
+            sources=sources_objs,
+            context_snapshot=snapshot,
+            linked_cockpit_record_id=linked_cockpit_record_id,
+            review_due=review_due_obj,
+            tags=list(tags or []),
+            legacy_source=False,
+        )
+        path = _append_decision_log_entry(entry)
+        base = ToolResponse(
+            summary=(
+                f"DecisionLog 1 件を記録しました: entry_id={entry.entry_id} / "
+                f"decision_type={entry.decision_type} / decided_by={entry.decided_by}\n"
+                f"path: {path}"
+            ),
+            files={"decision_log_jsonl": str(path)},
+        ).to_dict()
+        return {**base, "entry_id": entry.entry_id, "decision_type": entry.decision_type}
+
+    @mcp.tool()
+    async def logi_clo_decision_log_query(
+        company_id: str,
+        decision_type: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        decided_by: str | None = None,
+        include_legacy_cockpit: bool = True,
+        limit: int = 50,
+    ) -> dict[str, object]:
+        """意思決定履歴を取得します（新旧両 jsonl 統合 / decided_at 降順 / Tier S1）。
+
+        様式第 5 Ⅲ「実施状況」/ Ⅵ「改善基準告示遵守状況」執筆時の引用に使う。
+        legacy_source=True のエントリは旧 outputs/decisions/<id>.jsonl 由来の
+        cockpit 単発判断（変換表示）。
+
+        Args:
+            company_id: 対象企業 ID
+            decision_type: フィルタ（cockpit_single / measure_eval_topbottom 等）
+            from_date / to_date: 日付範囲（YYYY-MM-DD）
+            decided_by: 決定者完全一致フィルタ
+            include_legacy_cockpit: True なら旧 jsonl も統合（既定 True）
+            limit: 件数上限（1-500）
+
+        Returns:
+            ToolResponse: summary に件数概要、metadata.entries に全エントリ
+        """
+        from_d = _date.fromisoformat(from_date) if from_date else None
+        to_d = _date.fromisoformat(to_date) if to_date else None
+        entries = _query_decision_log_entries(
+            company_id,
+            decision_type=decision_type,  # type: ignore[arg-type]
+            from_date=from_d,
+            to_date=to_d,
+            decided_by=decided_by,
+            include_legacy_cockpit=include_legacy_cockpit,
+            limit=limit,
+        )
+        legacy_count = sum(1 for e in entries if e.legacy_source)
+        summary_lines = [
+            f"DecisionLog {len(entries)} 件取得しました（company_id={company_id}）",
+        ]
+        if legacy_count > 0:
+            summary_lines.append(
+                f"凡例: 旧仕様（cockpit 単発判断）由来の {legacy_count} 件を含みます"
+            )
+        warnings = (
+            [f"include_legacy_cockpit=True で旧 jsonl 由来 {legacy_count} 件を含めています"]
+            if legacy_count > 0
+            else []
+        )
+        # Codex 最終レビュー指摘 2: citations を集約 + metadata.entries に格納
+        all_citations: list[_Citation] = []
+        seen_urls: set[str] = set()
+        for e in entries:
+            for src in e.sources:
+                if src.url and src.url not in seen_urls:
+                    all_citations.append(src)
+                    seen_urls.add(src.url)
+        base = ToolResponse(
+            summary="\n".join(summary_lines),
+            citations=all_citations,
+            freshness_warnings=warnings,
+        ).to_dict()
+        base["metadata"] = {
+            "entries": [e.model_dump(mode="json") for e in entries],
+            "count": len(entries),
+            "legacy_count": legacy_count,
+        }
+        return base

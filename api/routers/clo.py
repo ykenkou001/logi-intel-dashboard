@@ -1085,3 +1085,102 @@ async def waste_traps(
     model = to_model(response)
     model.metadata = result.model_dump(mode="json")
     return model
+
+
+# ─── Tier S1: DecisionLog 永続化 ─────────────────────────────────────────
+# Tier S1 PR でのみ追加。並列セッション B/C は本セクションをスキップして良い。
+
+from core.io.decision_log_store import (  # noqa: E402
+    ContextSnapshot,
+    DecisionLogEntry,
+    DecisionType,
+    append_decision_log_entry,
+    query_decision_log_entries,
+)
+
+
+class DecisionLogEntryRequest(BaseModel):
+    """POST /decision-logs 入力スキーマ。entry_id / decided_at はサーバー側生成。"""
+
+    decision_type: DecisionType
+    decided_by: str
+    headline: str
+    rationale: str = ""
+    selected_measures: list[str] = Field(default_factory=list)
+    rejected_measures: list[str] = Field(default_factory=list)
+    sources: list[Citation] = Field(default_factory=list)
+    context_snapshot: ContextSnapshot
+    linked_cockpit_record_id: str | None = None
+    review_due: date | None = None
+    tags: list[str] = Field(default_factory=list)
+
+
+@router.post("/decision-logs/{company_id}", status_code=201)
+async def decision_log_record(
+    company_id: str,
+    body: Annotated[DecisionLogEntryRequest, Body()],
+) -> dict[str, str]:
+    """新 DecisionLogEntry を outputs/decision_logs/<id>.jsonl に append する。
+
+    様式第 5 定期報告の証跡として後日 GET /decision-logs/{id} で引用可能。
+    """
+    _resolve_profile_or_404(company_id)
+    entry = DecisionLogEntry(
+        entry_id=str(uuid.uuid4()),
+        company_id=company_id,
+        decision_type=body.decision_type,
+        decided_at=datetime.now(UTC),
+        decided_by=body.decided_by,
+        headline=body.headline,
+        rationale=body.rationale,
+        selected_measures=list(body.selected_measures),
+        rejected_measures=list(body.rejected_measures),
+        sources=list(body.sources),
+        context_snapshot=body.context_snapshot,
+        linked_cockpit_record_id=body.linked_cockpit_record_id,
+        review_due=body.review_due,
+        tags=list(body.tags),
+        legacy_source=False,
+    )
+    try:
+        path = append_decision_log_entry(entry)
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"jsonl append 失敗: {exc}") from exc
+    return {
+        "entry_id": entry.entry_id,
+        "company_id": company_id,
+        "decision_type": entry.decision_type,
+        "log_path": str(path),
+    }
+
+
+@router.get("/decision-logs/{company_id}")
+async def decision_log_query(
+    company_id: str,
+    decision_type: Annotated[DecisionType | None, Query()] = None,
+    from_date: Annotated[date | None, Query()] = None,
+    to_date: Annotated[date | None, Query()] = None,
+    decided_by: Annotated[str | None, Query()] = None,
+    include_legacy_cockpit: Annotated[bool, Query()] = True,
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+) -> dict[str, object]:
+    """新旧両 jsonl を統合した意思決定履歴を返す（decided_at 降順）。
+
+    legacy_source=True のエントリは旧 outputs/decisions/<id>.jsonl 由来。
+    include_legacy_cockpit=False で旧 jsonl を除外できる。
+    """
+    _resolve_profile_or_404(company_id)
+    entries = query_decision_log_entries(
+        company_id,
+        decision_type=decision_type,
+        from_date=from_date,
+        to_date=to_date,
+        decided_by=decided_by,
+        include_legacy_cockpit=include_legacy_cockpit,
+        limit=limit,
+    )
+    return {
+        "company_id": company_id,
+        "count": len(entries),
+        "entries": [e.model_dump(mode="json") for e in entries],
+    }
