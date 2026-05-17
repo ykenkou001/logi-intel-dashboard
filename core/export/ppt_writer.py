@@ -52,6 +52,9 @@ _ACCENT = "F5B82E"
 _POSITIVE = "2DD4BF"
 _NEGATIVE = "EF6F6C"
 _WHITE = "FFFFFF"
+_WARN_ORANGE = "F58E2E"
+_DEEP_RED = "9B1C1C"
+_DIM = "D4D8DE"
 
 _FOOTER_TEXT = "Logi-Intel Dashboard | CLO中長期計画書ドラフト"
 
@@ -215,6 +218,8 @@ def _english_label(title: str, slide_no: int) -> str:
         return "IMPACT SIMULATION"
     if "マッチング" in title or "認定" in title:
         return "CASE BENCHMARK"
+    if "罰則" in title or "リスクステップ" in title or "コンプライアンス" in title:
+        return "COMPLIANCE RISK"
     if "出典" in title:
         return "APPENDIX"
     return "CLO REPORT"
@@ -1214,10 +1219,247 @@ def _add_roadmap_chart_body(slide: Any, spec: ChartSpec) -> None:
     chart.value_axis.tick_labels.font.name = _FONT
 
 
+# ── Tier S4: 罰則・社名公表リスクのステップフロー ──────────────────────────
+# 物流効率化法の段階的措置を 4 段で表現する。法文の確認できる範囲だけを根拠とし、
+# 「準拠率 X% のとき行政指導の確率は Y%」のような数値推定は付与しない（推測禁止）。
+# 行政指導は法文に明文規定なし（実務運用）と注記する。
+_COMPLIANCE_STEP_KEYS: tuple[str, ...] = ("guidance", "recommendation", "publication", "fine")
+_COMPLIANCE_STEP_NAMES: dict[str, str] = {
+    "guidance": "行政指導",
+    "recommendation": "勧告",
+    "publication": "公表",
+    "fine": "罰金 (100万円以下)",
+}
+_COMPLIANCE_STEP_BASIS_SHIPPER: dict[str, str] = {
+    "guidance": "実務運用 (明文なし)",
+    "recommendation": "法第48条",
+    "publication": "法第49条",
+    "fine": "法第50条",
+}
+_COMPLIANCE_STEP_BASIS_CHAIN: dict[str, str] = {
+    "guidance": "実務運用 (明文なし)",
+    "recommendation": "法第67条",
+    "publication": "法第68条",
+    "fine": "法第69条",
+}
+_COMPLIANCE_STEP_COLORS: dict[str, str] = {
+    "ok": _POSITIVE,
+    "guidance": _ACCENT,
+    "recommendation": _WARN_ORANGE,
+    "publication": _NEGATIVE,
+    "fine": _DEEP_RED,
+}
+_COMPLIANCE_STEP_BANNER: dict[str, str] = {
+    "ok": "現在判定基準で問題なし（指導前）",
+    "guidance": "行政指導 段階のリスク（内部評価）",
+    "recommendation": "勧告 段階のリスク（内部評価）",
+    "publication": "公表 段階のリスク（内部評価）",
+    "fine": "罰金 段階のリスク（内部評価）",
+}
+
+
+def _compliance_step_index(step_key: str) -> int:
+    if step_key in _COMPLIANCE_STEP_KEYS:
+        return _COMPLIANCE_STEP_KEYS.index(step_key)
+    return -1  # "ok" or unknown
+
+
+def _add_compliance_risk_step_body(slide: Any, spec: ChartSpec) -> None:
+    """`submission_validator` の準拠率を 4 段ステップフローで描画する。
+
+    法文整合: 行政指導→勧告→公表→罰金 の段階的措置を CHEVRON で表現。
+    現在地マーカーは準拠率 + error/warning 件数からの **内部評価** で決定し、
+    数値推定 (X% の確率で行政指導等) は一切付与しない。
+    """
+    data = spec.data
+    score: float = float(data.get("compliance_score_pct", 0.0))
+    error_count: int = int(data.get("error_count", 0))
+    warning_count: int = int(data.get("warning_count", 0))
+    current_step: str = str(data.get("current_step", "guidance"))
+    missing_actions: list[str] = list(data.get("missing_actions", []))
+    is_chain_franchise: bool = bool(data.get("is_chain_franchise", False))
+
+    current_index = _compliance_step_index(current_step)
+    accent_color = _COMPLIANCE_STEP_COLORS.get(current_step, _ACCENT)
+    banner_text = _COMPLIANCE_STEP_BANNER.get(current_step, _COMPLIANCE_STEP_BANNER["guidance"])
+    basis_map = (
+        _COMPLIANCE_STEP_BASIS_CHAIN if is_chain_franchise else _COMPLIANCE_STEP_BASIS_SHIPPER
+    )
+
+    # ── 1. 現在地バナー（スコア + 段階表示）────────────────────────────────
+    _add_rect(
+        slide, Inches(0.52), Inches(1.78), Inches(12.3), Inches(0.62), fill=accent_color
+    )
+    _add_text(
+        slide,
+        f"準拠率 {score:.1f}% / エラー {error_count} 件 / 警告 {warning_count} 件",
+        Inches(0.78),
+        Inches(1.88),
+        Inches(6.6),
+        Inches(0.22),
+        size=10,
+        color=_PRIMARY_DK,
+        bold=True,
+    )
+    _add_text(
+        slide,
+        banner_text,
+        Inches(0.78),
+        Inches(2.10),
+        Inches(11.8),
+        Inches(0.26),
+        size=14,
+        color=_PRIMARY_DK,
+        bold=True,
+    )
+
+    # ── 2. 4 ステップ CHEVRON フロー ────────────────────────────────────
+    flow_top = Inches(2.70)
+    flow_height = Inches(1.55)
+    step_count = len(_COMPLIANCE_STEP_KEYS)
+    margin_x = Inches(0.52)
+    total_width = Inches(13.333) - margin_x * 2
+    gap = Inches(0.12)
+    step_w = (total_width - gap * (step_count - 1)) / step_count
+
+    for i, step_key in enumerate(_COMPLIANCE_STEP_KEYS):
+        left = margin_x + (step_w + gap) * i
+        is_current = i == current_index
+        is_passed = current_index >= 0 and i < current_index
+        if is_current:
+            fill_color = _COMPLIANCE_STEP_COLORS[step_key]
+            text_color = _PRIMARY_DK
+            label_color = _PRIMARY_DK
+        elif is_passed:
+            fill_color = _MUTED
+            text_color = _ON_PRIMARY
+            label_color = _SECONDARY
+        else:
+            fill_color = _DIM
+            text_color = _MUTED
+            label_color = _MUTED
+
+        shape = slide.shapes.add_shape(MSO_SHAPE.CHEVRON, left, flow_top, step_w, flow_height)
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = _rgb(fill_color)
+        shape.line.fill.background()
+
+        _add_text(
+            slide,
+            f"STEP {i + 1:02}",
+            left + Inches(0.18),
+            flow_top + Inches(0.16),
+            step_w - Inches(0.6),
+            Inches(0.18),
+            size=9,
+            color=label_color,
+            bold=True,
+        )
+        _add_text(
+            slide,
+            _COMPLIANCE_STEP_NAMES[step_key],
+            left + Inches(0.18),
+            flow_top + Inches(0.40),
+            step_w - Inches(0.6),
+            Inches(0.42),
+            size=16,
+            color=text_color,
+            bold=True,
+        )
+        _add_text(
+            slide,
+            basis_map[step_key],
+            left + Inches(0.18),
+            flow_top + Inches(0.92),
+            step_w - Inches(0.6),
+            Inches(0.22),
+            size=10,
+            color=text_color,
+        )
+
+    # ── 3. 現在地マーカー（▲ + 「現在地」テキスト）─────────────────────
+    if current_index >= 0:
+        marker_left = margin_x + (step_w + gap) * current_index + step_w / 2 - Inches(0.4)
+        marker_top = flow_top + flow_height + Inches(0.08)
+        triangle = slide.shapes.add_shape(
+            MSO_SHAPE.ISOSCELES_TRIANGLE, marker_left, marker_top, Inches(0.8), Inches(0.3)
+        )
+        # 三角形を反転（下向き）するため、180度回転
+        triangle.rotation = 180
+        triangle.fill.solid()
+        triangle.fill.fore_color.rgb = _rgb(accent_color)
+        triangle.line.fill.background()
+        _add_text(
+            slide,
+            "現在地",
+            marker_left - Inches(0.4),
+            marker_top + Inches(0.34),
+            Inches(1.6),
+            Inches(0.22),
+            size=11,
+            color=accent_color,
+            bold=True,
+            alignment=PP_ALIGN.CENTER,
+        )
+
+    # ── 4. 必要な追加対応 箇条書き（最大 5 件）─────────────────────────
+    actions_top = Inches(4.90)
+    _add_rect(
+        slide, Inches(0.52), actions_top, Inches(12.3), Inches(1.85), fill=_SURFACE
+    )
+    _add_text(
+        slide,
+        "提出可までに必要な追加対応",
+        Inches(0.78),
+        actions_top + Inches(0.12),
+        Inches(6.0),
+        Inches(0.24),
+        size=12,
+        color=_PRIMARY,
+        bold=True,
+    )
+    actions = missing_actions[:5] if missing_actions else ["（指摘なし — 現状の準拠率で提出可能）"]
+    for i, action in enumerate(actions):
+        bullet_y = actions_top + Inches(0.46 + 0.28 * i)
+        _add_rect(
+            slide,
+            Inches(0.84),
+            bullet_y + Inches(0.06),
+            Inches(0.10),
+            Inches(0.10),
+            fill=accent_color,
+        )
+        _add_text(
+            slide,
+            action,
+            Inches(1.06),
+            bullet_y,
+            Inches(11.5),
+            Inches(0.22),
+            size=10,
+            color=_PRIMARY,
+        )
+
+    # ── 5. 注記 ─────────────────────────────────────────────────────
+    _add_text(
+        slide,
+        "※ 本判定は当社の準拠率しきい値による内部評価です。"
+        "行政指導は法令上の明文規定がない実務運用、勧告以降は物流効率化法の段階的措置に対応。",
+        Inches(0.52),
+        Inches(6.85),
+        Inches(12.3),
+        Inches(0.22),
+        size=8,
+        color=_MUTED,
+        italic=True,
+    )
+
+
 _CHART_DISPATCH = {
     "portfolio": _add_portfolio_chart_body,
     "waterfall": _add_waterfall_chart_body,
     "roadmap": _add_roadmap_chart_body,
+    "compliance_risk_step": _add_compliance_risk_step_body,
 }
 
 

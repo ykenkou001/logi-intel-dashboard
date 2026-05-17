@@ -571,7 +571,10 @@ def register_tools(mcp: FastMCP) -> None:
         return response.to_dict()
 
     @mcp.tool()
-    async def logi_clo_plan_draft(company_id: str) -> dict[str, object]:
+    async def logi_clo_plan_draft(
+        company_id: str,
+        include_compliance_risk_slide: bool = True,
+    ) -> dict[str, object]:
         """CLO 中長期計画書ドラフトを統合生成し、PPT/Word/Excel/Markdown を出力します。
 
         フェーズ3 のクライマックス機能。Step 1〜6（業界ベンチマーク・ドライバー需給・
@@ -585,6 +588,11 @@ def register_tools(mcp: FastMCP) -> None:
                 - "sample_chain_01": 連鎖化事業者（コンビニ本部・埼玉県・売上3,200億）
                 - "sample_retail_01": 小売業（ヒートマップ対応サンプル）
                 ※ フェーズ4 で実データアップロード対応予定
+            include_compliance_risk_slide: True（既定）で PPT に Tier S4「罰則・社名
+                公表リスクステップ」スライドを追加。submission_validator の準拠率を
+                行政指導→勧告→公表→100万円罰金の 4 段で経営層に焼き付ける。
+                法令根拠は特定荷主 (法第48〜50条) / 連鎖化事業者 (法第67〜69条)
+                で自動切替。
 
         Returns:
             ToolResponse 構造:
@@ -594,7 +602,10 @@ def register_tools(mcp: FastMCP) -> None:
             - freshness_warnings: 静的データの鮮度警告
         """
         try:
-            result: PlanDraftResult = await generate_plan_draft(company_id)
+            result: PlanDraftResult = await generate_plan_draft(
+                company_id,
+                include_compliance_risk_slide=include_compliance_risk_slide,
+            )
         except ValueError as exc:
             return ToolResponse(summary=str(exc)).to_dict()
 
