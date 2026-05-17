@@ -9,6 +9,13 @@
  * - 同一 origin の `/api/v1/analytics/collect` に POST するため
  *   アドブロッカーで弾かれにくい
  * - ブラウザ単位の永続 ID は `localStorage` の UUID v4 で持つ（Cookie 不使用）
+ *
+ * イベント名のメモ:
+ *   GA4 では `user_engagement` / `session_start` / `screen_view` 等は予約名で
+ *   Measurement Protocol からは送れない（NAME_RESERVED で破棄される）。
+ *   gtag.js が internal で送るためのもの。手動実装ではカスタム名（例: `page_engagement`）
+ *   を使い、engagement_time_msec はそれに載せる。GA4 は任意イベントの
+ *   engagement_time_msec を accumulate して engaged session 判定に使う仕様。
  */
 
 import { usePathname } from "next/navigation";
@@ -93,7 +100,7 @@ export function Analytics(): null {
     if (lastPathRef.current && lastPathRef.current !== pathname) {
       const engagement = now - activeSinceRef.current;
       send(
-        "user_engagement",
+        "page_engagement",
         { engagement_time_msec: Math.min(engagement, 30 * 60 * 1000) },
         false,
       );
@@ -119,7 +126,7 @@ export function Analytics(): null {
       const engagement = Date.now() - activeSinceRef.current;
       if (engagement <= 0) return;
       send(
-        "user_engagement",
+        "page_engagement",
         { engagement_time_msec: Math.min(engagement, 30 * 60 * 1000) },
         useBeacon,
       );
