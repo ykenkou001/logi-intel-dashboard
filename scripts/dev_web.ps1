@@ -21,24 +21,23 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $webDir = Join-Path $repoRoot "web"
 
-# ── 1. 同 port を listen している既存 next dev を kill ──────────────
-$existing = Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
-    Where-Object {
-        $_.CommandLine -and
-        $_.CommandLine -match "next" -and
-        $_.CommandLine -match "dev" -and
-        ($_.CommandLine -match "--port\s+$Port\b" -or
-         ($Port -eq 3000 -and $_.CommandLine -notmatch "--port"))
-    }
-
-if ($existing) {
-    Write-Host ("[dev_web] 既存 next dev (port {0}) を停止: {1}" -f $Port, ($existing.ProcessId -join ", "))
-    foreach ($p in $existing) {
-        Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+# ── 1. 同 port を listen している全プロセスを kill ────────────────────
+# 古い next dev だけでなく、別アプリ（Zenn CLI 等）が port を占有しているケースも
+# 同じ症状（リクエストが届かない）になるため、listener ベースで一律停止する。
+# 2026-05-17: dev_api.ps1 と同じ方針に揃えた。
+$listeners = @(Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue)
+if ($listeners.Count -gt 0) {
+    $pids = $listeners | Select-Object -ExpandProperty OwningProcess -Unique
+    foreach ($targetPid in $pids) {
+        $proc = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
+        $cmd = (Get-CimInstance Win32_Process -Filter "ProcessId=$targetPid" -ErrorAction SilentlyContinue).CommandLine
+        Write-Host ("[dev_web] port {0} を占有中のプロセスを停止: PID={1} Name={2}" -f $Port, $targetPid, $proc.ProcessName)
+        if ($cmd) { Write-Host ("           cmd: {0}" -f $cmd) }
+        Stop-Process -Id $targetPid -Force -ErrorAction SilentlyContinue
     }
     Start-Sleep -Seconds 1
 } else {
-    Write-Host "[dev_web] 既存 next dev なし"
+    Write-Host ("[dev_web] port {0} 占有プロセスなし" -f $Port)
 }
 
 # ── 2. API_BASE をローカル uvicorn に向けて起動 ─────────────────────
