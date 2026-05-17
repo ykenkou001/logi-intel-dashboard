@@ -814,3 +814,142 @@ def test_chain_franchise_measure_details_excludes_loading_section() -> None:
         assert d["form3_section"] != "loading", (
             f"連鎖化に loading 系施策 {d['measure_id']} の詳細が含まれている"
         )
+
+
+# ─── Tier S1: DecisionLog 永続化 ─────────────────────────────────────────
+
+
+def _decision_log_request_body(
+    *,
+    decision_type: str = "free_form",
+    decided_by: str = "CLO_A",
+    headline: str = "test headline",
+    selected: list[str] | None = None,
+) -> dict[str, object]:
+    return {
+        "decision_type": decision_type,
+        "decided_by": decided_by,
+        "headline": headline,
+        "rationale": "test rationale",
+        "selected_measures": list(selected or []),
+        "rejected_measures": [],
+        "sources": [],
+        "context_snapshot": {
+            "snapshot_date": "2026-05-17",
+            "load_factor_pct": 42.0,
+            "wait_time_avg_min": None,
+            "wait_time_max_min": None,
+            "handling_time_avg_min": None,
+            "over_2h_count_total": None,
+            "co2_intensity_g_per_tonkm": None,
+            "f2_score": None,
+            "j2_trap_count_high": None,
+            "related_kpi_name": None,
+            "compliance_overall": None,
+            "feasibility_kpi_level": None,
+            "extra": {},
+        },
+        "linked_cockpit_record_id": None,
+        "review_due": None,
+        "tags": [],
+    }
+
+
+def test_t13_post_decision_logs_returns_201_and_entry_id(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    resp = client.post(
+        "/api/v1/clo/decision-logs/sample_wholesale_01",
+        json=_decision_log_request_body(),
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert "entry_id" in body and len(body["entry_id"]) >= 16
+    assert body["company_id"] == "sample_wholesale_01"
+    assert body["decision_type"] == "free_form"
+    assert "log_path" in body
+
+
+def test_t14_get_decision_logs_applies_query_filters(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    client.post(
+        "/api/v1/clo/decision-logs/sample_wholesale_01",
+        json=_decision_log_request_body(
+            decision_type="measure_eval_topbottom",
+            decided_by="CLO_A",
+        ),
+    )
+    client.post(
+        "/api/v1/clo/decision-logs/sample_wholesale_01",
+        json=_decision_log_request_body(
+            decision_type="scenario_sim_baseline",
+            decided_by="CLO_B",
+        ),
+    )
+
+    resp = client.get(
+        "/api/v1/clo/decision-logs/sample_wholesale_01",
+        params={"decision_type": "measure_eval_topbottom"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["count"] == 1
+    assert body["entries"][0]["decision_type"] == "measure_eval_topbottom"
+
+    resp_b = client.get(
+        "/api/v1/clo/decision-logs/sample_wholesale_01",
+        params={"decided_by": "CLO_B"},
+    )
+    assert resp_b.json()["count"] == 1
+    assert resp_b.json()["entries"][0]["decided_by"] == "CLO_B"
+
+
+def test_t15_get_decision_logs_unknown_company_404() -> None:
+    resp = client.get("/api/v1/clo/decision-logs/does_not_exist_xyz")
+    assert resp.status_code == 404
+
+
+def test_t16_e2e_cockpit_then_decision_log_pane_merges(tmp_path, monkeypatch) -> None:
+    """E2E: 旧 POST /decisions/{id} で 1 件 + 新 POST /decision-logs/{id} で 1 件 →
+    GET /decision-logs/{id} で 2 件返り、legacy_source=True が 1 件含まれる。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    # 旧仕様で 1 件記録
+    legacy_resp = client.post(
+        "/api/v1/clo/decisions/sample_wholesale_01",
+        json={
+            "cockpit_item_id": "compl_wait_max_violation_20260517",
+            "decision": "adopt",
+            "decided_by": "system",
+            "rationale": "legacy decision",
+        },
+    )
+    assert legacy_resp.status_code == 201
+    # 新仕様で 1 件記録
+    new_resp = client.post(
+        "/api/v1/clo/decision-logs/sample_wholesale_01",
+        json=_decision_log_request_body(
+            decision_type="measure_eval_topbottom",
+            decided_by="CLO_A",
+            headline="Top 3 採択",
+        ),
+    )
+    assert new_resp.status_code == 201
+
+    # 両方が統合されて返る
+    merged_resp = client.get("/api/v1/clo/decision-logs/sample_wholesale_01")
+    assert merged_resp.status_code == 200
+    merged = merged_resp.json()
+    assert merged["count"] == 2
+    legacy_entries = [e for e in merged["entries"] if e["legacy_source"]]
+    new_entries = [e for e in merged["entries"] if not e["legacy_source"]]
+    assert len(legacy_entries) == 1
+    assert legacy_entries[0]["decision_type"] == "cockpit_single"
+    assert len(new_entries) == 1
+    assert new_entries[0]["decision_type"] == "measure_eval_topbottom"
+
+    # include_legacy_cockpit=false で旧仕様除外
+    no_legacy_resp = client.get(
+        "/api/v1/clo/decision-logs/sample_wholesale_01",
+        params={"include_legacy_cockpit": "false"},
+    )
+    assert no_legacy_resp.json()["count"] == 1
+    assert no_legacy_resp.json()["entries"][0]["legacy_source"] is False
