@@ -100,12 +100,18 @@ class PlanDraftResult:
     """提出実務チェックリスト（Codex 1 取込）。提出経路・指定通知書番号・法人番号など。"""
 
 
-async def generate_plan_draft(company_id: str) -> PlanDraftResult:
+async def generate_plan_draft(
+    company_id: str,
+    include_compliance_risk_slide: bool = True,
+) -> PlanDraftResult:
     """サンプル企業プロフィールから CLO 計画書ドラフトを統合生成する。
 
     Args:
         company_id: サンプル企業ID（例: "sample_mfg_01", "sample_wholesale_01",
                                     "sample_chain_01"）
+        include_compliance_risk_slide: True で PPT に Tier S4「罰則・社名公表リスク
+            ステップフロー」スライドを追加（既定 True）。`submission_validator` の
+            準拠率を行政指導→勧告→公表→100万円罰金の 4 段で経営層に焼き付ける。
 
     Returns:
         PlanDraftResult — 4種類の成果物パスと各 Step 結果を含む
@@ -238,7 +244,41 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
     )
     files["html"] = str(html_path)
 
-    # 2. PPT
+    # 2. Excel（Tier S4: PPT より先に生成して compliance スライドに使えるよう順序入替）
+    excel_path = _build_excel(profile, target_proposal, simulation, citations)
+    files["excel"] = str(excel_path)
+
+    # 3. Word（様式第3別紙）— Tier S4: validator は docx を読むため PPT より先に生成
+    docx_path = _build_form3(profile, target_proposal, simulation, plan_period)
+    files["docx"] = str(docx_path)
+
+    # 4. Tier S4: 罰則・社名公表リスクのステップフロースライドを構築
+    compliance_risk_slide: SlideContent | None = None
+    if include_compliance_risk_slide:
+        # 暫定 PlanDraftResult を validator に渡すことで再帰呼び出しを回避する
+        partial_result = PlanDraftResult(
+            company_id=profile.company_id,
+            company_name=profile.name,
+            plan_period=plan_period,
+            benchmark=benchmark,
+            driver_gap=driver_gap,
+            eligibility=eligibility,
+            target_proposal=target_proposal,
+            simulation=simulation,
+            certified_matches=certified_matches,
+            financial=financial,
+            files=dict(files),
+            citations=citations,
+            freshness_warnings=all_warnings(),
+            data_source=profile.data_source,
+            submission_checklist=submission_checklist,
+        )
+        compliance_risk_slide = await _build_compliance_risk_slide(
+            partial_result,
+            is_chain_franchise=profile.is_chain_franchise,
+        )
+
+    # 5. PPT
     body_slides = _build_ppt_slides(
         benchmark,
         driver_gap,
@@ -249,6 +289,8 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         profile,
         submission_checklist=submission_checklist,
     )
+    if compliance_risk_slide is not None:
+        body_slides.append(compliance_risk_slide)
     ppt_path = write_ppt_plan(
         company_name=profile.name,
         company_id=profile.company_id,
@@ -264,14 +306,6 @@ async def generate_plan_draft(company_id: str) -> PlanDraftResult:
         citations=citations,
     )
     files["ppt"] = str(ppt_path)
-
-    # 3. Excel
-    excel_path = _build_excel(profile, target_proposal, simulation, citations)
-    files["excel"] = str(excel_path)
-
-    # 4. Word（様式第3別紙）
-    docx_path = _build_form3(profile, target_proposal, simulation, plan_period)
-    files["docx"] = str(docx_path)
 
     return PlanDraftResult(
         company_id=profile.company_id,
@@ -542,6 +576,60 @@ def _build_ppt_slides(
             )
         )
     return slides
+
+
+def _classify_compliance_step(score: float, error_count: int) -> str:
+    """準拠率とエラー件数から compliance_risk_step の段階キーを決定する。
+
+    本判定は当社の準拠率しきい値による **内部評価** であり、行政の実運用とは別。
+    数値推定（X% の確率で行政指導等）は付与しない。
+    """
+    if score >= 90.0 and error_count == 0:
+        return "ok"
+    if score >= 70.0 and error_count <= 1:
+        return "guidance"
+    if score >= 40.0 and error_count <= 2:
+        return "recommendation"
+    if score >= 1.0 and error_count <= 5:
+        return "publication"
+    return "fine"
+
+
+async def _build_compliance_risk_slide(
+    plan_result: PlanDraftResult,
+    is_chain_franchise: bool,
+) -> SlideContent:
+    """submission_validator の準拠率を 4 段ステップフロースライドに変換する（Tier S4）。
+
+    validator の error/warning suggestion を最大 5 件抽出して missing_actions に詰める。
+    """
+    # 遅延 import で循環依存を回避（validator → plan_draft → validator を防止）
+    from core.validators.submission_validator import validate_submission
+
+    report = await validate_submission(plan_result.company_id, plan_draft=plan_result)
+    errors = report.errors()
+    warnings = report.warnings()
+    missing_actions = [
+        (issue.suggestion or issue.message).strip()
+        for issue in (*errors, *warnings)
+    ][:5]
+    current_step = _classify_compliance_step(report.compliance_score_pct, len(errors))
+
+    return SlideContent(
+        title="罰則・社名公表リスクステップ",
+        chart=ChartSpec(
+            kind="compliance_risk_step",
+            data={
+                "compliance_score_pct": report.compliance_score_pct,
+                "error_count": len(errors),
+                "warning_count": len(warnings),
+                "current_step": current_step,
+                "missing_actions": missing_actions,
+                "is_chain_franchise": is_chain_franchise,
+            },
+            note="行政指導→勧告→公表→100万円罰金 の段階的措置（物流効率化法）",
+        ),
+    )
 
 
 def _build_chart_slides(

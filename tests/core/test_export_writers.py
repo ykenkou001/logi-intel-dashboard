@@ -327,6 +327,174 @@ def test_ppt_uses_codex_recommended_design_surface() -> None:
     assert "物流効率化法 第46条／第65条 対応" in first_slide_text
 
 
+# ---- Tier S4: 罰則・社名公表リスクのステップフロー ----
+
+
+def _compliance_slide_text(slide_path: Path, slide_index: int = 2) -> str:
+    from pptx import Presentation
+
+    prs = Presentation(str(slide_path))
+    slide = prs.slides[slide_index]
+    return "\n".join(shape.text for shape in slide.shapes if hasattr(shape, "text"))
+
+
+def test_compliance_risk_slide_renders_four_steps() -> None:
+    """compliance_risk_step スライドが 4 段ステップ + 法的根拠を全て描画する。"""
+    path = ppt_writer.write_clo_plan_draft(
+        company_name="リスク試験株式会社",
+        company_id="risktest",
+        plan_period="2026〜2030",
+        executive_summary=["要約"],
+        body_slides=[
+            ppt_writer.SlideContent(
+                title="罰則・社名公表リスクステップ",
+                chart=ppt_writer.ChartSpec(
+                    kind="compliance_risk_step",
+                    data={
+                        "compliance_score_pct": 55.0,
+                        "error_count": 2,
+                        "warning_count": 3,
+                        "current_step": "recommendation",
+                        "missing_actions": [
+                            "様式第3 の「実施措置」欄を埋める",
+                            "CO2 削減目標を国家目標 ▲23.4% まで引き上げ",
+                        ],
+                        "is_chain_franchise": False,
+                    },
+                ),
+            ),
+        ],
+        citations=[Citation(label="A", url="https://a.example.com")],
+    )
+    text = _compliance_slide_text(path, slide_index=2)
+    # 4 段ステップ名が含まれる
+    assert "行政指導" in text
+    assert "勧告" in text
+    assert "公表" in text
+    assert "罰金" in text
+    # 法第48条（特定荷主の勧告条文）が含まれる（is_chain_franchise=False）
+    assert "法第48条" in text
+    # 現在地マーカー + 段階表示
+    assert "現在地" in text
+    assert "勧告 段階のリスク" in text
+    # 準拠率の表示
+    assert "55.0%" in text
+    # 必要な追加対応の箇条書き
+    assert "様式第3" in text
+    # 注記
+    assert "内部評価" in text
+
+
+def test_compliance_risk_slide_uses_chain_franchise_articles() -> None:
+    """連鎖化事業者では法第67〜69条が引用される（is_chain_franchise=True）。"""
+    path = ppt_writer.write_clo_plan_draft(
+        company_name="チェーン本部",
+        company_id="chaintest",
+        plan_period="2026〜2030",
+        executive_summary=["要約"],
+        body_slides=[
+            ppt_writer.SlideContent(
+                title="罰則・社名公表リスクステップ",
+                chart=ppt_writer.ChartSpec(
+                    kind="compliance_risk_step",
+                    data={
+                        "compliance_score_pct": 30.0,
+                        "error_count": 4,
+                        "warning_count": 1,
+                        "current_step": "publication",
+                        "missing_actions": [
+                            "必須セクション「積載率向上」が様式第3 に含まれていません"
+                        ],
+                        "is_chain_franchise": True,
+                    },
+                ),
+            ),
+        ],
+        citations=[Citation(label="A", url="https://a.example.com")],
+    )
+    text = _compliance_slide_text(path, slide_index=2)
+    # 連鎖化条文
+    assert "法第67条" in text  # 勧告
+    assert "法第68条" in text  # 公表
+    assert "法第69条" in text  # 罰金
+    # 荷主条文は含まれない
+    assert "法第48条" not in text
+    assert "法第49条" not in text
+    assert "公表 段階のリスク" in text
+
+
+def test_compliance_risk_slide_ok_state_shows_pre_guidance_banner() -> None:
+    """準拠率満点（ok）では『指導前』バナーが出る + 現在地マーカーは出ない。"""
+    path = ppt_writer.write_clo_plan_draft(
+        company_name="満点株式会社",
+        company_id="oktest",
+        plan_period="2026〜2030",
+        executive_summary=["要約"],
+        body_slides=[
+            ppt_writer.SlideContent(
+                title="罰則・社名公表リスクステップ",
+                chart=ppt_writer.ChartSpec(
+                    kind="compliance_risk_step",
+                    data={
+                        "compliance_score_pct": 100.0,
+                        "error_count": 0,
+                        "warning_count": 0,
+                        "current_step": "ok",
+                        "missing_actions": [],
+                        "is_chain_franchise": False,
+                    },
+                ),
+            ),
+        ],
+        citations=[Citation(label="A", url="https://a.example.com")],
+    )
+    text = _compliance_slide_text(path, slide_index=2)
+    assert "現在判定基準で問題なし" in text
+    # 現在地マーカーは出ない（current_step="ok" のため）
+    assert "現在地" not in text
+    # 指摘なしメッセージ
+    assert "指摘なし" in text
+    # 100.0% 表示
+    assert "100.0%" in text
+
+
+def test_compliance_risk_slide_truncates_actions_to_five() -> None:
+    """missing_actions が 5 件超でも最初の 5 件のみ表示する。"""
+    actions = [f"対応 {i}" for i in range(8)]
+    path = ppt_writer.write_clo_plan_draft(
+        company_name="X",
+        company_id="trunctest",
+        plan_period="2026〜2030",
+        executive_summary=["要約"],
+        body_slides=[
+            ppt_writer.SlideContent(
+                title="罰則・社名公表リスクステップ",
+                chart=ppt_writer.ChartSpec(
+                    kind="compliance_risk_step",
+                    data={
+                        "compliance_score_pct": 10.0,
+                        "error_count": 7,
+                        "warning_count": 2,
+                        "current_step": "fine",
+                        "missing_actions": actions,
+                        "is_chain_franchise": False,
+                    },
+                ),
+            ),
+        ],
+        citations=[Citation(label="A", url="https://a.example.com")],
+    )
+    text = _compliance_slide_text(path, slide_index=2)
+    # 最初の 5 件は出る
+    for i in range(5):
+        assert f"対応 {i}" in text
+    # 6 件目以降は出ない
+    for i in range(5, 8):
+        assert f"対応 {i}" not in text
+    # 罰金段階バナー
+    assert "罰金 段階のリスク" in text
+
+
 # ---- docx_form3_writer ----
 
 
