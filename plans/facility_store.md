@@ -179,17 +179,60 @@ GET /api/v1/clo/wait-heatmap?company_id={cid}&facility_id={fid}
 
 ---
 
-## 8. 寄託先施設の扱い（Codex 二者議論で確定する）
+## 8. 寄託先施設の扱い（Codex 二者議論結果反映 — 2026-05-17）
 
-論点:
+### 8.1 論点と初期 Claude 案
 
 1. **取込ルール**: 寄託先施設を自社 Facility として登録すべきか、別タイプとすべきか
-   - 案 A: `is_consigned_warehouse=True` フラグで同一テーブルに混在（提案中）
-   - 案 B: ConsignedFacility を別モデルとして分離
+   - 案 A: `is_consigned_warehouse=True` フラグで同一テーブルに混在（PR #50 で採用）
+   - 案 B: `ConsignedFacility` を別モデルとして分離
 2. **集計時の扱い**: heatmap に含めるか / 除外するか / 警告表示か
 3. **法令観点**: 国交省手引書（特定倉庫業者編 / 特定荷主編）で寄託先の測定責任主体はどう定義されるか
 
-→ Codex に二者議論を依頼（Tier A 相当 `--model gpt-5.5`）。結論はこの計画書 §8 末尾に追記。
+### 8.2 Codex 回答（2026-05-17 / `--model gpt-5.5`）
+
+> **注記（CLAUDE.md §9.4-3 準拠）**: Codex は条番号 / 告示番号 / 様式第5 必須文言を「**不明（推測）**」と明示している。条文出典は二次調査が必要。
+
+#### 論点 1: テーブル設計
+
+- **Codex 判断**: 案 A（同一 Facility + `is_consigned_warehouse`）のままでは弱い。行政提出・経営会議では「自社管理施設」と「寄託先管理施設」の責任境界が説明単位になるため、単なる bool では混入リスクが残る。ただし別モデル完全分離（案 B）よりも、同一保存形式で `facility_control_type` と証跡項目を必須化する案が強い。
+- **根拠（Codex 提示）**: 特定荷主編手引書 3-5-3「寄託先施設との混同」、IV-4・IV-5（条番号は不明・推測）
+- **Codex の修正提案**:
+  - `facility_control_type: Literal["owned", "leased", "operated_by_3pl", "consigned"]` を追加
+  - `measurement_source: str | None`（測定主体名）
+  - `consigned_partner_name: str | None`（寄託契約相手の事業者名）
+  - `contract_scope_note: str | None`（寄託契約のスコープ注記）
+
+#### 論点 2: heatmap 集計時の寄託先扱い
+
+- **Codex 判断**: 法令整合上、寄託先を自社管理施設の heatmap KPI に既定混入させる設計は弱い。最も強いのは「警告付き集計」だが、自社管理施設の主集計と分離し、寄託先は参考値レイヤとして出すこと。完全除外は改善連携の実務価値を捨て、既定集計対象は責任境界を曖昧にする。
+- **根拠（Codex 提示）**: 特定荷主編手引書 3-5-2 / 03 IV-4・IV-5、特定倉庫業者編 様式第8 IV「荷待ち時間等の状況等」（告示番号は不明・推測）
+- **Codex の修正提案**: `include_consigned=false` を既定にし、ON 時は「寄託先（自社直接測定外・参考値）」バナー、主 KPI 非混入、別系列 / 別凡例で表示する。
+
+#### 論点 3: 測定責任主体と様式第5 注記
+
+- **Codex 判断**: 荷主が様式第5 に記載する値の提出責任は荷主に残る。特定倉庫業者は自ら管理する施設について様式第8 で計測・報告する責任を持つ。荷主が寄託先から値を受領して使う場合は、「寄託先提供値」「把握範囲」「計測条件」「自社直接計測外」を明記するのが防御的。
+- **根拠（Codex 提示）**: 特定荷主編手引書 3-5-2 / 03 IV-5「把握している範囲」「任意項目」、特定倉庫業者編 様式第8 IV 1-3（様式第5 の必須文言は不明・推測）
+- **Codex の修正提案**:
+  - `measurement_conditions` に標準文言「寄託先○○から提供を受けた参考値。計測期間・対象運行・計測方法は寄託先記録に基づく（自社直接計測外）。」を入れる
+  - `exclusion_reasons` に「寄託契約先管理施設のため自社管理施設の主集計から除外。IV-4/IV-5 に連携状況・把握範囲を記載。」を入れる
+
+### 8.3 Claude 評価と次 PR タスク
+
+| 論点 | Claude 評価 | 反映方針 |
+|------|------------|----------|
+| 1: 設計拡張 | **修正のうえ採用** | `is_consigned_warehouse: bool` を残しつつ（後方互換）、`facility_control_type` Enum + `measurement_source` / `consigned_partner_name` / `contract_scope_note` を追加する。型分離（案 B）は採用しない（PR #50 のテーブル設計と JSON 形式を破壊するため） |
+| 2: 集計分離 | **修正のうえ採用** | 全社集計（`facility_id=None`）時に寄託先を既定除外する `include_consigned: bool = False` 引数を `build_wait_time_heatmap` に追加。ただし `facility_id` 直接指定時は意図的選択なので集計対象（既存挙動維持） |
+| 3: 標準注記 | **採用** | `Facility` に `consigned_disclaimer_default()` ヘルパーを追加し、`is_consigned_warehouse=True` のとき `measurement_conditions` 未入力なら推奨文言を自動付与（運用負荷低減）。Web 側でも標準文言の自動挿入ボタンを追加 |
+
+### 8.4 持ち越し（フォロー PR で対応）
+
+1. **論点 1 の設計拡張**: `facility_control_type` 追加 + Pydantic マイグレーション（既存 JSON は `is_consigned_warehouse` から逆算して `consigned` / `owned` のいずれかにフォールバック）
+2. **論点 2 の集計分離**: `include_consigned: bool = False` 引数追加 + heatmap metadata に「主集計件数」「除外された寄託先件数」を併記
+3. **論点 3 の標準文言**: `core/io/facility_store.py` に `default_consigned_disclaimer()` を追加し、`upsert_facility` 時に自動付与
+4. **条文出典の二次調査**: Codex が「不明」と明示した条番号 / 告示番号 / 様式第5 文言を一次資料（特定荷主編手引書 PDF）で確認し、`Citation` に登録
+
+タスク #1-#3 は別 PR `feat(facility): Codex 二者議論 §8 反映（control_type / include_consigned / standard disclaimer）` として段階的に進める。タスク #4 は健一 + Codex で二次調査依頼。
 
 ---
 
