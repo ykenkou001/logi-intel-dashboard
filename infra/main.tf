@@ -11,6 +11,8 @@
 #       /logi-intel/<env>/ESTAT_APP_ID
 #       /logi-intel/<env>/CORP_NUMBER_APP_ID
 #       /logi-intel/<env>/EDMC_APP_ID
+#       /logi-intel/<env>/GA4_MEASUREMENT_ID  (String, G-XXXXXXXXXX 形式)
+#       /logi-intel/<env>/GA4_API_SECRET      (SecureString)
 #
 # 適用手順:
 #   cd infra
