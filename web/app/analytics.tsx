@@ -50,9 +50,17 @@ function getOrCreateSessionId(): string {
 function send(eventName: string, params: EventParams, useBeacon: boolean): void {
   const clientId = getOrCreateClientId();
   if (!clientId) return;
+  // GA4 Measurement Protocol は session_id と engagement_time_msec が両方無いと
+  // engaged session として認識せずリアルタイム/標準レポートから除外する。
+  // gtag.js は internal で常時付与する挙動なので、手動実装でも常時付与する。
+  const enrichedParams: EventParams = {
+    ...params,
+    session_id: params.session_id ?? getOrCreateSessionId(),
+    engagement_time_msec: params.engagement_time_msec ?? 1,
+  };
   const body = JSON.stringify({
     client_id: clientId,
-    events: [{ name: eventName, params }],
+    events: [{ name: eventName, params: enrichedParams }],
   });
   // 離脱イベントは fetch では送信が間に合わないため Beacon を使う
   if (useBeacon && typeof navigator !== "undefined" && "sendBeacon" in navigator) {
