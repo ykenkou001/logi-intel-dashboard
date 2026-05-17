@@ -260,6 +260,15 @@ async def wait_heatmap(
             ),
         ),
     ] = None,
+    include_consigned: Annotated[
+        bool,
+        Query(
+            description=(
+                "全社集計時に寄託先施設の site も含めるか（Tier S3 フォロー PR）。"
+                "既定 False で寄託先 site は除外。facility_id 指定時は無視。"
+            ),
+        ),
+    ] = False,
 ) -> ToolResponseModel:
     """拠点 × 時間帯（朝/昼/夕/夜）の荷待ち時間ヒートマップを生成する。
 
@@ -287,7 +296,9 @@ async def wait_heatmap(
 
     try:
         result: HeatmapResult = build_wait_time_heatmap(
-            profile, facility=facility_obj
+            profile,
+            facility=facility_obj,
+            include_consigned=include_consigned,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -330,6 +341,11 @@ async def wait_heatmap(
         "exclusion_reasons": result.exclusion_reasons,
         "is_consigned_warehouse": result.is_consigned_warehouse,
         "consigned_notice": result.consigned_notice,
+        # Tier S3 フォロー PR: 全社集計時の寄託先除外可視化
+        "include_consigned": result.include_consigned,
+        "primary_aggregated_site_count": result.primary_aggregated_site_count,
+        "excluded_consigned_site_count": result.excluded_consigned_site_count,
+        "excluded_consigned_site_names": result.excluded_consigned_site_names,
     }
     return model
 

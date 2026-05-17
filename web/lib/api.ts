@@ -63,7 +63,18 @@ export interface HeatmapMetadata {
   exclusion_reasons: string[];
   is_consigned_warehouse: boolean;
   consigned_notice: string | null;
+  // Tier S3 フォロー PR: 全社集計時の寄託先除外可視化
+  include_consigned: boolean;
+  primary_aggregated_site_count: number;
+  excluded_consigned_site_count: number;
+  excluded_consigned_site_names: string[];
 }
+
+export type FacilityControlType =
+  | "owned"
+  | "leased"
+  | "operated_by_3pl"
+  | "consigned";
 
 // ─── Tier S3: 報告単位 Facility（施設マスタ）─────────────────
 export interface FacilityMeasurementPeriod {
@@ -84,6 +95,11 @@ export interface Facility {
   measurement_conditions: string[];
   exclusion_reasons: string[];
   is_consigned_warehouse: boolean;
+  // Tier S3 フォロー PR: Codex §8.4-1 追加フィールド
+  facility_control_type: FacilityControlType | null;
+  measurement_source: string | null;
+  consigned_partner_name: string | null;
+  contract_scope_note: string | null;
   notes: string | null;
   created_at: string;     // ISO datetime
   updated_at: string;     // ISO datetime
@@ -271,9 +287,14 @@ export async function fetchDriverGap(prefecture: string): Promise<ToolResponse> 
 export async function fetchWaitHeatmap(
   companyId: string,
   facilityId?: string,
+  includeConsigned?: boolean,
 ): Promise<ToolResponse> {
   return request<ToolResponse>("/api/v1/clo/wait-heatmap", {
-    searchParams: { company_id: companyId, facility_id: facilityId },
+    searchParams: {
+      company_id: companyId,
+      facility_id: facilityId,
+      include_consigned: includeConsigned ? true : undefined,
+    },
   });
 }
 

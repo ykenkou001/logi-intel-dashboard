@@ -74,6 +74,9 @@ class HeatmapResult:
     フェーズ 5.5 Tier S3 で施設フィルタ用フィールドを追加（既存利用箇所は
     facility_* / measurement_* / is_consigned_warehouse / consigned_notice を
     無視できる: default 値で全社集計と互換）。
+
+    Codex §8.4-2（フォロー PR）で include_consigned + 除外件数フィールドを追加。
+    全社集計時に寄託先 site を既定除外しつつ、件数を可視化する。
     """
 
     company_id: str
@@ -98,6 +101,15 @@ class HeatmapResult:
     is_consigned_warehouse: bool = False
     consigned_notice: str | None = None
     """寄託先施設の場合に表示する自社測定外バナー文言。"""
+    # --- Tier S3 フォロー PR: 全社集計時の寄託先除外の可視化 ---
+    include_consigned: bool = False
+    """今回の集計で寄託先 site を含めたか（facility 指定時は False 固定）。"""
+    primary_aggregated_site_count: int = 0
+    """主集計に含まれた拠点数（除外後）。"""
+    excluded_consigned_site_count: int = 0
+    """寄託先として除外された拠点数（全社集計時のみ意味あり）。"""
+    excluded_consigned_site_names: list[str] = field(default_factory=list)
+    """除外された寄託先拠点名一覧（CLO 説明責任のため metadata に残す）。"""
 
 
 def _classify_severity(avg_minutes: float | None) -> Severity:
@@ -127,6 +139,8 @@ def _aggregate_rows(rows: list[WaitTimeRow]) -> tuple[float | None, float | None
 def build_wait_time_heatmap(
     profile: CompanyProfile,
     facility: Facility | None = None,
+    include_consigned: bool = False,
+    facilities: list[Facility] | None = None,
 ) -> HeatmapResult:
     """CompanyProfile.wait_time_rows を拠点 × 時間帯 4 区分で集計する。
 
@@ -135,11 +149,19 @@ def build_wait_time_heatmap(
         facility: 指定時はその施設の site_name に紐付く行のみで集計する
             （フェーズ 5.5 Tier S3 で追加）。facility.site_name が None の場合は
             ValueError（測定単位が未紐付け＝集計不能）。
+        include_consigned: 全社集計時（facility=None）に寄託先施設の site も含めるか。
+            既定 False（Codex §8.4-2: 自社管理施設の主集計に寄託先を混入させない）。
+            facility 直接指定時はこの引数は無視され、対象施設のみで集計する。
+        facilities: 全社集計時に参照する Facility 一覧。None なら
+            load_facilities(profile.company_id) を実行時に呼ぶ。テスト等で
+            外部からの注入が必要な場合に指定する。
 
     Returns:
         HeatmapResult: ヒートマップ表示に必要な構造化データ
             facility 指定時は facility_id / facility_name / measurement_period_label /
             exclusion_reasons / is_consigned_warehouse / consigned_notice が設定される。
+            全社集計時は excluded_consigned_site_* / primary_aggregated_site_count が
+            設定される。
 
     Raises:
         ValueError: facility.site_name が None の場合
@@ -160,6 +182,25 @@ def build_wait_time_heatmap(
             )
         target_site_name = facility.site_name
 
+    # Tier S3 フォロー: 全社集計時に寄託先 site を除外するための準備
+    consigned_site_names: set[str] = set()
+    excluded_consigned_site_names: list[str] = []
+    effective_include_consigned: bool = include_consigned
+    if facility is None and not include_consigned:
+        # 全社集計 & 既定（寄託先除外）モード
+        facility_pool = facilities
+        if facility_pool is None:
+            # 遅延 import で循環参照回避
+            from core.io.facility_store import load_facilities
+
+            facility_pool = load_facilities(profile.company_id)
+        for f in facility_pool:
+            if f.is_consigned_for_aggregation and f.site_name:
+                consigned_site_names.add(f.site_name)
+    elif facility is not None:
+        # facility 直接指定時は include_consigned 無効
+        effective_include_consigned = False
+
     # 1. site_name 指定行のみ抽出（拠点別レーンを構成）
     site_rows: dict[str, dict[str, list[WaitTimeRow]]] = {}
     for row in profile.wait_time_rows:
@@ -167,6 +208,11 @@ def build_wait_time_heatmap(
             continue
         # Tier S3: facility 指定時は対象 site_name のみ
         if target_site_name is not None and row.site_name != target_site_name:
+            continue
+        # Tier S3 フォロー: 全社集計 + 既定モードで寄託先 site を除外
+        if facility is None and row.site_name in consigned_site_names:
+            if row.site_name not in excluded_consigned_site_names:
+                excluded_consigned_site_names.append(row.site_name)
             continue
         slot_key: str = row.time_slot if row.time_slot is not None else "all_day"
         site_rows.setdefault(row.site_name, {}).setdefault(slot_key, []).append(row)
@@ -212,6 +258,9 @@ def build_wait_time_heatmap(
     all_rows = [r for r in profile.wait_time_rows if r.site_name is not None]
     if target_site_name is not None:
         all_rows = [r for r in all_rows if r.site_name == target_site_name]
+    elif facility is None and not include_consigned and consigned_site_names:
+        # 全社集計 + 既定モード: 寄託先 site の行も overall から除外
+        all_rows = [r for r in all_rows if r.site_name not in consigned_site_names]
     overall_avg, overall_max, _, _ = _aggregate_rows(all_rows)
 
     # 6. 出典・鮮度
@@ -294,4 +343,8 @@ def build_wait_time_heatmap(
         exclusion_reasons=exclusion_reasons,
         is_consigned_warehouse=is_consigned_warehouse,
         consigned_notice=consigned_notice,
+        include_consigned=effective_include_consigned,
+        primary_aggregated_site_count=len(site_names),
+        excluded_consigned_site_count=len(excluded_consigned_site_names),
+        excluded_consigned_site_names=excluded_consigned_site_names,
     )
