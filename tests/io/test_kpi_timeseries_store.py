@@ -178,3 +178,35 @@ def test_recorded_at_microsecond_tiebreak(
     snaps = load_monthly_snapshots("sample_wholesale_01")
     assert len(snaps) == 1
     assert snaps[0].load_factor_pct == 95.0
+
+
+# ---------------------------------------------------------------------------
+# v1.1: logistics_cost_ratio
+# ---------------------------------------------------------------------------
+
+
+def test_logistics_cost_ratio_persists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v1.1: logistics_cost_ratio が jsonl に保存され読み戻せる。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    snap = MonthlyKpiSnapshot(
+        company_id="sample_wholesale_01",
+        year_month="2026-04",
+        logistics_cost_ratio=0.048,  # JILS 卸売平均と同水準
+        recorded_at=datetime(2026, 4, 30, 12, 0, 0),
+    )
+    append_monthly_snapshot(snap)
+    snaps = load_monthly_snapshots("sample_wholesale_01")
+    assert snaps[0].logistics_cost_ratio == pytest.approx(0.048)
+
+
+def test_logistics_cost_ratio_range_constraint() -> None:
+    """v1.1: logistics_cost_ratio は 0-1 の範囲制約に違反すると ValidationError。"""
+    with pytest.raises(ValueError):
+        MonthlyKpiSnapshot(
+            company_id="sample_wholesale_01",
+            year_month="2026-04",
+            logistics_cost_ratio=1.5,  # 範囲外
+            recorded_at=datetime.now(),
+        )

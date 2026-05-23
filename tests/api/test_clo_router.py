@@ -1002,3 +1002,33 @@ def test_kpi_timeseries_record_invalid_year_month_rejected() -> None:
         json={"year_month": "2026/04", "measure_runs": []},
     )
     assert resp.status_code == 422
+
+
+# ─── Tier S2 v1.1: 物流コスト比率 + 業界平均 + baseline_source ─────────
+
+
+def test_kpi_timeseries_query_includes_industry_benchmark() -> None:
+    """v1.1: GET レスポンスに industry_benchmark_logistics_cost_ratio が含まれる。"""
+    resp = client.get("/api/v1/clo/kpi-timeseries/sample_wholesale_01")
+    assert resp.status_code == 200
+    md = resp.json()["metadata"]
+    # 卸売業 → JILS 平均 4.8%
+    assert md["industry_category"] == "wholesale"
+    assert md["industry_benchmark_logistics_cost_ratio"] == pytest.approx(0.048)
+
+
+def test_kpi_timeseries_record_with_monthly_logistics_cost() -> None:
+    """v1.1: POST に monthly_logistics_cost_jpy を渡すと saved_snapshot に物流コスト比率が入る。"""
+    # SAMPLE_WHOLESALE annual_revenue=42_000_000_000、月推計売上 = 3_500_000_000
+    # cost=168_000_000 → 比率 = 0.048（卸売平均と同じ）
+    resp = client.post(
+        "/api/v1/clo/kpi-timeseries/sample_wholesale_01",
+        json={
+            "year_month": "2026-04",
+            "measure_runs": [],
+            "monthly_logistics_cost_jpy": 168_000_000,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    saved = resp.json()["metadata"]["saved_snapshot"]
+    assert saved["logistics_cost_ratio"] == pytest.approx(0.048, abs=0.0001)

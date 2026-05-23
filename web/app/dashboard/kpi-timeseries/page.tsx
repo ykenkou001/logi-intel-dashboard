@@ -17,8 +17,10 @@ import {
   type ToolResponse,
 } from "@/lib/api";
 import {
+  BASELINE_SOURCE_LABEL,
   DETERIORATION_SEVERITY_CLASS,
   DETERIORATION_SEVERITY_LABEL,
+  INDUSTRY_CATEGORY_LABEL,
   KPI_SNAPSHOT_SOURCE_LABEL,
 } from "@/lib/labels";
 import { useFetchTool } from "@/lib/useFetchTool";
@@ -39,6 +41,9 @@ export default function KpiTimeseriesPage() {
   const [samples, setSamples] = useState<SampleCompany[]>([]);
   const [companyId, setCompanyId] = useState<string>("sample_wholesale_01");
   const [yearMonth, setYearMonth] = useState<string>(currentYearMonth());
+  // v1.1: 当月の物流コスト実績入力（円・空文字 = 未入力 → null で送信）
+  const [monthlyLogisticsCostJpy, setMonthlyLogisticsCostJpy] =
+    useState<string>("");
   const { data: result, loading, error, run } = useFetchTool<ToolResponse>();
   const [recording, setRecording] = useState<boolean>(false);
   const [recordError, setRecordError] = useState<string | null>(null);
@@ -59,7 +64,17 @@ export default function KpiTimeseriesPage() {
     setRecording(true);
     setRecordError(null);
     try {
-      const res = await recordMonthlySnapshot(companyId, yearMonth);
+      const trimmedCost = monthlyLogisticsCostJpy.trim();
+      const costPayload =
+        trimmedCost === "" || Number.isNaN(Number(trimmedCost))
+          ? null
+          : Math.max(0, Math.trunc(Number(trimmedCost)));
+      const res = await recordMonthlySnapshot(
+        companyId,
+        yearMonth,
+        [],
+        costPayload,
+      );
       setRecordedSummary(res.summary);
       await run(() => fetchKpiTimeseries(companyId, { limitMonths: 24 }));
     } catch (e) {
@@ -127,6 +142,23 @@ export default function KpiTimeseriesPage() {
             />
           </label>
         </div>
+        <label className="block mb-5">
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block mb-1.5">
+            当月の物流コスト実績（円・任意）
+          </span>
+          <input
+            type="number"
+            min={0}
+            inputMode="numeric"
+            value={monthlyLogisticsCostJpy}
+            onChange={(e) => setMonthlyLogisticsCostJpy(e.target.value)}
+            placeholder="未入力なら profile.kpi_history の最新 fy 値にフォールバック"
+            className="w-full border border-gray-200 rounded-lg px-4 py-2.5 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2E73AC]/40 focus:border-[#2E73AC] transition"
+          />
+          <span className="block text-[11px] text-gray-500 mt-1">
+            年間売上 / 12 で当月推計売上を割り、物流コスト/売上比率を計算します。
+          </span>
+        </label>
         <div className="flex flex-wrap gap-3">
           <button
             type="button"
@@ -168,11 +200,26 @@ export default function KpiTimeseriesPage() {
             >
               月次推移チャート（最大 24 ヶ月）
             </h3>
-            <KpiTimeseriesChart months={timeseries.months} />
+            <KpiTimeseriesChart
+              months={timeseries.months}
+              industryBenchmarkLogisticsCostRatio={
+                timeseries.industry_benchmark_logistics_cost_ratio
+              }
+            />
             <p className="text-[11px] text-gray-500 mt-2">
-              左軸: 積載率 / F2 標準化スコア（%・pt）/ 右軸: 荷待ち平均 / 荷役等時間
-              / CO2 原単位（分・g）
+              左軸: 積載率 / 物流コスト比率 / F2 標準化スコア（%・pt）/ 右軸: 荷待ち平均 /
+              荷役等時間 / CO2 原単位（分・g）
             </p>
+            {timeseries.industry_benchmark_logistics_cost_ratio != null && (
+              <p className="text-[11px] text-rose-700 mt-1">
+                破線: 業界平均 物流コスト比率（JILS 2021・
+                {timeseries.industry_category
+                  ? INDUSTRY_CATEGORY_LABEL[timeseries.industry_category] ??
+                    timeseries.industry_category
+                  : "業種未解決"}
+                ）
+              </p>
+            )}
           </div>
 
           <DeteriorationPanel alerts={timeseries.deteriorations} />
@@ -221,6 +268,9 @@ function DeteriorationPanel({ alerts }: { alerts: KpiDeteriorationAlert[] }) {
                 {DETERIORATION_SEVERITY_LABEL[a.severity]}
               </span>
               <span className="font-bold">{a.metric_label}</span>
+              <span className="text-[10px] opacity-80 bg-white/40 px-1.5 py-0.5 rounded">
+                基準: {BASELINE_SOURCE_LABEL[a.baseline_source]}
+              </span>
               {a.consecutive_months > 0 && (
                 <span className="text-[10px] opacity-80">
                   連続悪化 {a.consecutive_months} ヶ月
@@ -259,6 +309,7 @@ function SnapshotTable({
               <th className="text-right px-2">荷待ち平均</th>
               <th className="text-right px-2">荷役等時間</th>
               <th className="text-right px-2">CO2 原単位</th>
+              <th className="text-right px-2">物流コスト比率</th>
               <th className="text-right px-2">F2 スコア</th>
               <th className="text-right px-2">罠 high/med/low</th>
               <th className="text-left px-2">由来</th>
@@ -291,6 +342,14 @@ function SnapshotTable({
                   style={{ fontFamily: "var(--font-mono)" }}
                 >
                   {m.co2_intensity_g_per_tonkm?.toFixed(1) ?? "—"}
+                </td>
+                <td
+                  className="text-right px-2"
+                  style={{ fontFamily: "var(--font-mono)" }}
+                >
+                  {m.logistics_cost_ratio == null
+                    ? "—"
+                    : `${(m.logistics_cost_ratio * 100).toFixed(2)}%`}
                 </td>
                 <td
                   className="text-right px-2"

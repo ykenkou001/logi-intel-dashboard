@@ -91,11 +91,22 @@ pytest 1022 件全 pass / ruff pass / Next.js build 全 20 ページ pass。
 **次セッション開始時に `cd infra && terraform apply -var="env=dev"` を実行してアラートを有効化する。**
 SNS サブスクリプション確認メールが届いたら "Confirm subscription" をクリックすること。
 
-### #1.5 [✅ 完了] Tier S2 KPI 時系列トラッキング（2026-05-23）
+### #1.5 [✅ 完了] Tier S2 KPI 時系列トラッキング v1.0（2026-05-23 / PR #55）
 
 `core/io/kpi_timeseries_store.py` + `core/analytics/kpi_timeseries.py` を新設し、
 月次粒度の KPI 推移と悪化アラートを Web / REST / MCP 経由で取得可能に。
 詳細は [plans/tier_s2_kpi_timeseries.md](plans/tier_s2_kpi_timeseries.md) を参照。
+
+### #1.6 [✅ 完了] Tier S2 v1.1 物流コスト比率 + 業界平均（2026-05-23）
+
+Codex 独立評価（plans/tier_s2_kpi_timeseries_codex_review.md）の観点 ③ / ⑤ / ⑥ を反映:
+- `logistics_cost_ratio` フィールド追加（JILS 2021 業種別平均と比較）
+- baseline 由来（3 ヶ月前比 / 最古比）を UI バッジ表示
+- 業種別水準差を吸収する**相対率閾値**採用
+- `profile.kpi_history` の `logistics_cost_revenue_ratio_pct` を fallback ソースとして取込
+
+v1.2 候補（別 PR）: 計画値線（target_proposal / plan_draft_freeze 由来の線形補間 vs 月次入力）。
+Phase 6 候補: Excel `kpi_history_monthly` シート追加（後方互換テスト大のため別 PR）。
 
 ### #2 README 整備
 

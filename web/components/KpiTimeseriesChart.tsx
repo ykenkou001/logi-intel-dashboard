@@ -5,6 +5,7 @@ import {
   Legend,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -42,6 +43,13 @@ const SERIES: Array<{
     color: "#5B7E5A",
     axis: "right",
   },
+  // v1.1: 物流コスト/売上比率（%表示用に 100 倍する別キー）
+  {
+    key: "logistics_cost_ratio_pct" as keyof MonthlyKpiSnapshot,
+    label: "物流コスト比率(%)",
+    color: "#C2526B",
+    axis: "left",
+  },
   {
     key: "standardization_score",
     label: "F2標準化スコア",
@@ -52,8 +60,10 @@ const SERIES: Array<{
 
 export function KpiTimeseriesChart({
   months,
+  industryBenchmarkLogisticsCostRatio,
 }: {
   months: MonthlyKpiSnapshot[];
+  industryBenchmarkLogisticsCostRatio?: number | null;
 }) {
   if (months.length === 0) {
     return (
@@ -70,8 +80,16 @@ export function KpiTimeseriesChart({
     wait_time_avg_min: m.wait_time_avg_min,
     handling_time_avg_min: m.handling_time_avg_min,
     co2_intensity_g_per_tonkm: m.co2_intensity_g_per_tonkm,
+    // v1.1: 0-1 比率 → % 表示
+    logistics_cost_ratio_pct:
+      m.logistics_cost_ratio == null ? null : m.logistics_cost_ratio * 100,
     standardization_score: m.standardization_score,
   }));
+
+  const benchmarkPct =
+    industryBenchmarkLogisticsCostRatio == null
+      ? null
+      : industryBenchmarkLogisticsCostRatio * 100;
 
   return (
     <div style={{ width: "100%", height: 360 }}>
@@ -136,6 +154,20 @@ export function KpiTimeseriesChart({
               connectNulls
             />
           ))}
+          {benchmarkPct != null && (
+            <ReferenceLine
+              yAxisId="left"
+              y={benchmarkPct}
+              stroke="#C2526B"
+              strokeDasharray="4 4"
+              label={{
+                value: `業界平均 ${benchmarkPct.toFixed(1)}%`,
+                position: "insideTopRight",
+                fill: "#C2526B",
+                fontSize: 11,
+              }}
+            />
+          )}
         </LineChart>
       </ResponsiveContainer>
     </div>

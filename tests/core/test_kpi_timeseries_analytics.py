@@ -284,3 +284,154 @@ def test_record_monthly_snapshot_persist_true(
     path = tmp_path / "kpi_timeseries" / f"{SAMPLE_WHOLESALE.company_id}.jsonl"
     assert path.exists()
     assert path.read_text(encoding="utf-8").count("2026-04") >= 1
+
+
+# ---------------------------------------------------------------------------
+# v1.1: logistics_cost_ratio 関連
+# ---------------------------------------------------------------------------
+
+
+def test_record_with_monthly_cost_computes_ratio(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v1.1: monthly_logistics_cost_jpy given なら年間売上/12 で当月比率を計算。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    # SAMPLE_WHOLESALE: annual_revenue_jpy=42_000_000_000（420 億）
+    # 月推計売上 = 35 億, 物流コスト 1.68 億 → 比率 = 0.048（卸売平均と一致）
+    monthly_revenue = SAMPLE_WHOLESALE.annual_revenue_jpy / 12
+    monthly_cost = int(monthly_revenue * 0.048)
+    snap = record_monthly_snapshot(
+        SAMPLE_WHOLESALE,
+        year_month="2026-04",
+        measure_runs=[],
+        monthly_logistics_cost_jpy=monthly_cost,
+        persist=False,
+    )
+    assert snap.logistics_cost_ratio == pytest.approx(0.048, abs=0.0001)
+
+
+def test_record_without_cost_falls_back_to_kpi_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v1.1: monthly_logistics_cost_jpy 未指定なら profile.kpi_history の最新 fy 値を採用。"""
+    from core.static.sample_company import KpiHistoryEntry
+
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    profile = SAMPLE_WHOLESALE.model_copy(
+        update={
+            "kpi_history": [
+                KpiHistoryEntry(
+                    fy=2024,
+                    metric="logistics_cost_revenue_ratio_pct",
+                    value=4.0,  # 4.0% (unit='%') → 0.04 比率
+                    unit="%",
+                ),
+                KpiHistoryEntry(
+                    fy=2025,
+                    metric="logistics_cost_revenue_ratio_pct",
+                    value=5.2,  # 最新 fy 値（こちらが採用される）
+                    unit="%",
+                ),
+            ],
+        },
+    )
+    snap = record_monthly_snapshot(
+        profile,
+        year_month="2026-04",
+        measure_runs=[],
+        persist=False,
+    )
+    assert snap.logistics_cost_ratio == pytest.approx(0.052)
+
+
+def test_record_without_cost_or_history_returns_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v1.1: コスト入力なし & kpi_history に該当エントリ無し → None。"""
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    # SAMPLE_WHOLESALE は kpi_history 空（default factory）
+    snap = record_monthly_snapshot(
+        SAMPLE_WHOLESALE,
+        year_month="2026-04",
+        measure_runs=[],
+        persist=False,
+    )
+    assert snap.logistics_cost_ratio is None
+
+
+def test_deterioration_logistics_cost_ratio_warn() -> None:
+    """v1.1: 物流コスト比率が baseline 比 +35% で warn 判定（業界別水準差を吸収する相対率閾値）。"""
+    months = [
+        _snap(year_month="2025-12"),
+        _snap(year_month="2026-01"),
+        _snap(year_month="2026-02"),
+        _snap(year_month="2026-03"),
+    ]
+    # baseline (2025-12) = 0.040, latest (2026-03) = 0.054 → +35% > warn (+30%)
+    months_with_cost = [
+        m.model_copy(update={"logistics_cost_ratio": v})
+        for m, v in zip(
+            months,
+            [0.040, 0.043, 0.048, 0.054],
+            strict=True,
+        )
+    ]
+    alerts = detect_kpi_deterioration(months_with_cost)
+    cost = next(
+        a for a in alerts if a.metric == "logistics_cost_ratio"
+    )
+    assert cost.severity in {"warn", "critical"}
+    assert cost.direction == "up"
+    assert cost.delta_pct is not None and cost.delta_pct > 30
+
+
+def test_deterioration_baseline_source_three_months_ago() -> None:
+    """v1.1: 4 ヶ月以上の履歴があれば baseline_source='three_months_ago'。"""
+    months = [
+        _snap(year_month="2025-12", load_factor_pct=85.0),
+        _snap(year_month="2026-01", load_factor_pct=83.0),
+        _snap(year_month="2026-02", load_factor_pct=82.0),
+        _snap(year_month="2026-03", load_factor_pct=72.0),  # critical drop
+    ]
+    alerts = detect_kpi_deterioration(months)
+    lf = next(a for a in alerts if a.metric == "load_factor_pct")
+    assert lf.baseline_source == "three_months_ago"
+
+
+def test_deterioration_baseline_source_oldest_when_short_history() -> None:
+    """v1.1: 履歴 < 4 ヶ月なら baseline_source='oldest_snapshot'。"""
+    months = [
+        _snap(year_month="2026-01", load_factor_pct=85.0),
+        _snap(year_month="2026-02", load_factor_pct=70.0),  # critical drop
+    ]
+    alerts = detect_kpi_deterioration(months)
+    lf = next(a for a in alerts if a.metric == "load_factor_pct")
+    assert lf.baseline_source == "oldest_snapshot"
+
+
+def test_build_kpi_timeseries_includes_industry_benchmark(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v1.1: profile を渡すと industry_benchmark_logistics_cost_ratio が埋まる。"""
+    from core.analytics.kpi_timeseries import build_kpi_timeseries
+
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    result = build_kpi_timeseries(
+        SAMPLE_WHOLESALE.company_id,
+        profile=SAMPLE_WHOLESALE,
+    )
+    # SAMPLE_WHOLESALE の jsic_code は 卸売業 → 業界平均 4.8%
+    assert result.industry_category == "wholesale"
+    assert result.industry_benchmark_logistics_cost_ratio == pytest.approx(0.048)
+
+
+def test_build_kpi_timeseries_without_profile_has_no_benchmark(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """v1.1: profile 未指定なら industry_benchmark は None。"""
+    from core.analytics.kpi_timeseries import build_kpi_timeseries
+
+    monkeypatch.setenv("LOGI_OUTPUTS_DIR", str(tmp_path))
+    result = build_kpi_timeseries("never_recorded")
+    assert result.industry_category is None
+    assert result.industry_benchmark_logistics_cost_ratio is None

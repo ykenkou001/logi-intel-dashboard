@@ -751,6 +751,8 @@ export interface MonthlyKpiSnapshot {
   wait_time_max_min: number | null;
   handling_time_avg_min: number | null;
   co2_intensity_g_per_tonkm: number | null;
+  // v1.1: 物流コスト/売上比率（0-1 の比率）
+  logistics_cost_ratio: number | null;
   standardization_score: number | null;
   waste_trap_count_high: number;
   waste_trap_count_medium: number;
@@ -762,6 +764,8 @@ export interface MonthlyKpiSnapshot {
 
 export type DeteriorationSeverity = "watch" | "warn" | "critical";
 export type DeteriorationDirection = "down" | "up";
+// v1.1: baseline 由来。'planned_value' は v1.2 で追加予定
+export type BaselineSource = "three_months_ago" | "oldest_snapshot";
 
 export interface KpiDeteriorationAlert {
   metric: string;
@@ -771,6 +775,7 @@ export interface KpiDeteriorationAlert {
   consecutive_months: number;
   latest_value: number | null;
   baseline_value: number | null;
+  baseline_source: BaselineSource;
   delta_pct: number | null;
   message: string;
 }
@@ -779,6 +784,9 @@ export interface KpiTimeSeriesMetadata {
   company_id: string;
   months: MonthlyKpiSnapshot[];
   deteriorations: KpiDeteriorationAlert[];
+  // v1.1: 業界平均 物流コスト/売上比率（JILS 2021）
+  industry_benchmark_logistics_cost_ratio: number | null;
+  industry_category: string | null;
   citations: Citation[];
   freshness_warnings: string[];
 }
@@ -807,6 +815,7 @@ export async function recordMonthlySnapshot(
   companyId: string,
   yearMonth: string,
   measureRuns: MeasureExecutionRecord[] = [],
+  monthlyLogisticsCostJpy: number | null = null,
 ): Promise<ToolResponse> {
   return request<ToolResponse>(
     `/api/v1/clo/kpi-timeseries/${encodeURIComponent(companyId)}`,
@@ -815,6 +824,7 @@ export async function recordMonthlySnapshot(
       body: JSON.stringify({
         year_month: yearMonth,
         measure_runs: measureRuns,
+        monthly_logistics_cost_jpy: monthlyLogisticsCostJpy,
       }),
     },
   );
