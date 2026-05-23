@@ -27,6 +27,7 @@ export const metadata: Metadata = {
 const NAV = [
   { href: "/guide", label: "ガイド" },
   { href: "/dashboard/cockpit", label: "コックピット" },
+  { href: "/dashboard/kpi-timeseries", label: "月次推移" },
   { href: "/dashboard/industry-package", label: "業種別パッケージ" },
   { href: "/dashboard/standardization", label: "標準化スコア" },
   { href: "/dashboard/waste-traps", label: "罠スコア" },

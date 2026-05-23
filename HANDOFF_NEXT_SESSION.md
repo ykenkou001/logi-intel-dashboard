@@ -1,19 +1,52 @@
-# 次セッションへの引継ぎ（2026-05-06 時点）
+# 次セッションへの引継ぎ（2026-05-23 時点）
 
-> このファイルを最初に読み、`uv sync` 実行後にフェーズ5.5（公開・記事化）に着手する。
+> このファイルを最初に読み、`uv sync` 実行後にフェーズ5.5 残タスク（公開・記事化）に着手する。
 
 ---
 
-## 並列セッション運用中（2026-05-17〜）
+## フェーズ5.5 Tier S 進捗（2026-05-23）
+
+| Tier | タスク | PR | 状態 |
+|---|---|---|---|
+| S1 | DecisionLog 永続化 | #53 | ✅ マージ済 |
+| **S2** | **KPI 時系列トラッキング** | **本ブランチ feat/tier-s2-kpi-timeseries** | **✅ 実装完了・PR 化予定** |
+| S3 | 報告単位 Facility 管理 | #50 / #51 / #52 | ✅ マージ済 |
+| S4 | 罰則・社名公表リスク PPT | #49 | ✅ マージ済 |
+| S5 | README Decision Support 軸再編集 | #48 | ✅ マージ済 |
+
+**Tier S 5 件すべて達成**。残るは記事化（Zenn）/ 社内デモ / Codex 二次調査（寄託先関連の条文出典）/ AWS terraform apply。
+
+---
+
+## Tier S2 で追加したファイル（フェーズ5.5 / 本セッション）
+
+- `core/io/kpi_timeseries_store.py` — 月次スナップショット永続化（jsonl + S3 backend）
+- `core/analytics/kpi_timeseries.py` — 日次→月次ロールアップ + 悪化検出
+- `api/routers/clo.py` — GET/POST `/kpi-timeseries/{company_id}`
+- `mcp_server/tools/clo_tools.py` — `logi_clo_kpi_timeseries` / `logi_clo_record_monthly_snapshot`
+- `web/app/dashboard/kpi-timeseries/page.tsx` — 月次推移 LineChart + 悪化アラート + 一覧表
+- `web/components/KpiTimeseriesChart.tsx` — Recharts ベースの 5 系列折れ線
+- `web/lib/api.ts` / `web/lib/labels.ts` — 型 + severity ラベル追加
+- `web/app/layout.tsx` — ナビに「月次推移」追加
+- `tests/io/test_kpi_timeseries_store.py`（11 件）
+- `tests/core/test_kpi_timeseries_analytics.py`（13 件）
+- `tests/api/test_clo_router.py` に E2E 4 件追加
+- `plans/tier_s2_kpi_timeseries.md` 起案
+
+pytest 1022 件全 pass / ruff pass / Next.js build 全 20 ページ pass。
+
+---
+
+## 並列セッション運用記録（2026-05-17〜・全完了）
 
 | セッション | タスク | worktree | ブランチ | 主担当ファイル | PR / 状態 |
 |---|---|---|---|---|---|
-| A | Tier S1 DecisionLog | ../logi-intel-dashboard.decision-log | docs/decision-log-store | core/io/decision_log_store.py | ✅ #53 マージ済（worktree 削除済 2026-05-17） |
-| B | Tier S3 Facility | ../logi-intel-dashboard.facility-store | docs/facility-store | core/io/facility_store.py | （別セッション管理 / 観測上 #50, #51, #52 マージ済） |
-| C | Tier S4 罰則 PPT | ../logi-intel-dashboard.compliance-risk | docs/compliance-risk-ppt | core/export/ppt_writer.py | （別セッション管理 / 観測上 #49 マージ済） |
+| A | Tier S1 DecisionLog | ../logi-intel-dashboard.decision-log | docs/decision-log-store | core/io/decision_log_store.py | ✅ #53 マージ済 |
+| B | Tier S3 Facility | ../logi-intel-dashboard.facility-store | docs/facility-store | core/io/facility_store.py | ✅ #50, #51, #52 マージ済 |
+| C | Tier S4 罰則 PPT | ../logi-intel-dashboard.compliance-risk | docs/compliance-risk-ppt | core/export/ppt_writer.py | ✅ #49 マージ済 |
 
 共通の追記領域（mcp_server/tools/clo_tools.py / api/routers/clo.py / web/lib/api.ts）
-は PR マージ順に rebase で吸収する。
+は PR マージ順に rebase で吸収済み。Tier S2 もこのファイル群を拡張している。
 
 ---
 
@@ -57,6 +90,12 @@
 
 **次セッション開始時に `cd infra && terraform apply -var="env=dev"` を実行してアラートを有効化する。**
 SNS サブスクリプション確認メールが届いたら "Confirm subscription" をクリックすること。
+
+### #1.5 [✅ 完了] Tier S2 KPI 時系列トラッキング（2026-05-23）
+
+`core/io/kpi_timeseries_store.py` + `core/analytics/kpi_timeseries.py` を新設し、
+月次粒度の KPI 推移と悪化アラートを Web / REST / MCP 経由で取得可能に。
+詳細は [plans/tier_s2_kpi_timeseries.md](plans/tier_s2_kpi_timeseries.md) を参照。
 
 ### #2 README 整備
 

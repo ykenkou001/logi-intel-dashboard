@@ -1170,6 +1170,106 @@ async def decision_log_record(
     }
 
 
+# ─── Tier S2: KPI 時系列トラッキング ──────────────────────────────────────
+# Tier S2 PR でのみ追加。月次粒度の KPI 推移 + 悪化アラートを返す。
+
+from core.analytics.kpi_timeseries import (  # noqa: E402
+    build_kpi_timeseries,
+    build_kpi_timeseries_summary,
+    record_monthly_snapshot,
+)
+
+
+class KpiTimeseriesRecordRequest(BaseModel):
+    """POST /kpi-timeseries 入力スキーマ。year_month は YYYY-MM。"""
+
+    year_month: str = Field(
+        pattern=r"^\d{4}-(0[1-9]|1[0-2])$",
+        description="記録対象月（YYYY-MM）",
+    )
+    measure_runs: list[MeasureExecutionRecord] = Field(
+        default_factory=list,
+        description="J2 罠件数を埋めるための施策実行記録。空なら保存済みを使う",
+    )
+
+
+@router.get("/kpi-timeseries/{company_id}", response_model=ToolResponseModel)
+async def kpi_timeseries_query(
+    company_id: str,
+    limit_months: Annotated[int, Query(ge=1, le=120)] = 24,
+    from_year_month: Annotated[str | None, Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")] = None,
+    to_year_month: Annotated[str | None, Query(pattern=r"^\d{4}-(0[1-9]|1[0-2])$")] = None,
+) -> ToolResponseModel:
+    """月次 KPI 時系列と悪化アラートを返す（既定 24 ヶ月ウィンドウ）。
+
+    積載率・荷待ち時間・荷役等時間・CO2 原単位・F2 標準化スコア・J2 罠件数の
+    推移を年月昇順で返し、3 ヶ月前比または 3 ヶ月連続悪化を検出した指標に
+    severity（watch / warn / critical）付きのアラートを添える。
+    """
+    profile = _resolve_profile_or_404(company_id)
+    result = build_kpi_timeseries(
+        company_id,
+        limit_months=limit_months,
+        from_year_month=from_year_month,
+        to_year_month=to_year_month,
+    )
+    response = ToolResponse(
+        summary=build_kpi_timeseries_summary(result),
+        citations=list(result.citations),
+        freshness_warnings=list(result.freshness_warnings),
+        data_source=profile.data_source,
+    )
+    model = to_model(response)
+    model.metadata = result.model_dump(mode="json")
+    return model
+
+
+@router.post("/kpi-timeseries/{company_id}", response_model=ToolResponseModel)
+async def kpi_timeseries_record(
+    company_id: str,
+    body: Annotated[KpiTimeseriesRecordRequest, Body()],
+) -> ToolResponseModel:
+    """指定月の月次スナップショットを記録する（cockpit 日次データを月平均化 + F2/J2 同時計算）。
+
+    日次 cockpit_snapshots が存在しない月でも F2 / J2 のみのスナップショットを
+    保存可能（source="manual_entry"）。saved snapshot を埋め込んだ Result を返す。
+    """
+    profile = _resolve_profile_or_404(company_id)
+    override = load_override(profile.company_id)
+
+    incoming = list(body.measure_runs)
+    if incoming:
+        runs = merge_with_stored(company_id, incoming)
+        save_runs(company_id, runs)
+    else:
+        runs = load_runs(company_id)
+
+    snapshot = record_monthly_snapshot(
+        profile,
+        body.year_month,
+        override=override,
+        measure_runs=runs,
+        persist=True,
+    )
+    result = build_kpi_timeseries(company_id)
+
+    response = ToolResponse(
+        summary=(
+            f"{body.year_month} スナップショット記録 (source={snapshot.source}) | "
+            + build_kpi_timeseries_summary(result)
+        ),
+        citations=list(result.citations),
+        freshness_warnings=list(result.freshness_warnings),
+        data_source=profile.data_source,
+    )
+    model = to_model(response)
+    model.metadata = {
+        "saved_snapshot": snapshot.model_dump(mode="json"),
+        "timeseries": result.model_dump(mode="json"),
+    }
+    return model
+
+
 @router.get("/decision-logs/{company_id}")
 async def decision_log_query(
     company_id: str,
