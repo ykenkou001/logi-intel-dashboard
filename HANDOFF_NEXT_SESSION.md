@@ -4,6 +4,19 @@
 
 ---
 
+## 並列セッション運用中（2026-05-17〜）
+
+| セッション | タスク | worktree | ブランチ | 主担当ファイル | PR / 状態 |
+|---|---|---|---|---|---|
+| A | Tier S1 DecisionLog | ../logi-intel-dashboard.decision-log | docs/decision-log-store | core/io/decision_log_store.py | ✅ #53 マージ済（worktree 削除済 2026-05-17） |
+| B | Tier S3 Facility | ../logi-intel-dashboard.facility-store | docs/facility-store | core/io/facility_store.py | （別セッション管理 / 観測上 #50, #51, #52 マージ済） |
+| C | Tier S4 罰則 PPT | ../logi-intel-dashboard.compliance-risk | docs/compliance-risk-ppt | core/export/ppt_writer.py | （別セッション管理 / 観測上 #49 マージ済） |
+
+共通の追記領域（mcp_server/tools/clo_tools.py / api/routers/clo.py / web/lib/api.ts）
+は PR マージ順に rebase で吸収する。
+
+---
+
 ## 🎯 次セッションのタスク: フェーズ5.5 — 公開・記事化
 
 ### 全体像
