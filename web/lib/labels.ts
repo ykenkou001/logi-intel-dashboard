@@ -207,3 +207,32 @@ export const SAFEGUARD_LABEL: Record<string, string> = {
 export function safeguardLabel(value: string): string {
   return SAFEGUARD_LABEL[value] ?? value;
 }
+
+// ─── Tier S2: KPI 時系列の悪化アラート severity ─────────────────
+
+export const DETERIORATION_SEVERITY_LABEL: Record<
+  "watch" | "warn" | "critical",
+  string
+> = {
+  watch: "注意",
+  warn: "警告",
+  critical: "重大",
+};
+
+export const DETERIORATION_SEVERITY_CLASS: Record<
+  "watch" | "warn" | "critical",
+  string
+> = {
+  watch: "bg-amber-50 text-amber-800 border-amber-200",
+  warn: "bg-orange-50 text-orange-800 border-orange-300",
+  critical: "bg-rose-50 text-rose-800 border-rose-400",
+};
+
+export const KPI_SNAPSHOT_SOURCE_LABEL: Record<
+  "rolled_up_from_daily" | "manual_entry" | "merged",
+  string
+> = {
+  rolled_up_from_daily: "日次データから月平均化",
+  manual_entry: "手入力",
+  merged: "合成（日次 + 手入力）",
+};

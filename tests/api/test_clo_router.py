@@ -953,3 +953,52 @@ def test_t16_e2e_cockpit_then_decision_log_pane_merges(tmp_path, monkeypatch) ->
     )
     assert no_legacy_resp.json()["count"] == 1
     assert no_legacy_resp.json()["entries"][0]["legacy_source"] is False
+
+
+# ─── Tier S2: KPI 時系列トラッキング ──────────────────────────────
+
+
+def test_kpi_timeseries_empty_returns_zero_months() -> None:
+    """履歴未登録なら months=[] / deteriorations=[] で 200 を返す。"""
+    resp = client.get("/api/v1/clo/kpi-timeseries/sample_wholesale_01")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    _assert_tool_response_shape(body)
+    md = body["metadata"]
+    assert md["company_id"] == "sample_wholesale_01"
+    assert md["months"] == []
+    assert md["deteriorations"] == []
+
+
+def test_kpi_timeseries_unknown_company_returns_404() -> None:
+    resp = client.get("/api/v1/clo/kpi-timeseries/nonexistent_xyz")
+    assert resp.status_code == 404
+
+
+def test_kpi_timeseries_record_then_query_returns_one_month() -> None:
+    """POST で当月スナップショットを記録した後、GET で 1 件返る。"""
+    record_resp = client.post(
+        "/api/v1/clo/kpi-timeseries/sample_wholesale_01",
+        json={"year_month": "2026-04", "measure_runs": []},
+    )
+    assert record_resp.status_code == 200, record_resp.text
+    record_body = record_resp.json()
+    assert "2026-04" in record_body["summary"]
+    saved = record_body["metadata"]["saved_snapshot"]
+    assert saved["year_month"] == "2026-04"
+    assert saved["company_id"] == "sample_wholesale_01"
+
+    query_resp = client.get("/api/v1/clo/kpi-timeseries/sample_wholesale_01")
+    assert query_resp.status_code == 200
+    md = query_resp.json()["metadata"]
+    assert len(md["months"]) == 1
+    assert md["months"][0]["year_month"] == "2026-04"
+
+
+def test_kpi_timeseries_record_invalid_year_month_rejected() -> None:
+    """YYYY-MM 以外のフォーマットは Pydantic で 422 にされる。"""
+    resp = client.post(
+        "/api/v1/clo/kpi-timeseries/sample_wholesale_01",
+        json={"year_month": "2026/04", "measure_runs": []},
+    )
+    assert resp.status_code == 422

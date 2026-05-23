@@ -34,6 +34,11 @@ from core.analytics.financial_translate import (
     build_financial_translate_summary,
     translate_to_pnl_impact,
 )
+from core.analytics.kpi_timeseries import (
+    build_kpi_timeseries,
+    build_kpi_timeseries_summary,
+    record_monthly_snapshot,
+)
 from core.analytics.measure_eval import (
     build_eval_summary,
     evaluate_measures,
@@ -1730,5 +1735,110 @@ def register_tools(mcp: FastMCP) -> None:
             "entries": [e.model_dump(mode="json") for e in entries],
             "count": len(entries),
             "legacy_count": legacy_count,
+        }
+        return base
+
+    # ─── Tier S2: KPI 時系列トラッキング ────────────────────────────
+    @mcp.tool()
+    async def logi_clo_kpi_timeseries(
+        company_id: str,
+        limit_months: int = 24,
+        from_year_month: str | None = None,
+        to_year_month: str | None = None,
+    ) -> dict[str, object]:
+        """月次 KPI 推移 + 悪化アラートを返します（フェーズ5.5 Tier S2）。
+
+        積載率 / 荷待ち時間 / 荷役等時間 / CO2 原単位 / F2 標準化スコア /
+        J2 罠件数の月次推移を年月昇順で返します。3 ヶ月前または 3 ヶ月連続悪化
+        を検出した指標には severity（watch / warn / critical）付きのアラートが
+        添えられます。日次 cockpit_snapshots からの自動ロールアップに加え、
+        record_monthly_snapshot で手入力した値もマージ対象です。
+
+        Args:
+            company_id: サンプル/取込済 企業 ID
+            limit_months: 末尾から何ヶ月分を返すか（既定 24）
+            from_year_month / to_year_month: 年月範囲（YYYY-MM）
+
+        Returns:
+            ToolResponse: summary に件数 + 悪化アラート件数、metadata に
+            months（MonthlyKpiSnapshot リスト）と deteriorations（KpiDeteriorationAlert リスト）
+        """
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
+
+        result = build_kpi_timeseries(
+            company_id,
+            limit_months=limit_months,
+            from_year_month=from_year_month,
+            to_year_month=to_year_month,
+        )
+        base = ToolResponse(
+            summary=build_kpi_timeseries_summary(result),
+            citations=list(result.citations),
+            freshness_warnings=list(result.freshness_warnings),
+            data_source=profile.data_source,
+        ).to_dict()
+        base["metadata"] = result.model_dump(mode="json")
+        return base
+
+    @mcp.tool()
+    async def logi_clo_record_monthly_snapshot(
+        company_id: str,
+        year_month: str,
+        measure_runs: list[MeasureExecutionRecord] | None = None,
+    ) -> dict[str, object]:
+        """指定月の月次スナップショットを記録します（フェーズ5.5 Tier S2）。
+
+        日次 cockpit_snapshots を月平均化し、F2 標準化スコア / J2 罠件数を
+        同時計算して outputs/kpi_timeseries/<company_id>.jsonl に append します。
+        日次データが無い月でも F2 / J2 のみの「manual_entry」スナップショットを
+        保存できます。
+
+        Args:
+            company_id: サンプル/取込済 企業 ID
+            year_month: 記録対象月（YYYY-MM）
+            measure_runs: J2 罠件数を埋めるための施策実行記録。None/空なら
+                保存済み outputs/measure_runs/<id>.json を使用
+
+        Returns:
+            ToolResponse: summary に記録結果、metadata に saved_snapshot と
+            timeseries 全体
+        """
+        try:
+            profile = resolve_profile(company_id)
+        except ProfileNotFoundError as exc:
+            return ToolResponse(summary=str(exc)).to_dict()
+
+        override = load_override(profile.company_id)
+        incoming = list(measure_runs) if measure_runs else []
+        if incoming:
+            runs = merge_with_stored(company_id, incoming)
+            save_runs(company_id, runs)
+        else:
+            runs = load_runs(company_id)
+
+        snapshot = record_monthly_snapshot(
+            profile,
+            year_month,
+            override=override,
+            measure_runs=runs,
+            persist=True,
+        )
+        result = build_kpi_timeseries(company_id)
+
+        base = ToolResponse(
+            summary=(
+                f"{year_month} スナップショット記録 (source={snapshot.source}) | "
+                + build_kpi_timeseries_summary(result)
+            ),
+            citations=list(result.citations),
+            freshness_warnings=list(result.freshness_warnings),
+            data_source=profile.data_source,
+        ).to_dict()
+        base["metadata"] = {
+            "saved_snapshot": snapshot.model_dump(mode="json"),
+            "timeseries": result.model_dump(mode="json"),
         }
         return base

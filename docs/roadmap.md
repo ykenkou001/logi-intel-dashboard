@@ -829,12 +829,25 @@ Codex 評価: **「条件付き完了」** — 完了宣言の粒度を明文化
   - Lambda p95 レイテンシアラーム（p95 > 20s → SNS 通知）
   - Budget アラート（月 $50 の 80%/100% 超でメール通知）
   - `docs/aws_migration_plan.md` §9 にセキュリティ確認結果 + ロールバック手順を追記
+- [x] **Tier S1 DecisionLog 永続化**（2026-05-17 / PR #53）— 経営判断スナップショットを `core/io/decision_log_store.py` で jsonl 永続化、新旧 jsonl の論理統合読出も実装
+- [x] **Tier S3 報告単位 Facility 管理**（2026-05-17 / PR #50/#51/#52）— `core/io/facility_store.py` に登録 / 寄託先扱い / 標準文言ヘルパーを追加、Codex 二者議論を 2 PR で反映
+- [x] **Tier S4 罰則 PPT スライドフロー**（2026-05-17 / PR #49）— `core/export/ppt_writer.py` に行政指導→勧告→公表→罰金のステップフローを追加し経営層に法令リスクを視覚化
+- [x] **Tier S5 README Decision Support 軸再編集**（2026-05-17 / PR #48）— ツール一覧を業務フロー順に束ね直し、フェーズ 5.5 アップデート案も plans に格納
+- [x] **Tier S2 KPI 時系列トラッキング**（2026-05-23 / feat/tier-s2-kpi-timeseries ブランチ）
+  - `core/io/kpi_timeseries_store.py` に `MonthlyKpiSnapshot` jsonl 永続化（同 year_month は recorded_at 最大を採用）
+  - `core/analytics/kpi_timeseries.py` に日次→月次ロールアップ + 悪化検出（3 ヶ月前比 + 3 ヶ月連続悪化）
+  - REST GET/POST `/api/v1/clo/kpi-timeseries/{company_id}` + MCP `logi_clo_kpi_timeseries` / `logi_clo_record_monthly_snapshot`
+  - Web `/dashboard/kpi-timeseries` を新設（Recharts 5 系列折れ線 + 悪化アラート一覧 + 月次表）
+  - pytest 1022 件全 pass（+24 件）/ Next.js build 全 20 ページ pass
+  - 持ち越し: 計画値（plan_draft 由来）との差分線、decision_log との自動連動、CSV/PPT エクスポート（フェーズ 6.0+）
 
 ### 残タスク
 
-- [ ] README 整備
-- [ ] Zenn 記事執筆
+- [ ] README に KPI 月次推移ページの導線を追記（Tier S2 完了後）
+- [ ] Zenn 記事執筆（候補 3 本 — Tier S2 / F2/J2 / Codex 協業録）
 - [ ] 社内デモ
+- [ ] Codex 二次調査結果を `core/export/citation.py` に登録（寄託先関連の条文出典）
+- [ ] AWS `terraform apply` 実行（運用ハーデニング設定の有効化）
 - [ ] （任意）Public 化、PyPI 公開
 
 ---

@@ -736,6 +736,90 @@ export async function fetchWasteTraps(
   );
 }
 
+// ─── Tier S2: KPI 時系列トラッキング ─────────────────────────────
+
+export type KpiSnapshotSource =
+  | "rolled_up_from_daily"
+  | "manual_entry"
+  | "merged";
+
+export interface MonthlyKpiSnapshot {
+  company_id: string;
+  year_month: string;
+  load_factor_pct: number | null;
+  wait_time_avg_min: number | null;
+  wait_time_max_min: number | null;
+  handling_time_avg_min: number | null;
+  co2_intensity_g_per_tonkm: number | null;
+  standardization_score: number | null;
+  waste_trap_count_high: number;
+  waste_trap_count_medium: number;
+  waste_trap_count_low: number;
+  source: KpiSnapshotSource;
+  daily_sample_count: number;
+  recorded_at: string;
+}
+
+export type DeteriorationSeverity = "watch" | "warn" | "critical";
+export type DeteriorationDirection = "down" | "up";
+
+export interface KpiDeteriorationAlert {
+  metric: string;
+  metric_label: string;
+  severity: DeteriorationSeverity;
+  direction: DeteriorationDirection;
+  consecutive_months: number;
+  latest_value: number | null;
+  baseline_value: number | null;
+  delta_pct: number | null;
+  message: string;
+}
+
+export interface KpiTimeSeriesMetadata {
+  company_id: string;
+  months: MonthlyKpiSnapshot[];
+  deteriorations: KpiDeteriorationAlert[];
+  citations: Citation[];
+  freshness_warnings: string[];
+}
+
+export async function fetchKpiTimeseries(
+  companyId: string,
+  params: {
+    limitMonths?: number;
+    fromYearMonth?: string;
+    toYearMonth?: string;
+  } = {},
+): Promise<ToolResponse> {
+  const search = new URLSearchParams();
+  if (params.limitMonths !== undefined) {
+    search.set("limit_months", String(params.limitMonths));
+  }
+  if (params.fromYearMonth) search.set("from_year_month", params.fromYearMonth);
+  if (params.toYearMonth) search.set("to_year_month", params.toYearMonth);
+  const query = search.toString() ? `?${search}` : "";
+  return request<ToolResponse>(
+    `/api/v1/clo/kpi-timeseries/${encodeURIComponent(companyId)}${query}`,
+  );
+}
+
+export async function recordMonthlySnapshot(
+  companyId: string,
+  yearMonth: string,
+  measureRuns: MeasureExecutionRecord[] = [],
+): Promise<ToolResponse> {
+  return request<ToolResponse>(
+    `/api/v1/clo/kpi-timeseries/${encodeURIComponent(companyId)}`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        year_month: yearMonth,
+        measure_runs: measureRuns,
+      }),
+    },
+  );
+}
+
 // ─── CLO 義務対象スクリーニング（/check 画面）─────────────────
 //
 // `api/routers/check.py` の Pydantic スキーマと一致させる。
