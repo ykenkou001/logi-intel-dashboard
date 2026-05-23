@@ -192,3 +192,79 @@ def co2_factors_citation() -> Citation:
         url="https://www.greenpartnership.jp/guideline_ver3_2.pdf",
         accessed_via="経産省・国交省共同ガイドライン（令和5年6月）",
     )
+
+
+# ---------------------------------------------------------------------------
+# Tier S3 フォロー（Codex 二次調査 2026-05-23 反映）
+# ---------------------------------------------------------------------------
+# 寄託先施設・様式第5 IV-4/IV-5・特定倉庫業者第57条の一次資料 URL を追加。
+# 既存 article46/65/66 / improvement_standards の URL は破壊しない（既存テストと
+# フィクスチャが portal URL に依存しているため）。新規 citation は一次資料 PDF
+# を恒久 URL として参照する。
+#
+# 詳細は docs/facility_citation_research.md（Codex 確定値レポート）を参照。
+
+
+def form5_iv4_iv5_consigned_citation() -> Citation:
+    """様式第5 IV-4/IV-5 — 寄託契約先施設の連携状況・参考情報の記載欄。
+
+    Codex 二次調査で確定: 「寄託先施設」の正式な位置づけは様式第5
+    「IV 荷待ち時間等の状況等」の IV-4「貨物に係る寄託契約等を締結した者が
+    管理する施設における寄託契約の締結先との連携状況等について」
+    および IV-5「貨物に係る寄託契約等を締結した者が管理する施設における
+    荷待ち時間等の状況に関する参考情報」。
+
+    Codex 初回回答の「特定荷主編手引書 3-5-3」という節番号は一次資料で
+    確認できず、登録しない。代わりに本 IV-4/IV-5 を使う。
+    """
+    return Citation(
+        label="様式第5 定期報告書 IV-4/IV-5（寄託契約先施設の連携状況・参考情報）",
+        url="https://www.meti.go.jp/policy/economy/distribution/250829_ninushi.pdf",
+        ordinance_number="様式第5 IV-4/IV-5",
+        accessed_via="経済産業省 PDF",
+    )
+
+
+def mlit_shipper_handbook_consigned_citation() -> Citation:
+    """国土交通省「特定荷主の物流効率化法への対応の手引き」第1.1版。
+
+    Codex 二次調査で確定: 寄託先施設の扱いは本手引書の様式第5 IV-4/IV-5
+    に詳述される。
+    """
+    return Citation(
+        label="特定荷主の物流効率化法への対応の手引き 第1.1版 様式第5 IV-4/IV-5",
+        url="https://www.mlit.go.jp/seisakutokatsu/freight/content/001984872.pdf",
+        ordinance_number="様式第5 IV-4/IV-5",
+        accessed_via="国土交通省 PDF",
+    )
+
+
+def logistics_efficiency_law_article57_citation() -> Citation:
+    """物流効率化法 第57条 — 特定倉庫業者の定期報告。
+
+    Codex 二次調査で確定: 様式第8 IV「荷待ち時間等の状況等」の直接根拠は
+    第57条であり、特定連鎖化事業者向けの第65条ではない。e-Gov 法令検索の
+    恒久 URL を一次出典として参照する。
+    """
+    return Citation(
+        label="物資の流通の効率化に関する法律 第57条（特定倉庫業者の定期の報告）",
+        url="https://laws.e-gov.go.jp/law/417AC0000000085",
+        ordinance_number="物資の流通の効率化に関する法律 第57条",
+        accessed_via="e-Gov 法令検索",
+    )
+
+
+def improvement_standards_notice_pdf_citation() -> Citation:
+    """改善基準告示（厚労省 PDF 一次資料）。
+
+    Codex 二次調査で確定: 原告示は平成元年労働省告示第7号、
+    2024-04-01 施行の大改正は令和4年厚生労働省告示第367号。
+    既存 `improvement_standards_citation()` は厚労省ポータルを指すが、
+    本関数は一次資料 PDF を直接参照する場面（経営会議の defensibility 補強）向け。
+    """
+    return Citation(
+        label="自動車運転者の労働時間等の改善のための基準（原文 PDF）",
+        url="https://www.mhlw.go.jp/content/001035032.pdf",
+        notice_number="平成元年労働省告示第7号、令和4年厚生労働省告示第367号改正",
+        accessed_via="厚生労働省 PDF",
+    )

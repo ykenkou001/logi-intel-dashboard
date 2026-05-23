@@ -24,7 +24,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
-from core.export.citation import Citation, improvement_standards_citation
+from core.export.citation import (
+    Citation,
+    form5_iv4_iv5_consigned_citation,
+    improvement_standards_citation,
+    mlit_shipper_handbook_consigned_citation,
+)
 from core.static._freshness import all_warnings, get
 from core.static.improvement_standards import WAIT_TIME_STANDARD
 from core.static.sample_company import CompanyProfile, WaitTimeRow
@@ -265,6 +270,14 @@ def build_wait_time_heatmap(
 
     # 6. 出典・鮮度
     citations: list[Citation] = [improvement_standards_citation()]
+    # Tier S3 フォロー（Codex 二次調査 2026-05-23）: 寄託先 facility の集計が
+    # 含まれる場合、様式第5 IV-4/IV-5 と国交省手引書を一次出典として追加。
+    if (
+        (facility is not None and facility.is_consigned_warehouse)
+        or (facility is None and effective_include_consigned and consigned_site_names)
+    ):
+        citations.append(form5_iv4_iv5_consigned_citation())
+        citations.append(mlit_shipper_handbook_consigned_citation())
     standard_freshness = get("improvement_standards")
     warnings = all_warnings()
     if standard_freshness is not None:

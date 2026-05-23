@@ -845,13 +845,18 @@ Codex 評価: **「条件付き完了」** — 完了宣言の粒度を明文化
   - `record_monthly_snapshot()` に `monthly_logistics_cost_jpy` 引数 + `profile.kpi_history` fallback
   - pytest 1034 件全 pass（+12 件）/ Next.js build 全 20 ページ pass
   - 持ち越し: 計画値線（v1.2）、decision_log 自動連動、CSV/PPT エクスポート、Excel `kpi_history_monthly` 月次拡張（Phase 6）
+- [x] **Tier S3 寄託先 citation 登録**（2026-05-23 / docs/facility-citation-registration）
+  - Codex 二次調査（docs/facility_citation_research.md）の確定値のみ反映
+  - 新規 4 citation: 様式第5 IV-4/IV-5（経産省 PDF）/ 国交省 特定荷主手引書 第1.1版 / 第57条（特定倉庫業者） e-Gov / 改善基準告示 PDF 一次資料
+  - `wait_time_heatmap` で寄託先 facility 集計時に IV-4/IV-5 + 手引書 citation を自動付与
+  - 推測値（3-5-3 / 測定実施者 / 責任主体 等）は登録せず、`docs/facility_citation_research.md` に未登録理由を残す
+  - 既存 article46/65/66 / improvement_standards の URL は破壊しない（既存テスト・フィクスチャ依存のため）
+  - pytest 1040 件全 pass（+6 件）
 
 ### 残タスク
 
-- [ ] README に KPI 月次推移ページの導線を追記（Tier S2 完了後）
 - [ ] Zenn 記事執筆（候補 3 本 — Tier S2 / F2/J2 / Codex 協業録）
 - [ ] 社内デモ
-- [ ] Codex 二次調査結果を `core/export/citation.py` に登録（寄託先関連の条文出典）
 - [ ] AWS `terraform apply` 実行（運用ハーデニング設定の有効化）
 - [ ] （任意）Public 化、PyPI 公開
 

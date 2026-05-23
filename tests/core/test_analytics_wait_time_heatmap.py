@@ -310,6 +310,30 @@ def test_facility_consigned_warehouse_emits_notice() -> None:
     assert len(result.cells) == 4
 
 
+def test_facility_consigned_warehouse_adds_form5_citations() -> None:
+    """Codex 二次調査 2026-05-23: 寄託先 facility 集計時は様式第5 IV-4/IV-5 と
+    国交省手引書を citations に追加する。"""
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    facility = _make_test_facility(is_consigned=True)
+    result = build_wait_time_heatmap(profile, facility=facility)
+
+    urls = [c.url for c in result.citations]
+    assert "https://www.meti.go.jp/policy/economy/distribution/250829_ninushi.pdf" in urls
+    assert "https://www.mlit.go.jp/seisakutokatsu/freight/content/001984872.pdf" in urls
+
+
+def test_facility_owned_does_not_add_form5_citations() -> None:
+    """寄託先でない facility 集計時は form5 citation を追加しない。"""
+    profile = get_sample("sample_retail_01")
+    assert profile is not None
+    facility = _make_test_facility(is_consigned=False)
+    result = build_wait_time_heatmap(profile, facility=facility)
+
+    urls = [c.url for c in result.citations]
+    assert "https://www.meti.go.jp/policy/economy/distribution/250829_ninushi.pdf" not in urls
+
+
 def test_facility_none_preserves_legacy_behavior() -> None:
     """facility=None（デフォルト）は既存挙動と完全互換（後方互換確認）。"""
     profile = get_sample("sample_retail_01")

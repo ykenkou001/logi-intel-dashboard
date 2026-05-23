@@ -11,7 +11,21 @@
     - WaitTimeRow.site_name と Facility.site_name の連結で wait_time_heatmap を
       施設粒度でフィルタ可能にする（CompanyProfile を破壊変更しない）
 
+寄託先施設（facility_control_type="consigned"）の公式出典:
+    - 様式第5 IV-4: 貨物に係る寄託契約等を締結した者が管理する施設における
+      寄託契約の締結先との連携状況等について
+    - 様式第5 IV-5: 同施設における荷待ち時間等の状況に関する参考情報
+    - 国交省「特定荷主の物流効率化法への対応の手引き」第1.1版（2026年4月）
+      https://www.mlit.go.jp/seisakutokatsu/freight/content/001984872.pdf
+    - 経産省「様式第5 定期報告書」
+      https://www.meti.go.jp/policy/economy/distribution/250829_ninushi.pdf
+
+公式定型語として確認できなかった用語（Codex 二次調査 2026-05-23）:
+    - 「測定実施者」「責任主体」「自社直接計測外」「3-5-3」
+      → アプリ内の説明文では使うが、公式 citation のラベル/必須文言としては扱わない
+
 plan: plans/facility_store.md（Tier S3）
+詳細レポート: docs/facility_citation_research.md（Codex 確定値 2026-05-23）
 """
 
 from __future__ import annotations
@@ -224,6 +238,12 @@ def default_consigned_disclaimer(partner_name: str | None = None) -> str:
 
     様式第5 Ⅳ で「寄託先提供値」を扱う際の防御的注記。Codex 二者議論 §8.4-3
     で確定した推奨文言（plans/facility_store.md）。
+
+    Codex 二次調査（2026-05-23）の注記:
+        本文言はアプリ側の説明文であり、様式第5 の「公式必須文言」として
+        登録されたものではない。「自社直接計測外」は公式定型語ではないが、
+        様式第5 IV-4/IV-5 の「参考情報」の意図と整合する説明文として使う。
+        詳細は docs/facility_citation_research.md を参照。
 
     Args:
         partner_name: 寄託契約相手の事業者名。None なら "寄託先" と汎用表記。

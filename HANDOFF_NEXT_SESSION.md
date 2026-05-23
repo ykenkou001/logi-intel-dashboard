@@ -108,6 +108,17 @@ Codex 独立評価（plans/tier_s2_kpi_timeseries_codex_review.md）の観点 �
 v1.2 候補（別 PR）: 計画値線（target_proposal / plan_draft_freeze 由来の線形補間 vs 月次入力）。
 Phase 6 候補: Excel `kpi_history_monthly` シート追加（後方互換テスト大のため別 PR）。
 
+### #1.7 [✅ 完了] Tier S3 寄託先 citation 登録（2026-05-23）
+
+Codex 二次調査（docs/facility_citation_research.md）の確定値を反映:
+- `form5_iv4_iv5_consigned_citation()`（経産省 PDF / 様式第5 IV-4/IV-5）新規追加
+- `mlit_shipper_handbook_consigned_citation()`（国交省 特定荷主手引書 第1.1版）新規追加
+- `logistics_efficiency_law_article57_citation()`（e-Gov / 特定倉庫業者の定期報告）新規追加
+- `improvement_standards_notice_pdf_citation()`（厚労省 PDF 一次資料）新規追加
+- `wait_time_heatmap.py` で寄託先 facility 集計時に上記 IV-4/IV-5 + 手引書 citation を自動付与
+- 既存 `article46/65/66` / `improvement_standards` の URL は破壊しない（テスト・フィクスチャ依存のため）
+- **登録しなかったもの**（推測値）: 「3-5-3」「測定実施者」「責任主体」「自社直接計測外」を公式定型語として扱う citation
+
 ### #2 README 整備
 
 - フェーズ4.5 J3 デイリーコックピット
