@@ -132,3 +132,30 @@
 | `logi_clo_feasibility_check` | 実現可能性チェッカー |
 | `logi_clo_submission_validate` | 提出前バリデータ |
 | `logi_clo_periodic_report_draft` | **定期報告書（様式第5）ドラフト** |
+
+### フェーズ 4.0 / 4.5
+
+| ツール名 | 機能 |
+|---------|------|
+| `logi_clo_load_company` | 自社プロフィール Excel/CSV テンプレ取込 |
+| `logi_clo_generate_template` | 用途別（daily / monthly / annual）入力テンプレ生成 |
+| `logi_clo_today_decisions` | J3 デイリーコックピット（今日の 3 判断 + 想定反論） |
+
+### フェーズ 5.0
+
+| ツール名 | 機能 |
+|---------|------|
+| `logi_clo_industry_package` | 業種別 CLO 標準パッケージ（4 業種 × 5 要素マトリクス） |
+| `logi_clo_standardization_score` | F2 標準化スコア（業種標準への準拠度 0-100） |
+| `logi_clo_waste_traps` | J2 罠スコア（6 軸セーフガード付きの誤検知抑止検出） |
+
+### フェーズ 5.5（Tier S）
+
+| ツール名 | 機能 | 関連 Tier |
+|---------|------|---|
+| `logi_clo_decision_log_record` | 経営判断スナップショットを jsonl 永続化（様式第 5 証跡引用可） | S1 |
+| `logi_clo_decision_log_query` | 新旧 jsonl 統合読み出し（フィルタ + 日付範囲 + limit） | S1 |
+| `logi_clo_kpi_timeseries` | 月次 KPI 推移 + 業界平均 + 悪化アラート（最大 24 ヶ月）| S2 |
+| `logi_clo_record_monthly_snapshot` | 月次スナップショット記録（cockpit_snapshots 月平均化 + F2/J2 + 物流コスト比率） | S2 |
+| `logi_clo_facility_register` | 報告単位 1 施設の登録 / 更新（upsert） | S3 |
+| `logi_clo_facility_list` | 自社の登録 Facility 一覧 | S3 |

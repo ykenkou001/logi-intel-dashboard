@@ -2,9 +2,9 @@
 
 日本のオープンデータ（e-Stat / 国税庁法人番号 / xROAD / 気象庁 / 燃料価格）と自社物流データを統合し、**CLO（物流統括管理者）の意思決定・中長期計画・定期報告を徹底的に支援する**分析基盤。
 
-Claude Desktop/Code から MCP ツール（32 本）として呼び出せるほか、FastAPI REST API と Next.js ダッシュボード（13 画面）+ `/check` 対象企業判定画面から、PPT / Word / Excel / HTML / Markdown の成果物ファイルを生成・ダウンロードできる。
+Claude Desktop/Code から MCP ツール（38 本）として呼び出せるほか、FastAPI REST API と Next.js ダッシュボード（14 画面）+ `/check` 対象企業判定画面から、PPT / Word / Excel / HTML / Markdown の成果物ファイルを生成・ダウンロードできる。
 
-**現在のフェーズ**: フェーズ 5.5 — 公開・記事化（MeasureExecutionRecord 永続化 + AWS 運用ハーデニング 完了済）
+**現在のフェーズ**: フェーズ 5.5 — Tier S 5 件すべて完了（DecisionLog 永続化 / KPI 月次推移 + 物流コスト比率 / Facility 管理 / 罰則 PPT / README 再編集）。残るは記事化 + 社内デモ + AWS terraform apply。
 
 **開発進捗**: [docs/roadmap.md](docs/roadmap.md)
 
@@ -74,10 +74,10 @@ Claude Desktop/Code から MCP ツール（32 本）として呼び出せるほ�
 
 | 項目 | 内容 |
 |---|---|
-| MCP ツール | `logi_clo_today_decisions` / `logi_clo_periodic_report_draft` / `logi_clo_wait_heatmap` / `logi_clo_certified_match` / `logi_clo_load_company` / `logi_clo_generate_template` |
-| Web 画面 | `/dashboard/cockpit` / `/dashboard/wait-heatmap` / `/dashboard/company` |
-| 入力 | 月次 KPI 実績 / 施策実行記録 |
-| 出力 | デイリーコックピット（今日の 3 判断 + 想定反論 3 件）/ 様式第 5 定期報告書 Word / 荷待ち・荷役時間ヒートマップ |
+| MCP ツール | `logi_clo_today_decisions` / `logi_clo_kpi_timeseries` / `logi_clo_record_monthly_snapshot` / `logi_clo_periodic_report_draft` / `logi_clo_wait_heatmap` / `logi_clo_certified_match` / `logi_clo_load_company` / `logi_clo_generate_template` |
+| Web 画面 | `/dashboard/cockpit` / `/dashboard/kpi-timeseries` / `/dashboard/wait-heatmap` / `/dashboard/company` |
+| 入力 | 月次 KPI 実績 / 施策実行記録 / 当月の物流コスト実績 |
+| 出力 | デイリーコックピット（今日の 3 判断 + 想定反論 3 件）/ KPI 月次推移（24 ヶ月折れ線 + 業界平均 ReferenceLine + 悪化アラート）/ 様式第 5 定期報告書 Word / 荷待ち・荷役時間ヒートマップ |
 
 ### 出口層（Step 4〜5 共通）
 
@@ -96,12 +96,13 @@ Claude Desktop/Code から MCP ツール（32 本）として呼び出せるほ�
 | カテゴリ | 内容 |
 |---|---|
 | **オープンデータ統合** | e-Stat（物流特化 7 統計カタログ）/ 国税庁法人番号 / xROAD（交通量）/ 気象庁（予報・警報）/ 燃料価格 |
-| **MCP ツール** | 計 32 本（オープンデータ系 10 / CLO 支援系 22） |
-| **REST API** | FastAPI、27 エンドポイント |
-| **Web ダッシュボード** | Next.js、13 機能画面 + `/check` 対象判定 + `/guide` 利用ガイド |
+| **MCP ツール** | 計 38 本（オープンデータ系 10 / CLO 支援系 28） |
+| **REST API** | FastAPI、34 エンドポイント |
+| **Web ダッシュボード** | Next.js、14 機能画面 + `/check` 対象判定 + `/guide` 利用ガイド |
 | **業種別パッケージ** | 製造業 / 卸売業 / 小売業 / 連鎖化事業者（連鎖化は `第 65 条` 強制ガード付き） |
 | **法令ロジック** | 改正物流効率化法（第 5 条 / 第 46 条 / 第 65 条）/ 改善基準告示 2024-04 / 標準的運賃 2024-03 改定版 |
-| **意思決定支援の核** | F2 標準化スコア（0–100）/ J2 罠スコア（6 軸セーフガード）/ J3 デイリーコックピット（今日の 3 判断）/ 経営会議向け財務翻訳（P&L / NPV） |
+| **意思決定支援の核** | F2 標準化スコア（0–100）/ J2 罠スコア（6 軸セーフガード）/ J3 デイリーコックピット（今日の 3 判断）/ KPI 月次推移（業界平均 ReferenceLine + 悪化アラート）/ 経営会議向け財務翻訳（P&L / NPV） |
+| **継続運用** | DecisionLog 永続化（様式第 5 証跡引用可）/ KPI 時系列スナップショット（jsonl + S3 backend）/ 報告単位 Facility 管理 / 罰則・社名公表リスク PPT |
 | **自社データ取込** | Excel / CSV テンプレ → `logi_clo_load_company` / サンプル 3 社（製造 / 卸売 / 連鎖化）で即試用可能 |
 
 MCP ツールと REST エンドポイントの完全な一覧は [docs/api_endpoints.md](docs/api_endpoints.md) と [docs/mcp_tools.md](docs/mcp_tools.md) を参照。
@@ -243,8 +244,8 @@ GitHub Actions で PR と `main` へのマージ後デプロイを管理する�
 | `core/playbook/` | 業種別 CLO 標準パッケージ・施策プレイブック |
 | `core/static/` | CO2 係数・改善基準告示・標準運賃等の静的データ（鮮度管理付き） |
 | `mcp_server/` | Claude Desktop/Code 向け FastMCP ツール層 |
-| `api/` | FastAPI REST API 層（27 エンドポイント） |
-| `web/` | Next.js ダッシュボード（13 画面）+ `/check` 対象企業判定 |
+| `api/` | FastAPI REST API 層（34 エンドポイント） |
+| `web/` | Next.js ダッシュボード（14 画面）+ `/check` 対象企業判定 |
 | `lambda/` | AWS Lambda 用エントリ・依存定義 |
 | `infra/` | Terraform IaC |
 | `docs/` | 設計、ロードマップ、API、CLO ドメイン知識 |
