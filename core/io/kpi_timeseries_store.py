@@ -53,6 +53,18 @@ class MonthlyKpiSnapshot(BaseModel):
     handling_time_avg_min: float | None = Field(default=None, ge=0)
     co2_intensity_g_per_tonkm: float | None = Field(default=None, ge=0)
 
+    # 物流コスト/売上比率（v1.1 追加・0-1 の比率。例: 0.048 が 4.8%）
+    logistics_cost_ratio: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description=(
+            "物流コスト/売上比率（0-1）。JILS 物流コスト調査の業種別平均と比較する。"
+            "v1.1 では (a) 当月の月次物流コスト入力 / (b) profile.kpi_history の最新 fy "
+            "値 / (c) None の優先順で埋まる。"
+        ),
+    )
+
     # F2 標準化スコア
     standardization_score: float | None = Field(default=None, ge=0, le=100)
 

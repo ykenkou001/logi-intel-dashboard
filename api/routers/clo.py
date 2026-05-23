@@ -1191,6 +1191,15 @@ class KpiTimeseriesRecordRequest(BaseModel):
         default_factory=list,
         description="J2 罠件数を埋めるための施策実行記録。空なら保存済みを使う",
     )
+    monthly_logistics_cost_jpy: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "v1.1 追加: 当月の物流コスト実績（円）。given なら "
+            "年間売上 / 12 で当月推計売上を割って物流コスト比率を計算。"
+            "未指定なら profile.kpi_history の最新 fy 値にフォールバック"
+        ),
+    )
 
 
 @router.get("/kpi-timeseries/{company_id}", response_model=ToolResponseModel)
@@ -1209,6 +1218,7 @@ async def kpi_timeseries_query(
     profile = _resolve_profile_or_404(company_id)
     result = build_kpi_timeseries(
         company_id,
+        profile=profile,
         limit_months=limit_months,
         from_year_month=from_year_month,
         to_year_month=to_year_month,
@@ -1249,9 +1259,10 @@ async def kpi_timeseries_record(
         body.year_month,
         override=override,
         measure_runs=runs,
+        monthly_logistics_cost_jpy=body.monthly_logistics_cost_jpy,
         persist=True,
     )
-    result = build_kpi_timeseries(company_id)
+    result = build_kpi_timeseries(company_id, profile=profile)
 
     response = ToolResponse(
         summary=(

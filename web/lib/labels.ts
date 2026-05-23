@@ -236,3 +236,21 @@ export const KPI_SNAPSHOT_SOURCE_LABEL: Record<
   manual_entry: "手入力",
   merged: "合成（日次 + 手入力）",
 };
+
+// v1.1: baseline 由来の日本語ラベル（Codex 観点 5 対応）
+export const BASELINE_SOURCE_LABEL: Record<
+  "three_months_ago" | "oldest_snapshot",
+  string
+> = {
+  three_months_ago: "3 ヶ月前比",
+  oldest_snapshot: "最古スナップショット比",
+};
+
+// v1.1: 業界カテゴリ日本語ラベル
+export const INDUSTRY_CATEGORY_LABEL: Record<string, string> = {
+  manufacturing: "製造業",
+  wholesale: "卸売業",
+  retail: "小売業",
+  chain_franchise: "連鎖化（コンビニ本部）",
+  transport: "運輸業",
+};

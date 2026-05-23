@@ -833,13 +833,18 @@ Codex 評価: **「条件付き完了」** — 完了宣言の粒度を明文化
 - [x] **Tier S3 報告単位 Facility 管理**（2026-05-17 / PR #50/#51/#52）— `core/io/facility_store.py` に登録 / 寄託先扱い / 標準文言ヘルパーを追加、Codex 二者議論を 2 PR で反映
 - [x] **Tier S4 罰則 PPT スライドフロー**（2026-05-17 / PR #49）— `core/export/ppt_writer.py` に行政指導→勧告→公表→罰金のステップフローを追加し経営層に法令リスクを視覚化
 - [x] **Tier S5 README Decision Support 軸再編集**（2026-05-17 / PR #48）— ツール一覧を業務フロー順に束ね直し、フェーズ 5.5 アップデート案も plans に格納
-- [x] **Tier S2 KPI 時系列トラッキング**（2026-05-23 / feat/tier-s2-kpi-timeseries ブランチ）
+- [x] **Tier S2 KPI 時系列トラッキング v1.0**（2026-05-23 / PR #55）
   - `core/io/kpi_timeseries_store.py` に `MonthlyKpiSnapshot` jsonl 永続化（同 year_month は recorded_at 最大を採用）
   - `core/analytics/kpi_timeseries.py` に日次→月次ロールアップ + 悪化検出（3 ヶ月前比 + 3 ヶ月連続悪化）
   - REST GET/POST `/api/v1/clo/kpi-timeseries/{company_id}` + MCP `logi_clo_kpi_timeseries` / `logi_clo_record_monthly_snapshot`
   - Web `/dashboard/kpi-timeseries` を新設（Recharts 5 系列折れ線 + 悪化アラート一覧 + 月次表）
   - pytest 1022 件全 pass（+24 件）/ Next.js build 全 20 ページ pass
-  - 持ち越し: 計画値（plan_draft 由来）との差分線、decision_log との自動連動、CSV/PPT エクスポート（フェーズ 6.0+）
+- [x] **Tier S2 KPI 時系列トラッキング v1.1**（2026-05-23 / feat/tier-s2-v1.1-logistics-cost）
+  - Codex 観点 ③ / ⑤ / ⑥ 対応: 物流コスト/売上比率追加 + 業界平均 ReferenceLine + baseline_source UI 明示
+  - 業種別水準差（1.8〜4.8%）を吸収する**相対率閾値**採用（baseline 比 watch +15% / warn +30% / critical +50%）
+  - `record_monthly_snapshot()` に `monthly_logistics_cost_jpy` 引数 + `profile.kpi_history` fallback
+  - pytest 1034 件全 pass（+12 件）/ Next.js build 全 20 ページ pass
+  - 持ち越し: 計画値線（v1.2）、decision_log 自動連動、CSV/PPT エクスポート、Excel `kpi_history_monthly` 月次拡張（Phase 6）
 
 ### 残タスク
 

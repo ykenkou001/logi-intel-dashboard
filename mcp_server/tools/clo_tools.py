@@ -1770,6 +1770,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         result = build_kpi_timeseries(
             company_id,
+            profile=profile,
             limit_months=limit_months,
             from_year_month=from_year_month,
             to_year_month=to_year_month,
@@ -1788,11 +1789,13 @@ def register_tools(mcp: FastMCP) -> None:
         company_id: str,
         year_month: str,
         measure_runs: list[MeasureExecutionRecord] | None = None,
+        monthly_logistics_cost_jpy: int | None = None,
     ) -> dict[str, object]:
         """指定月の月次スナップショットを記録します（フェーズ5.5 Tier S2）。
 
-        日次 cockpit_snapshots を月平均化し、F2 標準化スコア / J2 罠件数を
-        同時計算して outputs/kpi_timeseries/<company_id>.jsonl に append します。
+        日次 cockpit_snapshots を月平均化し、F2 標準化スコア / J2 罠件数 /
+        v1.1 で追加した物流コスト比率を同時計算して
+        outputs/kpi_timeseries/<company_id>.jsonl に append します。
         日次データが無い月でも F2 / J2 のみの「manual_entry」スナップショットを
         保存できます。
 
@@ -1801,6 +1804,9 @@ def register_tools(mcp: FastMCP) -> None:
             year_month: 記録対象月（YYYY-MM）
             measure_runs: J2 罠件数を埋めるための施策実行記録。None/空なら
                 保存済み outputs/measure_runs/<id>.json を使用
+            monthly_logistics_cost_jpy: v1.1 追加・当月の物流コスト実績（円）。
+                given なら年間売上 / 12 で当月推計売上を割って物流コスト比率を計算。
+                未指定なら profile.kpi_history の最新 fy 値にフォールバック
 
         Returns:
             ToolResponse: summary に記録結果、metadata に saved_snapshot と
@@ -1824,9 +1830,10 @@ def register_tools(mcp: FastMCP) -> None:
             year_month,
             override=override,
             measure_runs=runs,
+            monthly_logistics_cost_jpy=monthly_logistics_cost_jpy,
             persist=True,
         )
-        result = build_kpi_timeseries(company_id)
+        result = build_kpi_timeseries(company_id, profile=profile)
 
         base = ToolResponse(
             summary=(

@@ -42,6 +42,7 @@ from core.static.sample_company import CompanyProfile
 
 DeteriorationSeverity = Literal["watch", "warn", "critical"]
 DeteriorationDirection = Literal["down", "up"]
+BaselineSource = Literal["three_months_ago", "oldest_snapshot"]
 
 
 class KpiDeteriorationAlert(BaseModel):
@@ -64,6 +65,13 @@ class KpiDeteriorationAlert(BaseModel):
         default=None,
         description="比較基準（3 ヶ月前 or 最古スナップショット）",
     )
+    baseline_source: BaselineSource = Field(
+        default="three_months_ago",
+        description=(
+            "baseline の由来（v1.1 追加）。Codex 観点 5 対応。"
+            "v1.2 以降で 'planned_value'（計画値線）を追加予定。"
+        ),
+    )
     delta_pct: float | None = Field(
         default=None,
         description="baseline 比 %（baseline が 0 の場合は None）",
@@ -84,6 +92,20 @@ class KpiTimeSeriesResult(BaseModel):
         default_factory=list,
         description="severity 重い順 (critical > warn > watch)",
     )
+    industry_benchmark_logistics_cost_ratio: float | None = Field(
+        default=None,
+        description=(
+            "v1.1 追加: 業界平均 物流コスト/売上比率（JILS 2021）。"
+            "profile.jsic_code から解決した業種の平均値。Web で ReferenceLine 表示用。"
+        ),
+    )
+    industry_category: str | None = Field(
+        default=None,
+        description=(
+            "業種カテゴリ"
+            "（manufacturing / wholesale / retail / chain_franchise / transport）"
+        ),
+    )
     citations: list[Citation] = Field(default_factory=list)
     freshness_warnings: list[str] = Field(default_factory=list)
 
@@ -99,6 +121,7 @@ _METRIC_LABELS: dict[str, str] = {
     "wait_time_max_min": "荷待ち最大(分)",
     "handling_time_avg_min": "荷役等時間(分)",
     "co2_intensity_g_per_tonkm": "CO2原単位(g/t-km)",
+    "logistics_cost_ratio": "物流コスト/売上比率(%)",
     "standardization_score": "F2標準化スコア",
     "waste_trap_count_high": "J2罠(high)",
 }
@@ -109,17 +132,23 @@ _METRIC_DIRECTIONS: dict[str, DeteriorationDirection] = {
     "wait_time_max_min": "up",
     "handling_time_avg_min": "up",
     "co2_intensity_g_per_tonkm": "up",
+    "logistics_cost_ratio": "up",
     "standardization_score": "down",
     "waste_trap_count_high": "up",
 }
 
-# 閾値テーブル: (watch, warn, critical) はそれぞれ baseline 比 % 絶対値 or 絶対差分
+# 閾値テーブル: (watch, warn, critical) はそれぞれ baseline 比 % 絶対値 or 絶対差分。
+#
+# logistics_cost_ratio は Codex 観点 4 を反映し相対率ベース（業種別平均
+# 1.8%〜4.8% の幅を吸収）。当初案の固定 pp は製造業 1.8% → 卸 4.8% で意味が
+# 大きく変わるため、baseline 比 +15% / +30% / +50% を採用する。
 _THRESHOLDS: dict[str, dict[str, float]] = {
     "load_factor_pct": {"watch_pt": 2, "warn_pt": 5, "critical_pt": 10},
     "wait_time_avg_min": {"watch_pct": 10, "warn_pct": 25, "critical_pct": 50},
     "wait_time_max_min": {"watch_pct": 10, "warn_pct": 25, "critical_pct": 50},
     "handling_time_avg_min": {"watch_pct": 10, "warn_pct": 25, "critical_pct": 50},
     "co2_intensity_g_per_tonkm": {"watch_pct": 5, "warn_pct": 10, "critical_pct": 20},
+    "logistics_cost_ratio": {"watch_pct": 15, "warn_pct": 30, "critical_pct": 50},
     "standardization_score": {"watch_pt": 3, "warn_pt": 10, "critical_pt": 20},
     "waste_trap_count_high": {"watch_abs": 1, "warn_abs": 3, "critical_abs": 5},
 }
@@ -205,25 +234,65 @@ def roll_up_daily_to_monthly(
 # ---------------------------------------------------------------------------
 
 
+_LOGISTICS_COST_KPI_METRIC = "logistics_cost_revenue_ratio_pct"
+
+
+def _resolve_logistics_cost_ratio(
+    profile: CompanyProfile,
+    monthly_logistics_cost_jpy: int | None,
+) -> float | None:
+    """v1.1: 物流コスト/売上比率を入力 source の優先順で解決する。
+
+    優先順:
+        1. monthly_logistics_cost_jpy（当月物流コスト円・REST/MCP 引数）が与えられたら
+           当月推計売上（年間売上 / 12）で割って当月比率を計算
+        2. profile.kpi_history の `logistics_cost_revenue_ratio_pct` 最新 fy 値
+           （Excel kpi_history シート / KpiHistoryEntry 経由・年次粒度）
+        3. いずれも無ければ None
+
+    Codex 観点 1（入力ソース）への対応。Excel 月次拡張は v2 持ち越し。
+    """
+    if monthly_logistics_cost_jpy is not None and profile.annual_revenue_jpy > 0:
+        monthly_revenue = profile.annual_revenue_jpy / 12
+        if monthly_revenue > 0:
+            ratio = monthly_logistics_cost_jpy / monthly_revenue
+            return min(max(ratio, 0.0), 1.0)
+
+    # fallback: profile.kpi_history（年次）
+    entries = [
+        e for e in profile.kpi_history
+        if e.metric == _LOGISTICS_COST_KPI_METRIC
+    ]
+    if entries:
+        latest = max(entries, key=lambda e: e.fy)
+        # unit が "%" なら 0-100 → 0-1 比率に変換
+        return latest.value / 100 if latest.unit == "%" else latest.value
+    return None
+
+
 def record_monthly_snapshot(
     profile: CompanyProfile,
     year_month: str,
     *,
     override: CompanyPackageOverride | None = None,
     measure_runs: list[MeasureExecutionRecord] | None = None,
+    monthly_logistics_cost_jpy: int | None = None,
     today: date | None = None,
     persist: bool = True,
 ) -> MonthlyKpiSnapshot:
     """profile + measure_runs から月次スナップショットを作成・保存する。
 
-    F2 標準化スコア・J2 罠件数を同時に計算して埋める。日次 cockpit_snapshots が
-    存在すれば KPI 5 種は月平均で上書き、なければ None。
+    F2 標準化スコア・J2 罠件数・v1.1 で追加した物流コスト比率を同時に計算して埋める。
+    日次 cockpit_snapshots が存在すれば KPI 5 種は月平均で上書き、なければ None。
 
     Args:
         profile: 自社プロフィール
         year_month: YYYY-MM
         override: F2 計算用の個社差分
         measure_runs: J2 計算用の施策実行記録（None なら罠件数 0）
+        monthly_logistics_cost_jpy: v1.1 追加・当月の物流コスト実績（円）。
+            given なら年間売上 / 12 で割って当月比率を計算。未指定なら
+            profile.kpi_history の最新 fy 値にフォールバック
         today: F2 期限切れ判定の基準日
         persist: True なら store に append。False は計算だけ返す
     """
@@ -255,6 +324,9 @@ def record_monthly_snapshot(
             # measure_id 未解決等は 0 で続行
             high = medium = low = 0
 
+    # 4. v1.1: 物流コスト/売上比率
+    cost_ratio = _resolve_logistics_cost_ratio(profile, monthly_logistics_cost_jpy)
+
     snapshot = MonthlyKpiSnapshot(
         company_id=profile.company_id,
         year_month=year_month,
@@ -263,6 +335,7 @@ def record_monthly_snapshot(
         wait_time_max_min=rolled.wait_time_max_min if rolled else None,
         handling_time_avg_min=rolled.handling_time_avg_min if rolled else None,
         co2_intensity_g_per_tonkm=rolled.co2_intensity_g_per_tonkm if rolled else None,
+        logistics_cost_ratio=cost_ratio,
         standardization_score=f2_score,
         waste_trap_count_high=high,
         waste_trap_count_medium=medium,
@@ -398,13 +471,21 @@ def detect_kpi_deterioration(
         - baseline = 3 ヶ月前のスナップショット（無ければ最古）
         - latest = 最新（末尾）スナップショット
         - 3 ヶ月連続で悪化方向に推移している場合は閾値未満でも critical 扱い
+
+    v1.1（Codex 観点 5 対応）: baseline 由来を `baseline_source` で返し、UI で
+    「3 ヶ月前比」or「最古比」を経営会議向けに明示できるようにする。計画値線
+    （planned_value）は v1.2 で追加予定。
     """
     if len(months) < 2:
         return []
 
     sorted_months = sorted(months, key=lambda m: m.year_month)
     latest = sorted_months[-1]
-    baseline = sorted_months[-4] if len(sorted_months) >= 4 else sorted_months[0]
+    has_three_months_back = len(sorted_months) >= 4
+    baseline = sorted_months[-4] if has_three_months_back else sorted_months[0]
+    baseline_source: BaselineSource = (
+        "three_months_ago" if has_three_months_back else "oldest_snapshot"
+    )
 
     alerts: list[KpiDeteriorationAlert] = []
     for metric in _METRIC_LABELS:
@@ -428,6 +509,7 @@ def detect_kpi_deterioration(
                 consecutive_months=consecutive,
                 latest_value=latest_val,
                 baseline_value=baseline_val,
+                baseline_source=baseline_source,
                 delta_pct=delta_pct,
                 message=_build_message(
                     metric, severity, consecutive, latest_val, baseline_val, delta_pct,
@@ -445,9 +527,32 @@ def detect_kpi_deterioration(
 # ---------------------------------------------------------------------------
 
 
+def _resolve_industry_benchmark(
+    profile: CompanyProfile | None,
+) -> tuple[str | None, float | None]:
+    """v1.1: profile.jsic_code から業種カテゴリと業界平均物流コスト比率を解決する。
+
+    Returns:
+        (industry_category, logistics_cost_ratio) のタプル。解決失敗時は (None, None)。
+    """
+    if profile is None:
+        return None, None
+    try:
+        from core.static.industry_benchmarks import LOGISTICS_COST_RATIO
+        from core.static.jsic import category_of
+
+        category = category_of(profile.jsic_code)
+        if category is None:
+            return None, None
+        return category, LOGISTICS_COST_RATIO.get(category)
+    except Exception:
+        return None, None
+
+
 def build_kpi_timeseries(
     company_id: str,
     *,
+    profile: CompanyProfile | None = None,
     limit_months: int = 24,
     from_year_month: str | None = None,
     to_year_month: str | None = None,
@@ -456,6 +561,8 @@ def build_kpi_timeseries(
 
     Args:
         company_id: 対象企業 ID
+        profile: v1.1 追加。業界平均物流コスト比率の解決に使う。未指定なら
+            industry_benchmark_* フィールドは None
         limit_months: 末尾から何ヶ月分を返すか（既定 24）
         from_year_month / to_year_month: YYYY-MM 範囲フィルタ
     """
@@ -466,10 +573,13 @@ def build_kpi_timeseries(
         limit_months=limit_months,
     )
     deteriorations = detect_kpi_deterioration(months)
+    industry_category, benchmark_ratio = _resolve_industry_benchmark(profile)
     return KpiTimeSeriesResult(
         company_id=company_id,
         months=months,
         deteriorations=deteriorations,
+        industry_benchmark_logistics_cost_ratio=benchmark_ratio,
+        industry_category=industry_category,
         citations=[logistics_efficiency_law_citation()],
         freshness_warnings=all_warnings(),
     )

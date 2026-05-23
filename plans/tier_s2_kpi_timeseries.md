@@ -1,8 +1,13 @@
 # Tier S2: KPI 時系列トラッキング 実装計画
 
-**ステータス**: ドラフト v1.0（2026-05-23）
+**ステータス**: v1.1（2026-05-23）— PR #55 マージ済 + Codex 評価反映の追加 PR で v1.1 拡張
 **目的**: フェーズ5.5 Tier S2 を最終ピースとして実装し、CLO の月次レビューで「悪化中か / 計画線に乗っているか」を一目で判定可能にする。
-**完了条件**: pytest 全 pass / ruff check pass / Next.js build pass / cockpit に時系列ペイン追加 / HANDOFF + roadmap + dashboard_feature_guide 更新
+**完了条件**: pytest 全 pass / ruff check pass / Next.js build pass / 時系列ペイン追加 / HANDOFF + roadmap + dashboard_feature_guide 更新
+
+## バージョン履歴
+
+- **v1.0（PR #55）**: 月次 jsonl 永続化 + cockpit_snapshots → 月次ロールアップ + F2/J2 同梱 + 悪化検出 + Web 新ページ + 5 KPI（積載率 / 荷待ち 2 種 / 荷役 / CO2）
+- **v1.1（本 PR）**: 物流コスト/売上比率追加 + 業界平均 ReferenceLine + baseline_source UI 明示 + 相対率閾値導入
 
 ---
 
@@ -164,3 +169,38 @@ Codex 評価は [tier_s2_kpi_timeseries_codex_review.md](tier_s2_kpi_timeseries_
 | ⑧ 後方互換ガード: 既存 OperationKpiSnapshot / KpiHistoryEntry / cockpit ページの形式を変えない | ◎ 採用 | 新 store のみ追加。既存ファイルは触らない |
 
 **不採用理由の補足（⑤）**: Codex 案では cockpit に追加ペインを置くのが「日次↔月次の体験統合」観点で優位。しかし cockpit ページは既に 3 軸カード + 意思決定ボタン + decision_log 履歴を保持しており、月次 24 ヶ月の折れ線（5 系列）を追加すると視覚的負荷が大きい。代わりにナビバーに「月次推移」リンクを置き、cockpit カードからのワンクリック遷移で接続する設計を採用した。
+
+## 10. v1.1 で対応した Codex 観点 3 / 6 / 4 / 5（2026-05-23）
+
+PR #55 マージ後、Codex 独立評価（2026-05-23）で v1.0 残課題として 7 観点が照合された。本 PR で対応:
+
+| Codex 観点 | v1.0 状態 | v1.1 対応 |
+|---|---|---|
+| ③ Excel `kpi_history` を manual source として扱う | 取込経路なし | ✅ `record_monthly_snapshot()` で `profile.kpi_history` の最新 fy `logistics_cost_revenue_ratio_pct` 値を fallback として参照（Excel 月次拡張は v2 持ち越し） |
+| ④ baseline を expected_effect_jpy に寄せない | ✅ 寄せていない（PR #55） | （継続） 計画値線は v1.2 持ち越し |
+| ⑤ baseline 由来を UI に表示 | 表示なし | ✅ `KpiDeteriorationAlert.baseline_source` 追加（"three_months_ago" / "oldest_snapshot"）、Web の悪化カードにバッジ表示 |
+| ⑥ `logistics_cost_ratio` 欠落 | フィールド自体なし | ✅ `MonthlyKpiSnapshot.logistics_cost_ratio` 追加 / 業種別水準差（1.8〜4.8%）を考慮し**固定 pp ではなく相対率閾値**を採用（baseline 比 +15% / +30% / +50%）/ `industry_benchmark_logistics_cost_ratio` を Result に同梱 / Web で `<ReferenceLine>` 描画 |
+
+### v1.1 で意図的に落としたもの（v1.2 / Phase 6 持ち越し）
+
+| # | 項目 | 持ち越し先 | 理由 |
+|---|---|---|---|
+| 1 | 計画値線（target_proposal / plan_draft_freeze 由来）の表示 | v1.2 | 線形補間 vs 四半期固定 vs 月次入力の設計判断が必要。本 PR ではスコープ肥大を回避 |
+| 2 | baseline_source に "planned_value" 追加 | v1.2 | 計画値線と連動して導入 |
+| 3 | Excel `kpi_history` の月次粒度拡張（`kpi_history_monthly` シート） | Phase 6 | 後方互換テストが大きく、別 PR で扱う |
+| 4 | logistics_cost_ratio の業界平均比閾値（自社が業界平均 + N% で別 severity） | v1.2 | v1.1 は baseline 比のみ。業界平均比評価は cockpit 別画面と統合する設計が必要 |
+
+### v1.1 の主要変更
+
+- `core/io/kpi_timeseries_store.py`: `MonthlyKpiSnapshot.logistics_cost_ratio: float | None` 追加（0-1 比率）
+- `core/analytics/kpi_timeseries.py`:
+  - `_METRIC_LABELS` / `_METRIC_DIRECTIONS` / `_THRESHOLDS` に `logistics_cost_ratio`（増加が悪、相対率 watch +15% / warn +30% / critical +50%）
+  - `_resolve_logistics_cost_ratio()` 新設（monthly_logistics_cost_jpy 引数 > kpi_history fallback > None）
+  - `record_monthly_snapshot()` に `monthly_logistics_cost_jpy: int | None` 引数追加
+  - `KpiDeteriorationAlert.baseline_source` フィールド追加
+  - `KpiTimeSeriesResult.industry_benchmark_logistics_cost_ratio` / `industry_category` フィールド追加
+  - `build_kpi_timeseries()` に `profile: CompanyProfile | None` 引数追加（業界平均解決用）
+- `api/routers/clo.py`: POST Body に `monthly_logistics_cost_jpy`、GET/POST で profile を渡す
+- `mcp_server/tools/clo_tools.py`: 同上
+- Web: 物流コスト系列追加 + `<ReferenceLine>` で業界平均ライン + 入力欄追加 + baseline バッジ + 月次表に列追加
+- ラベル: `BASELINE_SOURCE_LABEL` / `INDUSTRY_CATEGORY_LABEL` 追加
