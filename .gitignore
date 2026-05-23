@@ -62,3 +62,9 @@ tfplan
 .playwright-mcp/
 screenshot-*.png
 screenshot-*.jpeg
+
+# NotebookLM 原本（PDF / PPTX / 動画）— 配信用は web/public/guide/ に複製してコミット
+# 原本は NotebookLM から再生成可能なため git では保持しない
+docs/notebooklm/*.pdf
+docs/notebooklm/*.pptx
+docs/notebooklm/*.mp4
