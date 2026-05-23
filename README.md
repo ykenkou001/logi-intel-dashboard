@@ -4,7 +4,7 @@
 
 Claude Desktop/Code から MCP ツール（38 本）として呼び出せるほか、FastAPI REST API と Next.js ダッシュボード（14 画面）+ `/check` 対象企業判定画面から、PPT / Word / Excel / HTML / Markdown の成果物ファイルを生成・ダウンロードできる。
 
-**現在のフェーズ**: フェーズ 5.5 — Tier S 5 件すべて完了（DecisionLog 永続化 / KPI 月次推移 + 物流コスト比率 / Facility 管理 / 罰則 PPT / README 再編集）。残るは記事化 + 社内デモ + AWS terraform apply。
+**現在のフェーズ**: フェーズ 5.5 — Tier S 5 件すべて完了（DecisionLog 永続化 / KPI 月次推移 + 物流コスト比率 / Facility 管理 / 罰則 PPT / README 再編集）。残るは記事化 + AWS terraform apply。
 
 **開発進捗**: [docs/roadmap.md](docs/roadmap.md)
 
