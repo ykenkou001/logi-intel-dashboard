@@ -102,8 +102,58 @@ export default function KpiTimeseriesPage() {
         <p className="text-sm text-gray-600 leading-relaxed">
           積載率・荷待ち時間・荷役等時間・CO2 原単位・F2 標準化スコアの月次推移を
           可視化し、3 ヶ月前との差分または 3 ヶ月連続悪化を検出した指標に
-          severity（注意 / 警告 / 重大）付きのアラートを添えます。日次
-          cockpit_snapshots からの自動ロールアップに加え、当月分の手動記録も可能。
+          severity（注意 / 警告 / 重大）付きのアラートを添えます。
+        </p>
+      </div>
+
+      <div className="bg-blue-50/70 border border-blue-100 rounded-xl px-5 py-4">
+        <div className="text-xs font-semibold uppercase tracking-widest text-[#2E73AC] mb-2">
+          データの入り方（3 経路）
+        </div>
+        <ul className="text-sm leading-7 text-gray-700 space-y-1.5">
+          <li>
+            <span className="font-bold text-gray-900">① 日次データ（4 指標）</span> —{" "}
+            <a
+              href="/dashboard/cockpit"
+              className="text-[#2E73AC] underline-offset-2 hover:underline"
+            >
+              コックピット
+            </a>
+            を毎営業日開くと、その日の積載率・荷待ち・荷役・CO2 原単位が自動保存され、月平均で集計されます。
+          </li>
+          <li>
+            <span className="font-bold text-gray-900">② 月次スナップショット（F2 / J2 / 物流コスト比率）</span>{" "}
+            — 下の「スナップショットを記録」ボタンで当月分を確定します。月初か月末に 1 回押すだけで OK。
+          </li>
+          <li>
+            <span className="font-bold text-gray-900">③ 年次 KPI 履歴（baseline / フォールバック）</span> —{" "}
+            <a
+              href="/dashboard/company"
+              className="text-[#2E73AC] underline-offset-2 hover:underline"
+            >
+              自社プロフィール入力
+            </a>
+            の Excel テンプレで取り込む `kpi_history`。当月の物流コスト未入力時のフォールバック値になります。
+          </li>
+        </ul>
+        <p className="text-[11px] text-gray-500 mt-2.5">
+          詳細は{" "}
+          <a
+            href="/guide/#4105-kpi-月次推移"
+            className="text-[#2E73AC] underline-offset-2 hover:underline"
+          >
+            機能別利用ガイド §4.10.5
+          </a>{" "}
+          / 入力項目仕様は{" "}
+          <a
+            href="https://github.com/ykenkou001/logi-intel-dashboard/blob/main/docs/data_input_guide.md#kpi-月次推移にデータが現れるまで"
+            target="_blank"
+            rel="noreferrer"
+            className="text-[#2E73AC] underline-offset-2 hover:underline"
+          >
+            自社データ入力ガイド
+          </a>
+          。
         </p>
       </div>
 
@@ -177,6 +227,17 @@ export default function KpiTimeseriesPage() {
             {recording ? "記録中…" : `${yearMonth} 月のスナップショットを記録`}
           </button>
         </div>
+        <p className="text-[11px] text-gray-500 mt-3 leading-relaxed">
+          「スナップショットを記録」ボタンは F2 標準化スコア / J2 罠件数 / 物流コスト比率を再計算して当月分を保存します。
+          積載率・荷待ち・荷役・CO2 原単位は{" "}
+          <a
+            href="/dashboard/cockpit"
+            className="text-[#2E73AC] underline-offset-2 hover:underline"
+          >
+            コックピット
+          </a>
+          を開くと当日分が自動収集されるため、ここで入力する必要はありません。
+        </p>
         {recordError && (
           <div className="mt-4">
             <ErrorBanner message={recordError} />
