@@ -98,7 +98,7 @@ MCP サーバー / REST API / Web ダッシュボードはすべて手段であ�
 
 ## 3. 現在のフェーズ
 
-**フェーズ 5.5 Tier S 5 件すべて完了（2026-05-23）— 残: 記事化・社内デモ・terraform apply**
+**フェーズ 5.5 Tier S 5 件すべて完了（2026-05-23）— 残: 記事化・terraform apply**
 
 > ⚠️ **完了の粒度**: 完成したのは「業種別 CLO 標準パッケージ機能基盤 + Tier S1-S5 拡張」であり、「法令提出を完全保証」ではない。公開時は「産業別パッケージ・F2 標準化スコア・J2 罠スコア・KPI 月次推移の基盤公開」と限定して訴求する。詳細 → [docs/roadmap.md](docs/roadmap.md) §フェーズ5.0 完了の粒度
 
@@ -334,4 +334,4 @@ Claude 単独で抱えず、**積極的に Codex に意見を求める**こと�
 
 ---
 
-最終更新: 2026-05-06（フェーズ5.0 完了確定。PR #16 で c.8 連鎖化強制ガード + c.9 Web 2 画面 + 統合テスト、PR #17 で Web 可読性向上（施策日本語名 / enum 日本語化 / 連鎖化バナー / labels.ts 共通表示層 / measure_details + chain_franchise_notice REST 拡張）、PR #18 で notes / Override summary の英語コード日本語化、PR #19 で Codex 独立評価を反映した完了粒度の明文化。pytest 835 件全 pass / Next.js build 全 16 ページ pass / AWS 本番稼働確認済。次はフェーズ5.5 — 最優先タスクは MeasureExecutionRecord 永続化（Codex 勧告で昇格）+ AWS 運用ハーデニング、その後 README 整備 / Zenn 記事 / 社内デモ。詳細は HANDOFF_NEXT_SESSION.md / docs/roadmap.md §フェーズ5.0 完了の粒度 参照）
+最終更新: 2026-05-23（フェーズ5.5 Tier S 5 件すべて完了。S1 DecisionLog 永続化（PR #53）/ S2 KPI 月次時系列 + 物流コスト比率・業界平均（PR #55, #56）/ S3 Facility 管理 + Codex 二次調査による寄託先 citation 登録（PR #50, #51, #52, #58）/ S4 罰則 PPT（PR #49）/ S5 README Decision Support 軸再編集（PR #48）。pytest 1040 件全 pass / Next.js build 全 20 ページ pass。次は Zenn 記事執筆 + AWS terraform apply。詳細は HANDOFF_NEXT_SESSION.md / docs/roadmap.md §フェーズ5.5 参照）

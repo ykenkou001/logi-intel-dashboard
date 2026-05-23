@@ -14,7 +14,7 @@
 | S4 | 罰則・社名公表リスク PPT | #49 | ✅ マージ済 |
 | S5 | README Decision Support 軸再編集 | #48 | ✅ マージ済 |
 
-**Tier S 5 件すべて達成**。残るは記事化（Zenn）/ 社内デモ / Codex 二次調査（寄託先関連の条文出典）/ AWS terraform apply。
+**Tier S 5 件すべて達成 + Codex 二次調査反映済**。残るは記事化（Zenn）/ AWS terraform apply。
 
 ---
 
@@ -133,14 +133,7 @@ Codex 二次調査（docs/facility_citation_research.md）の確定値を反映:
 - 「物流効率化法 第46条/第65条 をコードで遵守する — 業種別 CLO 標準パッケージの実装」
 - 「F2 標準化スコア × J2 罠スコア — Codex 勧告で誤検知を抑える」
 
-### #4 社内デモ準備
-
-- AWS PoC（https://d1zei8qivkf3cr.cloudfront.net/）でデモ可能
-- 4 業種サンプル profile（sample_mfg_01 / sample_wholesale_01 / sample_retail_01 / sample_chain_01）でストーリー組立
-- デモ動線案: ホーム → 業種別 CLO 標準パッケージ → F2 標準化スコア → コックピット → 計画書ドラフト生成
-- 「経営会議で説明できる数字」が出ること、出典 URL が踏めることを必ず見せる
-
-### #5 [任意] Public 化、PyPI 公開
+### #4 [任意] Public 化、PyPI 公開
 
 ---
 
@@ -186,7 +179,6 @@ Codex 二次調査（docs/facility_citation_research.md）の確定値を反映:
 
 - README が現状機能を網羅し、新規来訪者が 10 分以内に Quick Start できる
 - Zenn 記事 1 本以上が公開されている（または社内 Confluence 等に掲載）
-- 社内デモを実施し、営業・企画・経営層からのフィードバックが集まっている
 - **MeasureExecutionRecord 永続化が完成し、施策実行履歴が monitor できる**
 - **AWS 監視・コストアラート・ロールバック手順が整備されている**
 - HANDOFF_NEXT_SESSION.md がフェーズ6 以降（あれば）に更新されている
