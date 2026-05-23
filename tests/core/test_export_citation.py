@@ -5,10 +5,14 @@ from core.export.citation import (
     Citation,
     co2_factors_citation,
     estat_citation,
+    form5_iv4_iv5_consigned_citation,
     fuel_price_citation,
     improvement_standards_citation,
+    improvement_standards_notice_pdf_citation,
     jma_warning_citation,
+    logistics_efficiency_law_article57_citation,
     logistics_efficiency_law_citation,
+    mlit_shipper_handbook_consigned_citation,
 )
 
 
@@ -72,3 +76,45 @@ def test_co2_factors_citation() -> None:
     c = co2_factors_citation()
     assert "Ver.3.2" in c.label
     assert c.url.startswith("https://")
+
+
+# ---------------------------------------------------------------------------
+# Tier S3 フォロー Codex 二次調査 2026-05-23
+# ---------------------------------------------------------------------------
+
+
+def test_form5_iv4_iv5_consigned_citation_uses_meti_pdf() -> None:
+    """様式第5 IV-4/IV-5 は経産省 PDF を一次出典として参照する。"""
+    c = form5_iv4_iv5_consigned_citation()
+    assert c.url == "https://www.meti.go.jp/policy/economy/distribution/250829_ninushi.pdf"
+    assert c.ordinance_number == "様式第5 IV-4/IV-5"
+    assert "経済産業省" in c.accessed_via
+    # 推測値「3-5-3」が混入していないこと
+    assert "3-5-3" not in c.label
+    assert "3-5-3" not in (c.ordinance_number or "")
+
+
+def test_mlit_shipper_handbook_consigned_citation_uses_mlit_pdf() -> None:
+    """国交省 特定荷主手引書 第1.1版 PDF を一次出典として参照する。"""
+    c = mlit_shipper_handbook_consigned_citation()
+    assert c.url == "https://www.mlit.go.jp/seisakutokatsu/freight/content/001984872.pdf"
+    assert "第1.1版" in c.label
+    assert "国土交通省" in c.accessed_via
+
+
+def test_logistics_efficiency_law_article57_citation_uses_egov() -> None:
+    """第57条（特定倉庫業者の定期報告）は e-Gov 法令検索を恒久 URL とする。"""
+    c = logistics_efficiency_law_article57_citation()
+    assert c.url == "https://laws.e-gov.go.jp/law/417AC0000000085"
+    assert "第57条" in c.label
+    assert "第65条" not in c.label  # 連鎖化事業者用と混同しないこと
+    assert "e-Gov" in c.accessed_via
+
+
+def test_improvement_standards_notice_pdf_citation_has_both_notices() -> None:
+    """原告示（平成元年）と改正告示（令和4年）の双方を notice_number に含む。"""
+    c = improvement_standards_notice_pdf_citation()
+    assert c.url == "https://www.mhlw.go.jp/content/001035032.pdf"
+    assert c.notice_number is not None
+    assert "平成元年労働省告示第7号" in c.notice_number
+    assert "令和4年厚生労働省告示第367号" in c.notice_number
