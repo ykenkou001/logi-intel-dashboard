@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Logi-Intel Promo</title>
+<!--
+  15 秒プロモーション動画のソース（1920x1080）。
+  アニメーションは wall-clock ではなく window.seek(t) で時刻指定して描画する。
+  フレーム書き出しは Playwright で seek → screenshot を 30fps 分繰り返し、ffmpeg で mp4 化する。
+  ブラウザで直接開くと requestAnimationFrame でプレビュー再生される。
+
+  再生成手順（PowerShell / グローバル playwright を使用）:
+    $env:NODE_PATH = (npm root -g); node docs/promo/render.js docs/promo/promo.html <frames_dir>
+    ffmpeg -framerate 30 -i <frames_dir>/frame_%04d.png -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -movflags +faststart docs/promo/logi-intel-promo-15s.mp4
+  assets/*.png は本番ダッシュボード（サンプル企業）の画面を切り出したもの。
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;500&display=block" rel="stylesheet">
+<style>
+  :root {
+    --bg0: #07111f;
+    --bg1: #0d2240;
+    --ink: #f2f5fa;
+    --muted: #8ea3c0;
+    --accent: #f5b544;
+    --line: rgba(142, 163, 192, 0.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg0); }
+  body {
+    font-family: "Zen Kaku Gothic New", sans-serif;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  #stage {
+    position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background: radial-gradient(1200px 800px at 75% 30%, var(--bg1), var(--bg0) 70%);
+  }
+  #grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 96px 96px;
+    mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
+  }
+  #route { position: absolute; inset: 0; }
+  .scene { position: absolute; inset: 0; opacity: 0; will-change: opacity, transform, filter; }
+
+  .kicker {
+    font-family: "JetBrains Mono", monospace; font-size: 22px; letter-spacing: 0.18em;
+    color: var(--accent); display: flex; align-items: center; gap: 18px;
+  }
+  .kicker::before { content: ""; width: 48px; height: 2px; background: var(--accent); }
+  .mask { overflow: hidden; padding-bottom: 0.08em; }
+  .mask > span { display: block; will-change: transform; }
+  .headline { font-weight: 900; line-height: 1.22; letter-spacing: 0.02em; }
+  .sub { font-size: 38px; color: var(--muted); font-weight: 500; letter-spacing: 0.04em; line-height: 1.6; }
+  .shot {
+    position: absolute; border-radius: 18px; overflow: hidden;
+    box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    will-change: transform, opacity;
+  }
+  .shot img { display: block; width: 100%; }
+
+  /* Scene 1 — hook */
+  #s1 .kicker { position: absolute; left: 180px; top: 330px; }
+  #s1 .headline { position: absolute; left: 172px; top: 400px; font-size: 150px; }
+  #s1 .headline .em { color: var(--accent); }
+
+  /* Scene 2〜4 共通のテキストブロック */
+  .copy { position: absolute; top: 50%; transform: translateY(-50%); width: 640px; }
+  .copy .headline { font-size: 76px; margin: 28px 0 32px; }
+  #s2 .copy, #s4 .copy { left: 150px; }
+  #s3 .copy { right: 70px; width: 700px; }
+  #s3 .copy .headline { font-size: 68px; }
+  .copy .headline span { white-space: nowrap; }
+
+  #s2 .shot { width: 1020px; left: 800px; top: 320px; }
+  #s3 .shot { width: 1020px; left: 80px; top: 280px; }
+  #s4 .shot { width: 960px; left: 850px; top: 330px; }
+
+  /* Scene 5 — ロゴ */
+  #s5 .lockup { position: absolute; left: 50%; top: 440px; transform: translateX(-50%); display: flex; align-items: center; gap: 36px; }
+  #s5 .mark {
+    width: 132px; height: 132px; border-radius: 28px; border: 2px solid rgba(255, 255, 255, 0.25);
+    background: linear-gradient(145deg, #1d3b63, #0f2442);
+    display: grid; place-items: center; font-family: "JetBrains Mono", monospace; font-size: 50px; font-weight: 500;
+  }
+  #s5 .word { font-size: 120px; font-weight: 900; letter-spacing: 0.01em; }
+  #s5 .tag { position: absolute; left: 0; right: 0; top: 650px; text-align: center; font-size: 40px; font-weight: 700; letter-spacing: 0.12em; }
+  #s5 .foot { position: absolute; left: 0; right: 0; top: 730px; text-align: center; font-family: "JetBrains Mono", monospace; font-size: 26px; letter-spacing: 0.2em; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="grid"></div>
+
+  <!-- 全編を貫く「配送ルート」ライン。時間とともに描画され、トラック（点）が走る -->
+  <svg id="route" width="1920" height="1080" viewBox="0 0 1920 1080">
+    <defs>
+      <linearGradient id="rg" x1="0" x2="1">
+        <stop offset="0" stop-color="#f5b544" stop-opacity="0"/>
+        <stop offset="0.25" stop-color="#f5b544" stop-opacity="0.55"/>
+        <stop offset="1" stop-color="#f5b544" stop-opacity="0.9"/>
+      </linearGradient>
+    </defs>
+    <path id="routePath" d="M -40 930 C 260 930 340 1000 620 990 S 980 880 1220 905 S 1600 1010 1960 960"
+          fill="none" stroke="url(#rg)" stroke-width="2.5" stroke-linecap="round"/>
+    <g id="nodes"></g>
+    <circle id="truck" r="7" fill="#f5b544"/>
+    <circle id="truckGlow" r="22" fill="#f5b544" opacity="0.18"/>
+  </svg>
+
+  <section class="scene" id="s1">
+    <div class="kicker" data-k>物流効率化法 — CLO 義務化</div>
+    <div class="headline">
+      <div class="mask"><span data-l="0">何をやれば、</span></div>
+      <div class="mask"><span data-l="1"><span class="em">一番</span>効くか。</span></div>
+    </div>
+  </section>
+
+  <section class="scene" id="s2">
+    <div class="copy">
+      <div class="kicker" data-k>01 — DAILY COCKPIT</div>
+      <div class="headline">
+        <div class="mask"><span data-l="0">今日の3判断を、</span></div>
+        <div class="mask"><span data-l="1">1画面で。</span></div>
+      </div>
+      <p class="sub" data-sub>緊急度・インパクト・自信度で<br>いま決めるべきことを提示</p>
+    </div>
+    <div class="shot" data-shot><img src="assets/cockpit.png" alt=""></div>
+  </section>
+
+  <section class="scene" id="s3">
+    <div class="copy">
+      <div class="kicker" data-k>02 — DECISION SUPPORT</div>
+      <div class="headline">
+        <div class="mask"><span data-l="0">施策を4軸で採点。</span></div>
+        <div class="mask"><span data-l="1">選ばない理由まで。</span></div>
+      </div>
+      <p class="sub" data-sub>ROI・実現性・法令適合・補助金で<br>Top 3 と不採用の根拠を出す</p>
+    </div>
+    <div class="shot" data-shot><img src="assets/measure.png" alt=""></div>
+  </section>
+
+  <section class="scene" id="s4">
+    <div class="copy">
+      <div class="kicker" data-k>03 — BOARD-READY</div>
+      <div class="headline">
+        <div class="mask"><span data-l="0">経営会議へ、</span></div>
+        <div class="mask"><span data-l="1">そのまま。</span></div>
+      </div>
+      <p class="sub" data-sub>PPT・Word・Excel を一括生成<br>全数値に出典つき</p>
+    </div>
+    <div class="shot" data-shot><img src="assets/outputs.png" alt=""></div>
+  </section>
+
+  <section class="scene" id="s5">
+    <div class="lockup">
+      <div class="mark">LI</div>
+      <div class="word">Logi-Intel</div>
+    </div>
+    <div class="tag" data-sub>CLO の意思決定パートナー</div>
+    <div class="foot" data-foot>CHIEF LOGISTICS OFFICER · DECISION SUPPORT</div>
+  </section>
+</div>
+
+<script>
+  const DURATION = 15;
+  // [in 開始, out 開始, out 終了]。out 終了 = 次シーン in 開始と少し重ねてクロスフェードさせる
+  const SCENES = [
+    { id: 's1', t0: 0.0,  t1: 2.55, t2: 3.05 },
+    { id: 's2', t0: 2.85, t1: 5.75, t2: 6.2 },
+    { id: 's3', t0: 6.0,  t1: 8.9,  t2: 9.35 },
+    { id: 's4', t0: 9.15, t1: 11.9, t2: 12.35 },
+    { id: 's5', t0: 12.2, t1: 99,   t2: 99 },
+  ];
+
+  const clamp = (x) => Math.min(1, Math.max(0, x));
+  const prog = (t, a, b) => clamp((t - a) / (b - a));
+  const outExpo = (x) => (x === 1 ? 1 : 1 - Math.pow(2, -10 * x));
+  const inCubic = (x) => x * x * x;
+  const lerp = (a, b, x) => a + (b - a) * x;
+
+  const path = document.getElementById('routePath');
+  const pathLen = path.getTotalLength();
+  path.style.strokeDasharray = pathLen;
+
+  // ルート上の拠点ノード（進行に合わせて点灯）
+  const NODE_AT = [0.18, 0.4, 0.62, 0.84];
+  const nodesG = document.getElementById('nodes');
+  const nodes = NODE_AT.map((f) => {
+    const p = path.getPointAtLength(pathLen * f);
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', 6);
+    c.setAttribute('fill', '#07111f'); c.setAttribute('stroke', '#f5b544'); c.setAttribute('stroke-width', 2);
+    nodesG.appendChild(c);
+    return { c, f };
+  });
+
+  function renderScene(sc, t) {
+    const el = document.getElementById(sc.id);
+    const pin = outExpo(prog(t, sc.t0, sc.t0 + 0.9));
+    const pout = inCubic(prog(t, sc.t1, sc.t2));
+    const visible = t >= sc.t0 && t <= sc.t2;
+    el.style.opacity = visible ? Math.min(prog(t, sc.t0, sc.t0 + 0.35), 1 - pout) : 0;
+    el.style.filter = pout > 0 ? `blur(${pout * 14}px)` : 'none';
+    el.style.transform = `translateY(${-pout * 40}px) scale(${1 + pout * 0.03})`;
+    if (!visible) return;
+
+    el.querySelectorAll('[data-k]').forEach((k) => {
+      const p = outExpo(prog(t, sc.t0 + 0.05, sc.t0 + 0.8));
+      k.style.opacity = p; k.style.transform = `translateX(${(1 - p) * -30}px)`;
+    });
+    el.querySelectorAll('[data-l]').forEach((l) => {
+      const d = 0.15 + Number(l.dataset.l) * 0.18;
+      const p = outExpo(prog(t, sc.t0 + d, sc.t0 + d + 0.9));
+      l.style.transform = `translateY(${(1 - p) * 110}%)`;
+    });
+    el.querySelectorAll('[data-sub]').forEach((s) => {
+      const p = outExpo(prog(t, sc.t0 + 0.55, sc.t0 + 1.4));
+      s.style.opacity = p; s.style.transform = `translateY(${(1 - p) * 20}px)`;
+    });
+    el.querySelectorAll('[data-foot]').forEach((s) => {
+      s.style.opacity = outExpo(prog(t, sc.t0 + 0.9, sc.t0 + 1.8));
+    });
+    el.querySelectorAll('[data-shot]').forEach((s) => {
+      const p = outExpo(prog(t, sc.t0 + 0.1, sc.t0 + 1.2));
+      const drift = prog(t, sc.t0, sc.t2); // シーン全体でゆっくり寄る
+      const dir = sc.id === 's3' ? -1 : 1;
+      s.style.opacity = p;
+      s.style.transform =
+        `perspective(2200px) translateX(${(1 - p) * 160 * dir}px) translateY(${(1 - p) * 30}px) ` +
+        `rotateY(${dir * lerp(-14, -6, p)}deg) rotateX(${lerp(6, 2, p)}deg) scale(${1 + drift * 0.05})`;
+    });
+    if (sc.id === 's5') {
+      const lock = el.querySelector('.lockup');
+      const p = outExpo(prog(t, sc.t0 + 0.05, sc.t0 + 1.1));
+      lock.style.opacity = p;
+      lock.style.transform = `translateX(-50%) translateY(${(1 - p) * 30}px) scale(${lerp(0.94, 1, p)})`;
+    }
+  }
+
+  function renderRoute(t) {
+    // 全編でほぼ等速に進ませ、終盤だけ減速して着地させる
+    const x = prog(t, 0.2, 14.2);
+    const f = 1 - Math.pow(1 - x, 1.6);
+    path.style.strokeDashoffset = pathLen * (1 - f);
+    const p = path.getPointAtLength(pathLen * f);
+    for (const id of ['truck', 'truckGlow']) {
+      const c = document.getElementById(id);
+      c.setAttribute('cx', p.x); c.setAttribute('cy', p.y);
+    }
+    nodes.forEach(({ c, f: nf }) => {
+      const on = f >= nf;
+      c.setAttribute('fill', on ? '#f5b544' : '#07111f');
+      c.setAttribute('stroke-opacity', f >= nf - 0.08 ? 1 : 0);
+    });
+  }
+
+  window.seek = function (t) {
+    SCENES.forEach((sc) => renderScene(sc, t));
+    renderRoute(t);
+    document.getElementById('grid').style.transform = `translateY(${-t * 6}px)`;
+  };
+  window.DURATION = DURATION;
+
+  // ブラウザで直接開いたときのプレビュー再生（書き出し時は ?render で無効化）
+  if (!location.search.includes('render')) {
+    document.fonts.ready.then(() => {
+      const start = performance.now();
+      const loop = (now) => {
+        window.seek(((now - start) / 1000) % DURATION);
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    });
+  } else {
+    window.seek(0);
+  }
+</script>
+</body>
+</html>
