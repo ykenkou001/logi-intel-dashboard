@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>Logi-Intel Promo Dynamic</title>
+<!--
+  30 秒・テロップ解説つきのダイナミック版プロモーション動画のソース（1920x1080）。
+  promo.html と同じく window.seek(t) で時刻指定描画し、render.js でフレームを書き出す。
+
+  再生成手順（PowerShell / グローバル playwright を使用）:
+    $env:NODE_PATH = (npm root -g); node docs/promo/render.js docs/promo/promo_dynamic.html <frames_dir>
+    ffmpeg -framerate 30 -i <frames_dir>/frame_%04d.png -c:v libx264 -preset slow -crf 22 -pix_fmt yuv420p -movflags +faststart docs/promo/logi-intel-promo-30s-dynamic.mp4
+  シナリオ場面の数値は本番ダッシュボード /dashboard/scenario-sim のサンプル企業（sample_mfg_01）出力。
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=JetBrains+Mono:wght@500;700&display=block" rel="stylesheet">
+<style>
+  :root {
+    --bg0: #050b16;
+    --bg1: #0c1f3d;
+    --ink: #f4f7fb;
+    --muted: #9fb3cf;
+    --amber: #ffb938;
+    --cyan: #38e1ff;
+    --green: #3ee89a;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg0); }
+  body { font-family: "Zen Kaku Gothic New", sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased; }
+  .mono { font-family: "JetBrains Mono", monospace; }
+
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background: radial-gradient(1400px 900px at 70% 35%, var(--bg1), var(--bg0) 70%); }
+  #cam { position: absolute; inset: 0; will-change: transform; }
+  #grid { position: absolute; inset: -200px;
+    background-image: linear-gradient(rgba(159,179,207,.09) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(159,179,207,.09) 1px, transparent 1px);
+    background-size: 80px 80px; }
+  #lines { position: absolute; inset: 0; }
+  #lines i { position: absolute; height: 2px; border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan)); }
+
+  .scene { position: absolute; inset: 0; display: none; }
+
+  /* ---- Hook ---- */
+  .slam { position: absolute; left: 0; right: 0; top: 50%; text-align: center; font-weight: 900;
+    font-size: 210px; letter-spacing: .02em; transform-origin: center; line-height: 1;
+    text-shadow: 6px 0 0 rgba(56,225,255,.55), -6px 0 0 rgba(255,80,120,.45); }
+  .slam.amber { color: var(--amber); }
+  #q { position: absolute; left: 0; right: 0; top: 330px; text-align: center; font-weight: 900; font-size: 150px; line-height: 1.25; }
+  #q .l { display: block; }
+  #q .em { color: var(--amber); }
+
+  /* ---- Logo sting ---- */
+  #logo { position: absolute; left: 0; right: 0; top: 380px; display: flex; justify-content: center; align-items: center; gap: 44px; }
+  #logo .mark { width: 170px; height: 170px; border-radius: 36px; display: grid; place-items: center;
+    background: linear-gradient(145deg, #1f4677, #0c2141); border: 3px solid rgba(56,225,255,.6);
+    font-family: "JetBrains Mono", monospace; font-size: 66px; font-weight: 700;
+    box-shadow: 0 0 80px rgba(56,225,255,.35); }
+  #logo .word { font-size: 170px; font-weight: 900; display: flex; }
+  #logo .word span { display: inline-block; }
+  #logoSub { position: absolute; left: 0; right: 0; top: 640px; text-align: center; font-size: 44px; font-weight: 700;
+    letter-spacing: .3em; color: var(--cyan); }
+
+  /* ---- 機能シーン共通 ---- */
+  .kicker { position: absolute; left: 90px; top: 70px; display: flex; align-items: baseline; gap: 26px; }
+  .kicker .no { font-family: "JetBrains Mono", monospace; font-size: 30px; font-weight: 700; color: var(--bg0);
+    background: var(--amber); padding: 6px 16px; border-radius: 6px; letter-spacing: .1em; }
+  .kicker .name { font-size: 56px; font-weight: 900; letter-spacing: .04em; }
+  .frame { position: absolute; border-radius: 20px; overflow: hidden; will-change: transform;
+    box-shadow: 0 50px 140px rgba(0,0,0,.6), 0 0 0 2px rgba(56,225,255,.35), 0 0 90px rgba(56,225,255,.18); }
+  .frame .cam2 { will-change: transform; }
+  .frame img { display: block; width: 100%; }
+
+  /* 数値ポップ */
+  .pop { position: absolute; font-family: "JetBrains Mono", monospace; font-weight: 700; color: var(--ink);
+    background: rgba(5,11,22,.88); border: 3px solid var(--amber); border-radius: 18px; padding: 10px 26px;
+    box-shadow: 0 0 60px rgba(255,185,56,.4); text-align: center; }
+  .pop .v { font-size: 96px; line-height: 1; color: var(--amber); }
+  .pop .k { font-family: "Zen Kaku Gothic New", sans-serif; font-size: 26px; font-weight: 700; color: var(--muted); margin-top: 6px; }
+
+  /* シナリオ */
+  #bigNum { position: absolute; left: 150px; top: 250px; }
+  #bigNum .lbl { font-size: 40px; font-weight: 700; color: var(--muted); letter-spacing: .08em; }
+  #bigNum .val { font-family: "JetBrains Mono", monospace; font-weight: 700; font-size: 230px; line-height: 1.05; color: var(--green);
+    text-shadow: 0 0 60px rgba(62,232,154,.45); }
+  #bigNum .val small { font-family: "Zen Kaku Gothic New", sans-serif; font-size: 90px; font-weight: 900; margin-left: 12px; color: var(--ink); text-shadow: none; }
+  #bars { position: absolute; left: 1180px; top: 250px; width: 620px; height: 470px; display: flex; align-items: flex-end; gap: 46px; }
+  #bars .b { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  #bars .bar { width: 100%; border-radius: 12px 12px 0 0; background: linear-gradient(180deg, var(--cyan), #1b6f9c); }
+  #bars .b.main .bar { background: linear-gradient(180deg, var(--green), #1b8c5a); box-shadow: 0 0 50px rgba(62,232,154,.4); }
+  #bars .n { font-family: "JetBrains Mono", monospace; font-size: 34px; font-weight: 700; margin-bottom: 12px; }
+  #bars .t { font-size: 28px; font-weight: 700; color: var(--muted); margin-top: 14px; }
+  #stamp { position: absolute; left: 150px; top: 610px; font-size: 64px; font-weight: 900; color: var(--bg0);
+    background: var(--amber); padding: 14px 36px; border-radius: 14px; transform-origin: left center;
+    box-shadow: 0 0 70px rgba(255,185,56,.5); }
+  .note { position: absolute; right: 90px; top: 90px; font-size: 26px; color: var(--muted); font-weight: 700; }
+
+  /* 成果物 */
+  .chip { position: absolute; width: 250px; height: 150px; border-radius: 26px; display: grid; place-items: center;
+    font-family: "JetBrains Mono", monospace; font-size: 58px; font-weight: 700; color: #fff;
+    box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+  #cite { position: absolute; left: 0; right: 0; top: 700px; height: 60px; overflow: hidden;
+    border-top: 1px solid rgba(56,225,255,.3); border-bottom: 1px solid rgba(56,225,255,.3); background: rgba(56,225,255,.06); }
+  #citeRow { position: absolute; top: 12px; white-space: nowrap; font-family: "JetBrains Mono", monospace; font-size: 26px; color: var(--cyan); }
+
+  /* フィナーレ */
+  #fin .mark { width: 200px; height: 200px; font-size: 78px; }
+  #finTag { position: absolute; left: 0; right: 0; top: 660px; text-align: center; font-size: 64px; font-weight: 900; letter-spacing: .1em; }
+  #finTag .em { color: var(--amber); }
+  #finSub { position: absolute; left: 0; right: 0; top: 770px; text-align: center; font-size: 30px; letter-spacing: .25em; color: var(--muted); }
+
+  /* テロップ（解説） */
+  #cap { position: absolute; left: 90px; bottom: 70px; display: flex; align-items: stretch; will-change: transform, opacity; }
+  #cap .bar { width: 12px; background: var(--amber); border-radius: 6px 0 0 6px; }
+  #cap .body { background: rgba(5,11,22,.9); border: 2px solid rgba(255,255,255,.12); border-left: none;
+    padding: 22px 40px; border-radius: 0 12px 12px 0; overflow: hidden; }
+  #capText { font-size: 50px; font-weight: 900; white-space: nowrap; letter-spacing: .03em; }
+  #capText .em { color: var(--amber); }
+
+  #wipe { position: absolute; top: 0; width: 2600px; height: 1080px; transform-origin: center; }
+  #flash { position: absolute; inset: 0; background: #fff; pointer-events: none; }
+  #vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55)); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <div id="grid"></div>
+    <div id="lines"></div>
+
+    <section class="scene" id="hook">
+      <div class="slam" data-slam="0">2024年問題。</div>
+      <div class="slam" data-slam="1">ドライバー不足。</div>
+      <div class="slam amber" data-slam="2">CLO 義務化。</div>
+      <div id="q"><span class="l">何をやれば、</span><span class="l"><span class="em">一番</span>効くか？</span></div>
+    </section>
+
+    <section class="scene" id="sting">
+      <div id="logo">
+        <div class="mark">LI</div>
+        <div class="word"><span>L</span><span>o</span><span>g</span><span>i</span><span>-</span><span>I</span><span>n</span><span>t</span><span>e</span><span>l</span></div>
+      </div>
+      <div id="logoSub">CLO 意思決定支援</div>
+    </section>
+
+    <section class="scene" id="f1">
+      <div class="kicker"><span class="no">01</span><span class="name">デイリーコックピット</span></div>
+      <div class="frame" style="left:230px; top:220px; width:1460px;"><div class="cam2"><img src="assets/cockpit.png" alt=""></div></div>    </section>
+
+    <section class="scene" id="f2">
+      <div class="kicker"><span class="no">02</span><span class="name">施策評価エンジン</span></div>
+      <div class="frame" style="left:230px; top:200px; width:1460px;"><div class="cam2"><img src="assets/measure.png" alt=""></div></div>
+      <div class="pop" data-pop="0" style="left:300px; top:560px;"><div class="v" data-count="89">0</div><div class="k">Top 1</div></div>
+      <div class="pop" data-pop="1" style="left:830px; top:560px;"><div class="v" data-count="88">0</div><div class="k">Top 2</div></div>
+      <div class="pop" data-pop="2" style="left:1360px; top:560px;"><div class="v" data-count="87">0</div><div class="k">Top 3</div></div>
+    </section>
+
+    <section class="scene" id="f3">
+      <div class="kicker"><span class="no">03</span><span class="name">シナリオ試算</span></div>
+      <div class="note">※ サンプル企業での試算例</div>
+      <div id="bigNum">
+        <div class="lbl">営業利益インパクト / 年（標準）</div>
+        <div class="val">+<span id="bigVal">0.00</span><small>億円</small></div>
+      </div>
+      <div id="stamp">燃料 +20% でも黒字維持 ✓</div>
+      <div id="bars">
+        <div class="b"><div class="n" data-bar-n>1.59</div><div class="bar" data-bar="1.59"></div><div class="t">保守</div></div>
+        <div class="b main"><div class="n" data-bar-n>2.64</div><div class="bar" data-bar="2.64"></div><div class="t">標準</div></div>
+        <div class="b"><div class="n" data-bar-n>3.44</div><div class="bar" data-bar="3.44"></div><div class="t">上振れ</div></div>
+      </div>
+    </section>
+
+    <section class="scene" id="f4">
+      <div class="kicker"><span class="no">04</span><span class="name">経営会議用の成果物</span></div>
+      <div class="chip" data-chip="0" style="background:#d2522b;">PPT</div>
+      <div class="chip" data-chip="1" style="background:#2b5fd2;">Word</div>
+      <div class="chip" data-chip="2" style="background:#1f8a4c;">Excel</div>
+      <div class="chip" data-chip="3" style="background:#8a36c9;">HTML</div>
+      <div class="chip" data-chip="4" style="background:#3d4a5c;">MD</div>
+      <div id="cite"><div id="citeRow">出典: e-Stat 統計表 ／ 自動車運転者の労働時間等の改善のための基準（2024年4月施行） ／ 物資の流通の効率化に関する法律 ／ ロジスティクス分野におけるCO2排出量算定方法 共同ガイドライン Ver.3.2 ／ 経済センサス ／ 国勢調査 ／ 出典: e-Stat 統計表 ／ 自動車運転者の労働時間等の改善のための基準（2024年4月施行） ／ 物資の流通の効率化に関する法律</div></div>
+    </section>
+
+    <section class="scene" id="fin">
+      <div id="logo2" style="position:absolute; left:0; right:0; top:360px; display:flex; justify-content:center; align-items:center; gap:48px;">
+        <div class="mark" style="width:200px;height:200px;border-radius:40px;display:grid;place-items:center;background:linear-gradient(145deg,#1f4677,#0c2141);border:3px solid rgba(56,225,255,.6);font-family:'JetBrains Mono',monospace;font-size:78px;font-weight:700;box-shadow:0 0 100px rgba(56,225,255,.4);">LI</div>
+        <div style="font-size:190px;font-weight:900;">Logi-Intel</div>
+      </div>
+      <div id="finTag">CLO の<span class="em">意思決定パートナー</span></div>
+      <div id="finSub">物流効率化法 対応 ／ DECISION SUPPORT</div>
+    </section>
+
+    <div id="cap"><div class="bar"></div><div class="body"><div id="capText"></div></div></div>
+  </div>
+
+  <div id="wipe"></div>
+  <div id="flash"></div>
+  <div id="vignette"></div>
+</div>
+
+<script>
+  const DURATION = 30;
+  const clamp = (x) => Math.min(1, Math.max(0, x));
+  const prog = (t, a, b) => clamp((t - a) / (b - a));
+  const outExpo = (x) => (x === 1 ? 1 : 1 - Math.pow(2, -10 * x));
+  const outBack = (x) => 1 + 2.7 * Math.pow(x - 1, 3) + 1.7 * Math.pow(x - 1, 2);
+  const inOutCubic = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+  const lerp = (a, b, x) => a + (b - a) * x;
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+  // 区間キーフレーム補間: [[t, v], ...]（区間内は inOutCubic）
+  function kf(t, keys) {
+    if (t <= keys[0][0]) return keys[0][1];
+    for (let i = 1; i < keys.length; i++) {
+      if (t <= keys[i][0]) {
+        const [ta, va] = keys[i - 1], [tb, vb] = keys[i];
+        return lerp(va, vb, inOutCubic((t - ta) / (tb - ta)));
+      }
+    }
+    return keys[keys.length - 1][1];
+  }
+
+  const SCENES = { hook: [0, 3.45], sting: [3.45, 5.05], f1: [5.05, 10.55], f2: [10.55, 16.05], f3: [16.05, 21.55], f4: [21.55, 26.05], fin: [26.05, 99] };
+  // 斜めワイプ（中間時刻でシーンが切り替わる）
+  const WIPES = [[3.2, '#ffb938'], [4.8, '#38e1ff'], [10.3, '#ffb938'], [15.8, '#38e1ff'], [21.3, '#ffb938'], [25.8, '#38e1ff']];
+  const FLASHES = [0.7, 1.4, 2.1, 3.45, 26.05];
+  const IMPACTS = [0.0, 0.7, 1.4, 2.1, 17.2, 19.6, 26.05];
+  const CAPTIONS = [
+    [5.5, 7.9, '毎朝ひらくと、<span class="em">今日決めるべき判断が3件</span>だけ並ぶ'],
+    [8.0, 10.2, '緊急度・インパクト・自信度で<span class="em">優先順位を自動判定</span>'],
+    [11.0, 13.4, '標準10施策を <span class="em">ROI・実現性・法令・補助金</span> の4軸で採点'],
+    [13.5, 15.7, '推薦 Top 3 と<span class="em">「選ばなかった理由」</span>まで提示'],
+    [16.5, 21.2, '燃料・運賃・需要など<span class="em">7つのストレス</span>で施策の堅牢性を試算'],
+    [22.0, 25.7, 'PPT・Word・Excel を一括生成。<span class="em">全数値に出典つき</span>'],
+  ];
+
+  // 背景のスピードライン（決定的な擬似乱数で配置）
+  const lines = [];
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 36; i++) {
+    const el = document.createElement('i');
+    const w = 120 + rnd() * 380;
+    el.style.width = w + 'px';
+    el.style.top = rnd() * 1080 + 'px';
+    $('#lines').appendChild(el);
+    lines.push({ el, w, x0: rnd() * 2400, speed: 900 + rnd() * 1800, op: 0.15 + rnd() * 0.35 });
+  }
+
+  function show(id, t) {
+    const [a, b] = SCENES[id];
+    const on = t >= a && t < b;
+    $('#' + id).style.display = on ? 'block' : 'none';
+    return on;
+  }
+
+  function renderHook(t) {
+    $$('[data-slam]').forEach((el) => {
+      const i = Number(el.dataset.slam), a = i * 0.7, b = a + 0.7;
+      const on = t >= a && t < b;
+      el.style.display = on ? 'block' : 'none';
+      if (!on) return;
+      const p = outExpo(prog(t, a, a + 0.35));
+      el.style.transform = `translateY(-50%) scale(${lerp(1.8, 1, p)}) rotate(${lerp(-4, 0, p)}deg)`;
+      el.style.opacity = p;
+      el.style.letterSpacing = `${lerp(0.3, 0.02, p)}em`;
+    });
+    const q = $('#q');
+    q.style.display = t >= 2.1 ? 'block' : 'none';
+    $$('#q .l').forEach((l, i) => {
+      const p = outBack(prog(t, 2.1 + i * 0.22, 2.1 + i * 0.22 + 0.5));
+      l.style.transform = `translateY(${(1 - p) * 120}px) scale(${lerp(0.7, 1, p)})`;
+      l.style.opacity = clamp(p * 1.5);
+    });
+  }
+
+  function renderSting(t) {
+    const t0 = SCENES.sting[0];
+    const m = outBack(prog(t, t0, t0 + 0.5));
+    $('#logo .mark').style.transform = `scale(${m}) rotate(${lerp(-180, 0, m)}deg)`;
+    $$('#logo .word span').forEach((s, i) => {
+      const p = outBack(prog(t, t0 + 0.15 + i * 0.04, t0 + 0.55 + i * 0.04));
+      s.style.transform = `translateY(${(1 - p) * -160}px)`;
+      s.style.opacity = clamp(p * 2);
+    });
+    const p = outExpo(prog(t, t0 + 0.6, t0 + 1.1));
+    $('#logoSub').style.opacity = p;
+    $('#logoSub').style.letterSpacing = `${lerp(0.8, 0.3, p)}em`;
+  }
+
+  function renderKicker(scene, t0, t) {
+    const k = $('.kicker', scene);
+    const p = outExpo(prog(t, t0 + 0.1, t0 + 0.6));
+    k.style.transform = `translateX(${(1 - p) * -400}px)`;
+    k.style.opacity = p;
+  }
+
+  function renderFrame(scene, t0, t, zoom) {
+    const f = $('.frame', scene);
+    const p = outExpo(prog(t, t0 + 0.05, t0 + 0.9));
+    f.style.transform = `perspective(2400px) translateY(${(1 - p) * 500}px) rotateX(${(1 - p) * 35}deg) rotateZ(${(1 - p) * -6}deg) scale(${lerp(0.8, 1, p)})`;
+    f.style.opacity = clamp(p * 2);
+    const c = $('.cam2', scene);
+    c.style.transformOrigin = `${kf(t, zoom.ox)}% ${kf(t, zoom.oy)}%`;
+    c.style.transform = `scale(${kf(t, zoom.s)})`;
+  }
+
+  function popIn(el, a, t) {
+    const p = outBack(prog(t, a, a + 0.45));
+    el.style.transform = `scale(${p})`;
+    el.style.opacity = clamp(p * 3);
+    const v = $('[data-count]', el);
+    if (v) v.textContent = Math.round(Number(v.dataset.count) * outExpo(prog(t, a, a + 0.9)));
+  }
+
+  function renderF1(t) {
+    const s = $('#f1'), t0 = SCENES.f1[0];
+    renderKicker(s, t0, t);
+    // カード1（法令リスク）に寄ってから全体へ引き、右のカードへ流す
+    renderFrame(s, t0, t, {
+      s: [[t0 + 1.2, 1], [t0 + 2.0, 1.9], [t0 + 3.2, 1.9], [t0 + 3.9, 1], [t0 + 5.5, 1.08]],
+      ox: [[t0, 50], [t0 + 1.2, 4], [t0 + 3.2, 4], [t0 + 3.9, 50], [t0 + 5.5, 70]],
+      oy: [[t0, 50], [t0 + 1.2, 18], [t0 + 3.2, 18], [t0 + 3.9, 50]],
+    });
+  }
+
+  function renderF2(t) {
+    const s = $('#f2'), t0 = SCENES.f2[0];
+    renderKicker(s, t0, t);
+    renderFrame(s, t0, t, {
+      s: [[t0 + 1.0, 1], [t0 + 1.8, 1.7], [t0 + 2.8, 1.7], [t0 + 3.4, 1], [t0 + 5.5, 1.05]],
+      ox: [[t0 + 1.0, 50], [t0 + 1.8, 2], [t0 + 2.8, 2], [t0 + 3.4, 50]],
+      oy: [[t0 + 1.0, 50], [t0 + 1.8, 12], [t0 + 2.8, 12], [t0 + 3.4, 50]],
+    });
+    $$('[data-pop]', s).forEach((el, i) => popIn(el, t0 + 3.4 + i * 0.22, t));
+  }
+
+  function renderF3(t) {
+    const s = $('#f3'), t0 = SCENES.f3[0];
+    renderKicker(s, t0, t);
+    const pn = outExpo(prog(t, t0 + 0.3, t0 + 0.9));
+    $('#bigNum').style.opacity = pn;
+    $('#bigNum').style.transform = `translateX(${(1 - pn) * -200}px)`;
+    $('#bigVal').textContent = (2.64 * outExpo(prog(t, t0 + 0.4, t0 + 1.9))).toFixed(2);
+    $('.note', s).style.opacity = pn;
+    $$('#bars .b', s).forEach((b, i) => {
+      const bar = $('.bar', b), n = $('.n', b);
+      const p = outBack(prog(t, t0 + 0.8 + i * 0.25, t0 + 1.6 + i * 0.25));
+      bar.style.height = `${(Number(bar.dataset.bar) / 3.44) * 340 * Math.max(0, p)}px`;
+      n.style.opacity = clamp(p);
+      n.textContent = (Number(bar.dataset.bar) * clamp(p)).toFixed(2);
+    });
+    const ps = outBack(prog(t, t0 + 3.5, t0 + 3.9));
+    const st = $('#stamp');
+    st.style.opacity = clamp(ps * 3);
+    st.style.transform = `scale(${lerp(2.2, 1, clamp(ps))}) rotate(${lerp(-8, -2, clamp(ps))}deg)`;
+  }
+
+  function renderF4(t) {
+    const s = $('#f4'), t0 = SCENES.f4[0];
+    renderKicker(s, t0, t);
+    // 5 形式のチップが画面外から飛び込み、中央に整列
+    const from = [[-400, 200], [2300, 150], [-400, 900], [2300, 900], [960, -300]];
+    $$('[data-chip]', s).forEach((c, i) => {
+      const p = outBack(prog(t, t0 + 0.3 + i * 0.13, t0 + 0.95 + i * 0.13));
+      const tx = 210 + i * 310, ty = 330;
+      c.style.left = lerp(from[i][0], tx, p) + 'px';
+      c.style.top = lerp(from[i][1], ty, p) + 'px';
+      const bob = Math.sin((t - t0) * 3 + i) * 8 * prog(t, t0 + 1.8, t0 + 2.3);
+      c.style.transform = `rotate(${lerp(i % 2 ? 40 : -40, 0, clamp(p))}deg) translateY(${bob}px)`;
+    });
+    const pc = outExpo(prog(t, t0 + 1.4, t0 + 1.9));
+    $('#cite').style.opacity = pc;
+    $('#citeRow').style.transform = `translateX(${1920 - (t - t0 - 1.4) * 620}px)`;
+  }
+
+  function renderFin(t) {
+    const t0 = SCENES.fin[0];
+    const p = outBack(prog(t, t0, t0 + 0.6));
+    $('#logo2').style.transform = `scale(${lerp(1.6, 1, clamp(p))})`;
+    $('#logo2').style.opacity = clamp(p * 2);
+    const pt = outExpo(prog(t, t0 + 0.6, t0 + 1.3));
+    $('#finTag').style.opacity = pt;
+    $('#finTag').style.transform = `translateY(${(1 - pt) * 40}px)`;
+    $('#finSub').style.opacity = outExpo(prog(t, t0 + 1.1, t0 + 1.8));
+  }
+
+  function renderCaption(t) {
+    const cap = $('#cap');
+    const c = CAPTIONS.find(([a, b]) => t >= a && t < b);
+    if (!c) { cap.style.opacity = 0; return; }
+    const [a, b, html] = c;
+    const txt = $('#capText');
+    if (txt.innerHTML !== html) txt.innerHTML = html;
+    const pin = outExpo(prog(t, a, a + 0.45)), pout = prog(t, b - 0.25, b);
+    cap.style.opacity = 1 - pout;
+    cap.style.transform = `translateX(${(1 - pin) * -120}px)`;
+    $('#cap .body').style.clipPath = `inset(0 ${(1 - outExpo(prog(t, a + 0.05, a + 0.6))) * 100}% 0 0)`;
+  }
+
+  function renderFx(t) {
+    // カメラシェイク（着弾時に減衰振動）
+    let sx = 0, sy = 0;
+    for (const i of IMPACTS) {
+      if (t >= i && t < i + 0.5) {
+        const d = Math.exp(-(t - i) * 10) * 14;
+        sx += Math.sin((t - i) * 95) * d; sy += Math.cos((t - i) * 80) * d;
+      }
+    }
+    $('#cam').style.transform = `translate(${sx}px, ${sy}px)`;
+    $('#grid').style.transform = `translate(${(-t * 40) % 80}px, ${(-t * 20) % 80}px)`;
+
+    // スピードラインはワイプ前後で強くなる
+    let boost = 0;
+    for (const [w] of WIPES) boost = Math.max(boost, 1 - Math.min(1, Math.abs(t - (w + 0.25)) / 0.5));
+    lines.forEach((l) => {
+      const x = ((l.x0 - t * l.speed * (1 + boost * 2)) % 2400 + 2400) % 2400 - 400;
+      l.el.style.transform = `translateX(${x}px) scaleX(${1 + boost * 1.5})`;
+      l.el.style.opacity = l.op * (0.4 + boost);
+    });
+
+    const wipe = $('#wipe');
+    const w = WIPES.find(([a]) => t >= a && t < a + 0.5);
+    if (w) {
+      const p = inOutCubic(prog(t, w[0], w[0] + 0.5));
+      wipe.style.display = 'block';
+      wipe.style.background = w[1];
+      wipe.style.transform = `translateX(${lerp(-2800, 2200, p)}px) skewX(-20deg)`;
+    } else wipe.style.display = 'none';
+
+    let f = 0;
+    for (const a of FLASHES) if (t >= a) f = Math.max(f, 1 - (t - a) / 0.2);
+    $('#flash').style.opacity = clamp(f) * 0.75;
+  }
+
+  window.seek = function (t) {
+    if (show('hook', t)) renderHook(t);
+    if (show('sting', t)) renderSting(t);
+    if (show('f1', t)) renderF1(t);
+    if (show('f2', t)) renderF2(t);
+    if (show('f3', t)) renderF3(t);
+    if (show('f4', t)) renderF4(t);
+    if (show('fin', t)) renderFin(t);
+    renderCaption(t);
+    renderFx(t);
+  };
+  window.DURATION = DURATION;
+
+  if (!location.search.includes('render')) {
+    document.fonts.ready.then(() => {
+      const start = performance.now();
+      const loop = (now) => { window.seek(((now - start) / 1000) % DURATION); requestAnimationFrame(loop); };
+      requestAnimationFrame(loop);
+    });
+  } else {
+    window.seek(0);
+  }
+</script>
+</body>
+</html>
