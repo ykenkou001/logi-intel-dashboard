@@ -119,6 +119,10 @@ const DEMO_FLOW = [
   { href: "/dashboard/plan-draft", label: "計画書" },
 ] as const;
 
+// 15 秒プロモーション動画（生成ソース: docs/promo/promo.html）。無音のため自動再生・ループで流す
+const PROMO_VIDEO_SRC = "/promo/logi-intel-promo-15s.mp4";
+const PROMO_POSTER_SRC = "/promo/logi-intel-promo-15s-poster.jpg";
+
 const DEADLINE_SOURCE_URL =
   "https://www.mlit.go.jp/seisakutokatsu/freight/content/250829_ninushi.pdf";
 
@@ -135,84 +139,103 @@ export default function HomePage() {
       <section className="relative rounded-2xl overflow-hidden bg-gradient-to-br from-[#0F2D4F] via-[#1F4E79] to-[#2569A8] px-8 py-10 text-white">
         <div className="absolute top-0 right-0 w-80 h-80 rounded-full bg-white/5 translate-x-1/3 -translate-y-1/3 pointer-events-none" />
         <div className="absolute bottom-0 right-1/3 w-52 h-52 rounded-full bg-white/5 translate-y-1/2 pointer-events-none" />
-        <div className="relative">
-          <div className="inline-flex items-center gap-2 border border-red-400/40 bg-red-900/20 text-red-200 rounded-full px-3 py-1 text-xs mb-5">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-            2026年度 初回計画提出期限 2026年10月末日 — 残り{" "}
-            <strong
-              className="tabular-nums"
-              style={{ fontFamily: "var(--font-mono)" }}
-            >
-              {daysLeft}
-            </strong>{" "}
-            日
-          </div>
-          <div className="-mt-3 mb-5 text-[11px] leading-relaxed text-blue-100">
-            公式根拠: 通常年度は7月末、2026年度は経過措置により10月末日まで。{" "}
-            <a
-              href={DEADLINE_SOURCE_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="font-semibold underline decoration-blue-200 underline-offset-2 hover:text-white"
-            >
-              国交省掲載の命令附則
-            </a>
-          </div>
-          <h2
-            className="text-2xl md:text-3xl font-bold mb-3 leading-snug"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
-            CLO 中長期計画策定・運用支援
-          </h2>
-          <p className="text-blue-100 text-sm leading-relaxed max-w-2xl mb-7">
-            2026年4月義務化の CLO（物流統括管理者）の計画策定を、データ・施策評価・法令ロジックの
-            3 層から本格支援。経営会議で使える成果物（PPT / Word / Excel）まで自動生成し、説明責任を担保します。
-          </p>
-          <div className="flex flex-wrap gap-2 mb-7">
-            {["物流効率化法 第46条／第65条", "改善基準告示 2024年4月施行版"].map(
-              (tag) => (
-                <span
-                  key={tag}
-                  className="text-xs bg-white/10 border border-white/20 text-blue-50 px-3 py-1 rounded-full"
-                >
-                  {tag}
-                </span>
-              )
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/check"
-              className="inline-flex items-center gap-2 bg-white text-[#1F4E79] font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-blue-50 transition-colors shadow-md"
-            >
-              まず対象か 30 秒チェック
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
+        <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)] lg:items-center">
+          <div>
+            <div className="inline-flex items-center gap-2 border border-red-400/40 bg-red-900/20 text-red-200 rounded-full px-3 py-1 text-xs mb-5">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+              2026年度 初回計画提出期限 2026年10月末日 — 残り{" "}
+              <strong
+                className="tabular-nums"
+                style={{ fontFamily: "var(--font-mono)" }}
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                />
-              </svg>
-            </Link>
-            <Link
-              href="/dashboard/plan-draft"
-              className="inline-flex items-center gap-2 border border-white/40 bg-white/10 text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-white/20 transition-colors"
+                {daysLeft}
+              </strong>{" "}
+              日
+            </div>
+            <div className="-mt-3 mb-5 text-[11px] leading-relaxed text-blue-100">
+              公式根拠: 通常年度は7月末、2026年度は経過措置により10月末日まで。{" "}
+              <a
+                href={DEADLINE_SOURCE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="font-semibold underline decoration-blue-200 underline-offset-2 hover:text-white"
+              >
+                国交省掲載の命令附則
+              </a>
+            </div>
+            <h2
+              className="text-2xl md:text-3xl font-bold mb-3 leading-snug"
+              style={{ fontFamily: "var(--font-serif)" }}
             >
-              計画書ドラフトを生成する
-            </Link>
-            <Link
-              href="/guide"
-              className="inline-flex items-center gap-2 border border-white/30 bg-white/5 text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-white/15 transition-colors"
-            >
-              まず使い方を見る
-            </Link>
+              CLO 中長期計画策定・運用支援
+            </h2>
+            <p className="text-blue-100 text-sm leading-relaxed max-w-2xl mb-7">
+              2026年4月義務化の CLO（物流統括管理者）の計画策定を、データ・施策評価・法令ロジックの
+              3 層から本格支援。経営会議で使える成果物（PPT / Word / Excel）まで自動生成し、説明責任を担保します。
+            </p>
+            <div className="flex flex-wrap gap-2 mb-7">
+              {["物流効率化法 第46条／第65条", "改善基準告示 2024年4月施行版"].map(
+                (tag) => (
+                  <span
+                    key={tag}
+                    className="text-xs bg-white/10 border border-white/20 text-blue-50 px-3 py-1 rounded-full"
+                  >
+                    {tag}
+                  </span>
+                )
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href="/check"
+                className="inline-flex items-center gap-2 bg-white text-[#1F4E79] font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-blue-50 transition-colors shadow-md"
+              >
+                まず対象か 30 秒チェック
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+                  />
+                </svg>
+              </Link>
+              <Link
+                href="/dashboard/plan-draft"
+                className="inline-flex items-center gap-2 border border-white/40 bg-white/10 text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-white/20 transition-colors"
+              >
+                計画書ドラフトを生成する
+              </Link>
+              <Link
+                href="/guide"
+                className="inline-flex items-center gap-2 border border-white/30 bg-white/5 text-white font-bold text-sm px-5 py-2.5 rounded-lg hover:bg-white/15 transition-colors"
+              >
+                まず使い方を見る
+              </Link>
+            </div>
           </div>
+          <figure className="w-full">
+            <video
+              data-testid="home-promo-video"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              poster={PROMO_POSTER_SRC}
+              aria-label="Logi-Intel 15 秒紹介動画（無音）"
+              className="w-full aspect-video rounded-xl border border-white/20 bg-[#050b16] shadow-2xl"
+              src={PROMO_VIDEO_SRC}
+            />
+            <figcaption className="mt-2 text-[11px] text-blue-100">
+              15 秒でわかる Logi-Intel（無音）
+            </figcaption>
+          </figure>
         </div>
       </section>
 

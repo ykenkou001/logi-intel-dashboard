@@ -76,11 +76,43 @@ export default async function GuidePage() {
           動画と PDF で全体像を掴む
         </h2>
         <p className="mt-2 max-w-3xl text-sm leading-7 text-gray-600">
-          先に概要をつかみたい場合は、約 5 分の解説動画と、スライド PDF（CLO Command Center）を確認してください。
+          まず 15 秒の紹介動画でアプリの全体像を掴み、詳しくは約 5 分の解説動画とスライド PDF（CLO Command Center）を確認してください。
           下のテキストガイドは、画面ごとの詳細な使い方を参照する用途に向いています。
         </p>
 
-        <div className="mt-5 grid gap-6 lg:grid-cols-2">
+        <div className="mt-5 grid gap-4 rounded-lg border border-gray-100 bg-gray-50 p-4 md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-center">
+          <video
+            data-testid="guide-promo-video"
+            controls
+            muted
+            playsInline
+            preload="metadata"
+            poster="/promo/logi-intel-promo-15s-poster.jpg"
+            className="w-full aspect-video rounded-lg border border-gray-200 bg-[#050b16]"
+            src="/promo/logi-intel-promo-15s.mp4"
+          >
+            お使いのブラウザは video タグに対応していません。
+            <a
+              href="/promo/logi-intel-promo-15s.mp4"
+              className="text-[#2E73AC] underline"
+            >
+              動画ファイルをダウンロード
+            </a>
+            してご覧ください。
+          </video>
+          <div>
+            <h3 className="text-base font-bold text-gray-900">
+              まず 15 秒で全体像: Logi-Intel とは
+            </h3>
+            <p className="mt-2 text-sm leading-7 text-gray-600">
+              「何をやれば一番効くか」に答える 3 つの画面（デイリーコックピット / 施策評価 / 成果物ダウンロード）を 15 秒で紹介します。
+              画面はサンプル企業のデータです。
+            </p>
+            <p className="mt-2 text-xs text-gray-500">再生時間 15 秒 / 約 3.4 MB / 無音</p>
+          </div>
+        </div>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <div>
             <h3 className="mb-2 text-base font-bold text-gray-900">
               解説動画: CLO 戦略とダッシュボード活用

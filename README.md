@@ -8,6 +8,15 @@ Claude Desktop/Code から MCP ツール（38 本）として呼び出せるほ�
 
 **開発進捗**: [docs/roadmap.md](docs/roadmap.md)
 
+<p align="center">
+  <img src="docs/promo/logi-intel-promo-15s.gif" alt="Logi-Intel 15 秒紹介動画（デイリーコックピット / 施策評価 / 成果物ダウンロード）" width="720">
+</p>
+
+<p align="center">
+  🎬 紹介動画: <a href="docs/promo/logi-intel-promo-15s.mp4">15 秒版（mp4）</a> ／ <a href="docs/promo/logi-intel-promo-30s-dynamic.mp4">30 秒テロップ解説版（mp4）</a>
+  <br><sub>画面はサンプル企業のデータ。生成ソースは <a href="docs/promo/">docs/promo/</a></sub>
+</p>
+
 ---
 
 ## なぜ作ったか
