@@ -12,6 +12,10 @@
   再生成手順（PowerShell / グローバル playwright を使用）:
     $env:NODE_PATH = (npm root -g); node docs/promo/render.js docs/promo/promo.html <frames_dir>
     ffmpeg -framerate 30 -i <frames_dir>/frame_%04d.png -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -movflags +faststart docs/promo/logi-intel-promo-15s.mp4
+  派生ファイル（mp4 を差し替えたら併せて再生成する）:
+    Copy-Item docs/promo/logi-intel-promo-15s.mp4 web/public/promo/   # ホーム / guide 埋め込み用
+    ffmpeg -ss 2 -i docs/promo/logi-intel-promo-15s.mp4 -frames:v 1 -vf scale=1280:-1 -q:v 3 web/public/promo/logi-intel-promo-15s-poster.jpg
+    ffmpeg -i docs/promo/logi-intel-promo-15s.mp4 -vf "fps=10,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" -loop 0 docs/promo/logi-intel-promo-15s.gif   # README 用
   assets/*.png は本番ダッシュボード（サンプル企業）の画面を切り出したもの。
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
